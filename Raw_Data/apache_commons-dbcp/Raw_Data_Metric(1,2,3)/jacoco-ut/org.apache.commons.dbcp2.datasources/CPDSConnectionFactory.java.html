@@ -1,0 +1,426 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CPDSConnectionFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2.datasources</a> &gt; <span class="el_source">CPDSConnectionFactory.java</span></div><h1>CPDSConnectionFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.dbcp2.datasources;
+
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.sql.ConnectionEvent;
+import javax.sql.ConnectionEventListener;
+import javax.sql.ConnectionPoolDataSource;
+import javax.sql.PooledConnection;
+
+import org.apache.commons.dbcp2.Utils;
+import org.apache.commons.pool2.ObjectPool;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.impl.DefaultPooledObject;
+
+/**
+ * A {@link PooledObjectFactory} that creates {@link org.apache.commons.dbcp2.PoolableConnection PoolableConnection}s.
+ *
+ * @since 2.0
+ */
+class CPDSConnectionFactory
+        implements PooledObjectFactory&lt;PooledConnectionAndInfo&gt;, ConnectionEventListener, PooledConnectionManager {
+
+    private static final String NO_KEY_MESSAGE = &quot;close() was called on a Connection, but I have no record of the underlying PooledConnection.&quot;;
+
+    private final ConnectionPoolDataSource cpds;
+    private final String validationQuery;
+    private final int validationQueryTimeoutSeconds;
+    private final boolean rollbackAfterValidation;
+    private ObjectPool&lt;PooledConnectionAndInfo&gt; pool;
+    private final String userName;
+    private char[] userPassword;
+<span class="fc" id="L56">    private long maxConnLifetimeMillis = -1;</span>
+
+    /**
+     * Map of PooledConnections for which close events are ignored. Connections are muted when they are being validated.
+     */
+<span class="fc" id="L61">    private final Set&lt;PooledConnection&gt; validatingSet = Collections</span>
+<span class="fc" id="L62">            .newSetFromMap(new ConcurrentHashMap&lt;PooledConnection, Boolean&gt;());</span>
+
+    /**
+     * Map of PooledConnectionAndInfo instances
+     */
+<span class="fc" id="L67">    private final Map&lt;PooledConnection, PooledConnectionAndInfo&gt; pcMap = new ConcurrentHashMap&lt;&gt;();</span>
+
+    /**
+     * Creates a new {@code PoolableConnectionFactory}.
+     *
+     * @param cpds
+     *            the ConnectionPoolDataSource from which to obtain PooledConnection's
+     * @param validationQuery
+     *            a query to use to {@link #validateObject validate} {@link Connection}s. Should return at least one
+     *            row. May be {@code null} in which case {@link Connection#isValid(int)} will be used to validate
+     *            connections.
+     * @param validationQueryTimeoutSeconds
+     *            Timeout in seconds before validation fails
+     * @param rollbackAfterValidation
+     *            whether a rollback should be issued after {@link #validateObject validating} {@link Connection}s.
+     * @param userName
+     *            The user name to use to create connections
+     * @param userPassword
+     *            The password to use to create connections
+     * @since 2.4.0
+     */
+    public CPDSConnectionFactory(final ConnectionPoolDataSource cpds, final String validationQuery,
+            final int validationQueryTimeoutSeconds, final boolean rollbackAfterValidation, final String userName,
+<span class="fc" id="L90">            final char[] userPassword) {</span>
+<span class="fc" id="L91">        this.cpds = cpds;</span>
+<span class="fc" id="L92">        this.validationQuery = validationQuery;</span>
+<span class="fc" id="L93">        this.validationQueryTimeoutSeconds = validationQueryTimeoutSeconds;</span>
+<span class="fc" id="L94">        this.userName = userName;</span>
+<span class="fc" id="L95">        this.userPassword = userPassword;</span>
+<span class="fc" id="L96">        this.rollbackAfterValidation = rollbackAfterValidation;</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * Creates a new {@code PoolableConnectionFactory}.
+     *
+     * @param cpds
+     *            the ConnectionPoolDataSource from which to obtain PooledConnection's
+     * @param validationQuery
+     *            a query to use to {@link #validateObject validate} {@link Connection}s. Should return at least one
+     *            row. May be {@code null} in which case {@link Connection#isValid(int)} will be used to validate
+     *            connections.
+     * @param validationQueryTimeoutSeconds
+     *            Timeout in seconds before validation fails
+     * @param rollbackAfterValidation
+     *            whether a rollback should be issued after {@link #validateObject validating} {@link Connection}s.
+     * @param userName
+     *            The user name to use to create connections
+     * @param userPassword
+     *            The password to use to create connections
+     */
+    public CPDSConnectionFactory(final ConnectionPoolDataSource cpds, final String validationQuery,
+            final int validationQueryTimeoutSeconds, final boolean rollbackAfterValidation, final String userName,
+            final String userPassword) {
+<span class="fc" id="L120">        this(cpds, validationQuery, validationQueryTimeoutSeconds, rollbackAfterValidation, userName,</span>
+<span class="fc" id="L121">                Utils.toCharArray(userPassword));</span>
+<span class="fc" id="L122">    }</span>
+
+    /**
+     * (Testing API) Gets the value of password for the default user.
+     *
+     * @return value of password.
+     */
+    char[] getPasswordCharArray() {
+<span class="fc" id="L130">        return userPassword;</span>
+    }
+
+    /**
+     * Returns the object pool used to pool connections created by this factory.
+     *
+     * @return ObjectPool managing pooled connections
+     */
+    public ObjectPool&lt;PooledConnectionAndInfo&gt; getPool() {
+<span class="fc" id="L139">        return pool;</span>
+    }
+
+    /**
+     *
+     * @param pool
+     *            the {@link ObjectPool} in which to pool those {@link Connection}s
+     */
+    public void setPool(final ObjectPool&lt;PooledConnectionAndInfo&gt; pool) {
+<span class="fc" id="L148">        this.pool = pool;</span>
+<span class="fc" id="L149">    }</span>
+
+    @Override
+    public synchronized PooledObject&lt;PooledConnectionAndInfo&gt; makeObject() {
+        PooledConnectionAndInfo pci;
+        try {
+<span class="fc" id="L155">            PooledConnection pc = null;</span>
+<span class="fc bfc" id="L156" title="All 2 branches covered.">            if (userName == null) {</span>
+<span class="fc" id="L157">                pc = cpds.getPooledConnection();</span>
+            } else {
+<span class="fc" id="L159">                pc = cpds.getPooledConnection(userName, Utils.toString(userPassword));</span>
+            }
+
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">            if (pc == null) {</span>
+<span class="nc" id="L163">                throw new IllegalStateException(&quot;Connection pool data source returned null from getPooledConnection&quot;);</span>
+            }
+
+            // should we add this object as a listener or the pool.
+            // consider the validateObject method in decision
+<span class="fc" id="L168">            pc.addConnectionEventListener(this);</span>
+<span class="fc" id="L169">            pci = new PooledConnectionAndInfo(pc, userName, userPassword);</span>
+<span class="fc" id="L170">            pcMap.put(pc, pci);</span>
+<span class="nc" id="L171">        } catch (final SQLException e) {</span>
+<span class="nc" id="L172">            throw new RuntimeException(e.getMessage());</span>
+<span class="fc" id="L173">        }</span>
+<span class="fc" id="L174">        return new DefaultPooledObject&lt;&gt;(pci);</span>
+    }
+
+    /**
+     * Closes the PooledConnection and stops listening for events from it.
+     */
+    @Override
+    public void destroyObject(final PooledObject&lt;PooledConnectionAndInfo&gt; p) throws Exception {
+<span class="fc" id="L182">        doDestroyObject(p.getObject());</span>
+<span class="fc" id="L183">    }</span>
+
+    private void doDestroyObject(final PooledConnectionAndInfo pci) throws Exception {
+<span class="fc" id="L186">        final PooledConnection pc = pci.getPooledConnection();</span>
+<span class="fc" id="L187">        pc.removeConnectionEventListener(this);</span>
+<span class="fc" id="L188">        pcMap.remove(pc);</span>
+<span class="fc" id="L189">        pc.close();</span>
+<span class="fc" id="L190">    }</span>
+
+    @Override
+    public boolean validateObject(final PooledObject&lt;PooledConnectionAndInfo&gt; p) {
+        try {
+<span class="fc" id="L195">            validateLifetime(p);</span>
+<span class="nc" id="L196">        } catch (final Exception e) {</span>
+<span class="nc" id="L197">            return false;</span>
+<span class="fc" id="L198">        }</span>
+<span class="fc" id="L199">        boolean valid = false;</span>
+<span class="fc" id="L200">        final PooledConnection pconn = p.getObject().getPooledConnection();</span>
+<span class="fc" id="L201">        Connection conn = null;</span>
+<span class="fc" id="L202">        validatingSet.add(pconn);</span>
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if (null == validationQuery) {</span>
+<span class="fc" id="L204">            int timeoutSeconds = validationQueryTimeoutSeconds;</span>
+<span class="pc bpc" id="L205" title="1 of 2 branches missed.">            if (timeoutSeconds &lt; 0) {</span>
+<span class="fc" id="L206">                timeoutSeconds = 0;</span>
+            }
+            try {
+<span class="fc" id="L209">                conn = pconn.getConnection();</span>
+<span class="fc" id="L210">                valid = conn.isValid(timeoutSeconds);</span>
+<span class="nc" id="L211">            } catch (final SQLException e) {</span>
+<span class="nc" id="L212">                valid = false;</span>
+            } finally {
+<span class="fc" id="L214">                Utils.closeQuietly(conn);</span>
+<span class="fc" id="L215">                validatingSet.remove(pconn);</span>
+            }
+<span class="fc" id="L217">        } else {</span>
+<span class="nc" id="L218">            Statement stmt = null;</span>
+<span class="nc" id="L219">            ResultSet rset = null;</span>
+            // logical Connection from the PooledConnection must be closed
+            // before another one can be requested and closing it will
+            // generate an event. Keep track so we know not to return
+            // the PooledConnection
+<span class="nc" id="L224">            validatingSet.add(pconn);</span>
+            try {
+<span class="nc" id="L226">                conn = pconn.getConnection();</span>
+<span class="nc" id="L227">                stmt = conn.createStatement();</span>
+<span class="nc" id="L228">                rset = stmt.executeQuery(validationQuery);</span>
+<span class="nc bnc" id="L229" title="All 2 branches missed.">                if (rset.next()) {</span>
+<span class="nc" id="L230">                    valid = true;</span>
+                } else {
+<span class="nc" id="L232">                    valid = false;</span>
+                }
+<span class="nc bnc" id="L234" title="All 2 branches missed.">                if (rollbackAfterValidation) {</span>
+<span class="nc" id="L235">                    conn.rollback();</span>
+                }
+<span class="nc" id="L237">            } catch (final Exception e) {</span>
+<span class="nc" id="L238">                valid = false;</span>
+            } finally {
+<span class="nc" id="L240">                Utils.closeQuietly(rset);</span>
+<span class="nc" id="L241">                Utils.closeQuietly(stmt);</span>
+<span class="nc" id="L242">                Utils.closeQuietly(conn);</span>
+<span class="nc" id="L243">                validatingSet.remove(pconn);</span>
+            }
+        }
+<span class="fc" id="L246">        return valid;</span>
+    }
+
+    @Override
+    public void passivateObject(final PooledObject&lt;PooledConnectionAndInfo&gt; p) throws Exception {
+<span class="fc" id="L251">        validateLifetime(p);</span>
+<span class="fc" id="L252">    }</span>
+
+    @Override
+    public void activateObject(final PooledObject&lt;PooledConnectionAndInfo&gt; p) throws Exception {
+<span class="fc" id="L256">        validateLifetime(p);</span>
+<span class="fc" id="L257">    }</span>
+
+    // ***********************************************************************
+    // java.sql.ConnectionEventListener implementation
+    // ***********************************************************************
+
+    /**
+     * This will be called if the Connection returned by the getConnection method came from a PooledConnection, and the
+     * user calls the close() method of this connection object. What we need to do here is to release this
+     * PooledConnection from our pool...
+     */
+    @Override
+    public void connectionClosed(final ConnectionEvent event) {
+<span class="fc" id="L270">        final PooledConnection pc = (PooledConnection) event.getSource();</span>
+        // if this event occurred because we were validating, ignore it
+        // otherwise return the connection to the pool.
+<span class="fc bfc" id="L273" title="All 2 branches covered.">        if (!validatingSet.contains(pc)) {</span>
+<span class="fc" id="L274">            final PooledConnectionAndInfo pci = pcMap.get(pc);</span>
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">            if (pci == null) {</span>
+<span class="nc" id="L276">                throw new IllegalStateException(NO_KEY_MESSAGE);</span>
+            }
+
+            try {
+<span class="fc" id="L280">                pool.returnObject(pci);</span>
+<span class="nc" id="L281">            } catch (final Exception e) {</span>
+<span class="nc" id="L282">                System.err.println(&quot;CLOSING DOWN CONNECTION AS IT COULD &quot; + &quot;NOT BE RETURNED TO THE POOL&quot;);</span>
+<span class="nc" id="L283">                pc.removeConnectionEventListener(this);</span>
+                try {
+<span class="nc" id="L285">                    doDestroyObject(pci);</span>
+<span class="nc" id="L286">                } catch (final Exception e2) {</span>
+<span class="nc" id="L287">                    System.err.println(&quot;EXCEPTION WHILE DESTROYING OBJECT &quot; + pci);</span>
+<span class="nc" id="L288">                    e2.printStackTrace();</span>
+<span class="nc" id="L289">                }</span>
+<span class="fc" id="L290">            }</span>
+        }
+<span class="fc" id="L292">    }</span>
+
+    /**
+     * If a fatal error occurs, close the underlying physical connection so as not to be returned in the future
+     */
+    @Override
+    public void connectionErrorOccurred(final ConnectionEvent event) {
+<span class="fc" id="L299">        final PooledConnection pc = (PooledConnection) event.getSource();</span>
+<span class="pc bpc" id="L300" title="1 of 2 branches missed.">        if (null != event.getSQLException()) {</span>
+<span class="nc" id="L301">            System.err.println(&quot;CLOSING DOWN CONNECTION DUE TO INTERNAL ERROR (&quot; + event.getSQLException() + &quot;)&quot;);</span>
+        }
+<span class="fc" id="L303">        pc.removeConnectionEventListener(this);</span>
+
+<span class="fc" id="L305">        final PooledConnectionAndInfo pci = pcMap.get(pc);</span>
+<span class="pc bpc" id="L306" title="1 of 2 branches missed.">        if (pci == null) {</span>
+<span class="nc" id="L307">            throw new IllegalStateException(NO_KEY_MESSAGE);</span>
+        }
+        try {
+<span class="fc" id="L310">            pool.invalidateObject(pci);</span>
+<span class="nc" id="L311">        } catch (final Exception e) {</span>
+<span class="nc" id="L312">            System.err.println(&quot;EXCEPTION WHILE DESTROYING OBJECT &quot; + pci);</span>
+<span class="nc" id="L313">            e.printStackTrace();</span>
+<span class="fc" id="L314">        }</span>
+<span class="fc" id="L315">    }</span>
+
+    // ***********************************************************************
+    // PooledConnectionManager implementation
+    // ***********************************************************************
+
+    /**
+     * Invalidates the PooledConnection in the pool. The CPDSConnectionFactory closes the connection and pool counters
+     * are updated appropriately. Also closes the pool. This ensures that all idle connections are closed and
+     * connections that are checked out are closed on return.
+     */
+    @Override
+    public void invalidate(final PooledConnection pc) throws SQLException {
+<span class="fc" id="L328">        final PooledConnectionAndInfo pci = pcMap.get(pc);</span>
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">        if (pci == null) {</span>
+<span class="nc" id="L330">            throw new IllegalStateException(NO_KEY_MESSAGE);</span>
+        }
+        try {
+<span class="fc" id="L333">            pool.invalidateObject(pci); // Destroy instance and update pool counters</span>
+<span class="fc" id="L334">            pool.close(); // Clear any other instances in this pool and kill others as they come back</span>
+<span class="nc" id="L335">        } catch (final Exception ex) {</span>
+<span class="nc" id="L336">            throw new SQLException(&quot;Error invalidating connection&quot;, ex);</span>
+<span class="fc" id="L337">        }</span>
+<span class="fc" id="L338">    }</span>
+
+    /**
+     * Sets the database password used when creating new connections.
+     *
+     * @param userPassword
+     *            new password
+     */
+    public synchronized void setPassword(final char[] userPassword) {
+<span class="fc" id="L347">        this.userPassword =  Utils.clone(userPassword);</span>
+<span class="fc" id="L348">    }</span>
+
+    /**
+     * Sets the database password used when creating new connections.
+     *
+     * @param userPassword
+     *            new password
+     */
+    @Override
+    public synchronized void setPassword(final String userPassword) {
+<span class="fc" id="L358">        this.userPassword = Utils.toCharArray(userPassword);</span>
+<span class="fc" id="L359">    }</span>
+
+    /**
+     * Sets the maximum lifetime in milliseconds of a connection after which the connection will always fail activation,
+     * passivation and validation.
+     *
+     * @param maxConnLifetimeMillis
+     *            A value of zero or less indicates an infinite lifetime. The default value is -1.
+     */
+    public void setMaxConnLifetimeMillis(final long maxConnLifetimeMillis) {
+<span class="fc" id="L369">        this.maxConnLifetimeMillis = maxConnLifetimeMillis;</span>
+<span class="fc" id="L370">    }</span>
+
+    /**
+     * Verifies that the user name matches the user whose connections are being managed by this factory and closes the
+     * pool if this is the case; otherwise does nothing.
+     */
+    @Override
+    public void closePool(final String userName) throws SQLException {
+<span class="fc" id="L378">        synchronized (this) {</span>
+<span class="pc bpc" id="L379" title="2 of 4 branches missed.">            if (userName == null || !userName.equals(this.userName)) {</span>
+<span class="nc" id="L380">                return;</span>
+            }
+<span class="fc" id="L382">        }</span>
+        try {
+<span class="fc" id="L384">            pool.close();</span>
+<span class="nc" id="L385">        } catch (final Exception ex) {</span>
+<span class="nc" id="L386">            throw new SQLException(&quot;Error closing connection pool&quot;, ex);</span>
+<span class="fc" id="L387">        }</span>
+<span class="fc" id="L388">    }</span>
+
+    private void validateLifetime(final PooledObject&lt;PooledConnectionAndInfo&gt; p) throws Exception {
+<span class="pc bpc" id="L391" title="1 of 2 branches missed.">        if (maxConnLifetimeMillis &gt; 0) {</span>
+<span class="nc" id="L392">            final long lifetime = System.currentTimeMillis() - p.getCreateTime();</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">            if (lifetime &gt; maxConnLifetimeMillis) {</span>
+<span class="nc" id="L394">                throw new Exception(Utils.getMessage(&quot;connectionFactory.lifetimeExceeded&quot;, Long.valueOf(lifetime),</span>
+<span class="nc" id="L395">                        Long.valueOf(maxConnLifetimeMillis)));</span>
+            }
+        }
+<span class="fc" id="L398">    }</span>
+
+    /**
+     * @since 2.6.0
+     */
+    @Override
+    public synchronized String toString() {
+<span class="nc" id="L405">        final StringBuilder builder = new StringBuilder(super.toString());</span>
+<span class="nc" id="L406">        builder.append(&quot;[cpds=&quot;);</span>
+<span class="nc" id="L407">        builder.append(cpds);</span>
+<span class="nc" id="L408">        builder.append(&quot;, validationQuery=&quot;);</span>
+<span class="nc" id="L409">        builder.append(validationQuery);</span>
+<span class="nc" id="L410">        builder.append(&quot;, validationQueryTimeoutSeconds=&quot;);</span>
+<span class="nc" id="L411">        builder.append(validationQueryTimeoutSeconds);</span>
+<span class="nc" id="L412">        builder.append(&quot;, rollbackAfterValidation=&quot;);</span>
+<span class="nc" id="L413">        builder.append(rollbackAfterValidation);</span>
+<span class="nc" id="L414">        builder.append(&quot;, pool=&quot;);</span>
+<span class="nc" id="L415">        builder.append(pool);</span>
+<span class="nc" id="L416">        builder.append(&quot;, maxConnLifetimeMillis=&quot;);</span>
+<span class="nc" id="L417">        builder.append(maxConnLifetimeMillis);</span>
+<span class="nc" id="L418">        builder.append(&quot;, validatingSet=&quot;);</span>
+<span class="nc" id="L419">        builder.append(validatingSet);</span>
+<span class="nc" id="L420">        builder.append(&quot;, pcMap=&quot;);</span>
+<span class="nc" id="L421">        builder.append(pcMap);</span>
+<span class="nc" id="L422">        builder.append(&quot;]&quot;);</span>
+<span class="nc" id="L423">        return builder.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

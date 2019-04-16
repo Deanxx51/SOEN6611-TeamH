@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PerUserPoolDataSourceFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2.datasources</a> &gt; <span class="el_source">PerUserPoolDataSourceFactory.java</span></div><h1>PerUserPoolDataSourceFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.dbcp2.datasources;
+
+import java.io.IOException;
+import java.util.Map;
+
+import javax.naming.RefAddr;
+import javax.naming.Reference;
+
+/**
+ * A JNDI ObjectFactory which creates &lt;code&gt;SharedPoolDataSource&lt;/code&gt;s
+ *
+ * @since 2.0
+ */
+<span class="fc" id="L31">public class PerUserPoolDataSourceFactory extends InstanceKeyDataSourceFactory {</span>
+<span class="fc" id="L32">    private static final String PER_USER_POOL_CLASSNAME = PerUserPoolDataSource.class.getName();</span>
+
+    @Override
+    protected boolean isCorrectClass(final String className) {
+<span class="fc" id="L36">        return PER_USER_POOL_CLASSNAME.equals(className);</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;) // Avoid warnings on deserialization
+    @Override
+    protected InstanceKeyDataSource getNewInstance(final Reference ref) throws IOException, ClassNotFoundException {
+<span class="fc" id="L42">        final PerUserPoolDataSource pupds = new PerUserPoolDataSource();</span>
+<span class="fc" id="L43">        RefAddr ra = ref.get(&quot;defaultMaxTotal&quot;);</span>
+<span class="pc bpc" id="L44" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L45">            pupds.setDefaultMaxTotal(Integer.parseInt(ra.getContent().toString()));</span>
+        }
+
+<span class="fc" id="L48">        ra = ref.get(&quot;defaultMaxIdle&quot;);</span>
+<span class="pc bpc" id="L49" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L50">            pupds.setDefaultMaxIdle(Integer.parseInt(ra.getContent().toString()));</span>
+        }
+
+<span class="fc" id="L53">        ra = ref.get(&quot;defaultMaxWaitMillis&quot;);</span>
+<span class="pc bpc" id="L54" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L55">            pupds.setDefaultMaxWaitMillis(Integer.parseInt(ra.getContent().toString()));</span>
+        }
+
+<span class="fc" id="L58">        ra = ref.get(&quot;perUserDefaultAutoCommit&quot;);</span>
+<span class="pc bpc" id="L59" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L60">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L61">            pupds.setPerUserDefaultAutoCommit((Map&lt;String, Boolean&gt;) deserialize(serialized));</span>
+        }
+
+<span class="fc" id="L64">        ra = ref.get(&quot;perUserDefaultTransactionIsolation&quot;);</span>
+<span class="pc bpc" id="L65" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L66">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L67">            pupds.setPerUserDefaultTransactionIsolation((Map&lt;String, Integer&gt;) deserialize(serialized));</span>
+        }
+
+<span class="fc" id="L70">        ra = ref.get(&quot;perUserMaxTotal&quot;);</span>
+<span class="pc bpc" id="L71" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L72">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L73">            pupds.setPerUserMaxTotal((Map&lt;String, Integer&gt;) deserialize(serialized));</span>
+        }
+
+<span class="fc" id="L76">        ra = ref.get(&quot;perUserMaxIdle&quot;);</span>
+<span class="pc bpc" id="L77" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L78">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L79">            pupds.setPerUserMaxIdle((Map&lt;String, Integer&gt;) deserialize(serialized));</span>
+        }
+
+<span class="fc" id="L82">        ra = ref.get(&quot;perUserMaxWaitMillis&quot;);</span>
+<span class="pc bpc" id="L83" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L84">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L85">            pupds.setPerUserMaxWaitMillis((Map&lt;String, Long&gt;) deserialize(serialized));</span>
+        }
+
+<span class="fc" id="L88">        ra = ref.get(&quot;perUserDefaultReadOnly&quot;);</span>
+<span class="pc bpc" id="L89" title="3 of 4 branches missed.">        if (ra != null &amp;&amp; ra.getContent() != null) {</span>
+<span class="nc" id="L90">            final byte[] serialized = (byte[]) ra.getContent();</span>
+<span class="nc" id="L91">            pupds.setPerUserDefaultReadOnly((Map&lt;String, Boolean&gt;) deserialize(serialized));</span>
+        }
+<span class="fc" id="L93">        return pupds;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

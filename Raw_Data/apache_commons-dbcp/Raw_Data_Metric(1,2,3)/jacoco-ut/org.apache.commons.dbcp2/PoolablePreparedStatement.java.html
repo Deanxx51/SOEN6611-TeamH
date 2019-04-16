@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PoolablePreparedStatement.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2</a> &gt; <span class="el_source">PoolablePreparedStatement.java</span></div><h1>PoolablePreparedStatement.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.dbcp2;
+
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.List;
+
+import org.apache.commons.pool2.KeyedObjectPool;
+
+/**
+ * A {@link DelegatingPreparedStatement} that cooperates with {@link PoolingConnection} to implement a pool of
+ * {@link PreparedStatement}s.
+ * &lt;p&gt;
+ * My {@link #close} method returns me to my containing pool. (See {@link PoolingConnection}.)
+ *
+ * @param &lt;K&gt;
+ *            the key type
+ *
+ * @see PoolingConnection
+ * @since 2.0
+ */
+public class PoolablePreparedStatement&lt;K&gt; extends DelegatingPreparedStatement {
+    /**
+     * The {@link KeyedObjectPool} from which I was obtained.
+     */
+    private final KeyedObjectPool&lt;K, PoolablePreparedStatement&lt;K&gt;&gt; pool;
+
+    /**
+     * My &quot;key&quot; as used by {@link KeyedObjectPool}.
+     */
+    private final K key;
+
+<span class="fc" id="L50">    private volatile boolean batchAdded = false;</span>
+
+    /**
+     * Constructor
+     *
+     * @param stmt
+     *            my underlying {@link PreparedStatement}
+     * @param key
+     *            my key&quot; as used by {@link KeyedObjectPool}
+     * @param pool
+     *            the {@link KeyedObjectPool} from which I was obtained.
+     * @param conn
+     *            the {@link java.sql.Connection Connection} from which I was created
+     */
+    public PoolablePreparedStatement(final PreparedStatement stmt, final K key,
+            final KeyedObjectPool&lt;K, PoolablePreparedStatement&lt;K&gt;&gt; pool, final DelegatingConnection&lt;?&gt; conn) {
+<span class="fc" id="L66">        super(conn, stmt);</span>
+<span class="fc" id="L67">        this.pool = pool;</span>
+<span class="fc" id="L68">        this.key = key;</span>
+
+        // Remove from trace now because this statement will be
+        // added by the activate method.
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">        if (getConnectionInternal() != null) {</span>
+<span class="fc" id="L73">            getConnectionInternal().removeTrace(this);</span>
+        }
+<span class="fc" id="L75">    }</span>
+
+    /**
+     * Add batch.
+     */
+    @Override
+    public void addBatch() throws SQLException {
+<span class="fc" id="L82">        super.addBatch();</span>
+<span class="fc" id="L83">        batchAdded = true;</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Clear Batch.
+     */
+    @Override
+    public void clearBatch() throws SQLException {
+<span class="fc" id="L91">        batchAdded = false;</span>
+<span class="fc" id="L92">        super.clearBatch();</span>
+<span class="fc" id="L93">    }</span>
+
+    /**
+     * Return me to my pool.
+     */
+    @Override
+    public void close() throws SQLException {
+        // calling close twice should have no effect
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        if (!isClosed()) {</span>
+            try {
+<span class="fc" id="L103">                pool.returnObject(key, this);</span>
+<span class="nc" id="L104">            } catch (final SQLException e) {</span>
+<span class="nc" id="L105">                throw e;</span>
+<span class="nc" id="L106">            } catch (final RuntimeException e) {</span>
+<span class="nc" id="L107">                throw e;</span>
+<span class="nc" id="L108">            } catch (final Exception e) {</span>
+<span class="nc" id="L109">                throw new SQLException(&quot;Cannot close preparedstatement (return to pool failed)&quot;, e);</span>
+<span class="fc" id="L110">            }</span>
+        }
+<span class="fc" id="L112">    }</span>
+
+    @Override
+    public void activate() throws SQLException {
+<span class="fc" id="L116">        setClosedInternal(false);</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">        if (getConnectionInternal() != null) {</span>
+<span class="fc" id="L118">            getConnectionInternal().addTrace(this);</span>
+        }
+<span class="fc" id="L120">        super.activate();</span>
+<span class="fc" id="L121">    }</span>
+
+    @Override
+    public void passivate() throws SQLException {
+        // DBCP-372. clearBatch with throw an exception if called when the
+        // connection is marked as closed.
+<span class="fc bfc" id="L127" title="All 2 branches covered.">        if (batchAdded) {</span>
+<span class="fc" id="L128">            clearBatch();</span>
+        }
+<span class="fc" id="L130">        setClosedInternal(true);</span>
+<span class="pc bpc" id="L131" title="1 of 2 branches missed.">        if (getConnectionInternal() != null) {</span>
+<span class="fc" id="L132">            getConnectionInternal().removeTrace(this);</span>
+        }
+
+        // The JDBC spec requires that a statement closes any open
+        // ResultSet's when it is closed.
+        // FIXME The PreparedStatement we're wrapping should handle this for us.
+        // See bug 17301 for what could happen when ResultSets are closed twice.
+<span class="fc" id="L139">        final List&lt;AbandonedTrace&gt; resultSets = getTrace();</span>
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">        if (resultSets != null) {</span>
+<span class="fc" id="L141">            final ResultSet[] set = resultSets.toArray(new ResultSet[resultSets.size()]);</span>
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">            for (final ResultSet element : set) {</span>
+<span class="nc" id="L143">                element.close();</span>
+            }
+<span class="fc" id="L145">            clearTrace();</span>
+        }
+
+<span class="fc" id="L148">        super.passivate();</span>
+<span class="fc" id="L149">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

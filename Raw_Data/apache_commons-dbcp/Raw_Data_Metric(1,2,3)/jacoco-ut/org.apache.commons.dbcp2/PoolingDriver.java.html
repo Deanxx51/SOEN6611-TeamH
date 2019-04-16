@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PoolingDriver.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2</a> &gt; <span class="el_source">PoolingDriver.java</span></div><h1>PoolingDriver.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.dbcp2;
+
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.DriverPropertyInfo;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.HashMap;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.Set;
+import java.util.logging.Logger;
+
+import org.apache.commons.pool2.ObjectPool;
+
+/**
+ * A {@link Driver} implementation that obtains {@link Connection}s from a registered {@link ObjectPool}.
+ *
+ * @since 2.0
+ */
+public class PoolingDriver implements Driver {
+
+    /** Register myself with the {@link DriverManager}. */
+    static {
+        try {
+<span class="fc" id="L43">            DriverManager.registerDriver(new PoolingDriver());</span>
+<span class="nc" id="L44">        } catch (final Exception e) {</span>
+            // ignore
+<span class="fc" id="L46">        }</span>
+    }
+
+    /** The map of registered pools. */
+<span class="fc" id="L50">    protected static final HashMap&lt;String, ObjectPool&lt;? extends Connection&gt;&gt; pools = new HashMap&lt;&gt;();</span>
+
+    /** Controls access to the underlying connection */
+    private final boolean accessToUnderlyingConnectionAllowed;
+
+    /**
+     * Constructs a new driver with &lt;code&gt;accessToUnderlyingConnectionAllowed&lt;/code&gt; enabled.
+     */
+    public PoolingDriver() {
+<span class="fc" id="L59">        this(true);</span>
+<span class="fc" id="L60">    }</span>
+
+    /**
+     * For unit testing purposes.
+     *
+     * @param accessToUnderlyingConnectionAllowed
+     *            Do {@link DelegatingConnection}s created by this driver permit access to the delegate?
+     */
+<span class="fc" id="L68">    protected PoolingDriver(final boolean accessToUnderlyingConnectionAllowed) {</span>
+<span class="fc" id="L69">        this.accessToUnderlyingConnectionAllowed = accessToUnderlyingConnectionAllowed;</span>
+<span class="fc" id="L70">    }</span>
+
+    /**
+     * Returns the value of the accessToUnderlyingConnectionAllowed property.
+     *
+     * @return true if access to the underlying is allowed, false otherwise.
+     */
+    protected boolean isAccessToUnderlyingConnectionAllowed() {
+<span class="fc" id="L78">        return accessToUnderlyingConnectionAllowed;</span>
+    }
+
+    /**
+     * Gets the connection pool for the given name.
+     *
+     * @param name
+     *            The pool name
+     * @return The pool
+     * @throws SQLException
+     *             Thrown when the named pool is not registered.
+     */
+    public synchronized ObjectPool&lt;? extends Connection&gt; getConnectionPool(final String name) throws SQLException {
+<span class="fc" id="L91">        final ObjectPool&lt;? extends Connection&gt; pool = pools.get(name);</span>
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        if (null == pool) {</span>
+<span class="fc" id="L93">            throw new SQLException(&quot;Pool not registered: &quot; + name);</span>
+        }
+<span class="fc" id="L95">        return pool;</span>
+    }
+
+    /**
+     * Registers a named pool.
+     *
+     * @param name
+     *            The pool name.
+     * @param pool
+     *            The pool.
+     */
+    public synchronized void registerPool(final String name, final ObjectPool&lt;? extends Connection&gt; pool) {
+<span class="fc" id="L107">        pools.put(name, pool);</span>
+<span class="fc" id="L108">    }</span>
+
+    /**
+     * Closes a named pool.
+     *
+     * @param name
+     *            The pool name.
+     * @throws SQLException
+     *             Thrown when a problem is caught closing the pool.
+     */
+    public synchronized void closePool(final String name) throws SQLException {
+        @SuppressWarnings(&quot;resource&quot;)
+<span class="fc" id="L120">        final ObjectPool&lt;? extends Connection&gt; pool = pools.get(name);</span>
+<span class="fc bfc" id="L121" title="All 2 branches covered.">        if (pool != null) {</span>
+<span class="fc" id="L122">            pools.remove(name);</span>
+            try {
+<span class="fc" id="L124">                pool.close();</span>
+<span class="nc" id="L125">            } catch (final Exception e) {</span>
+<span class="nc" id="L126">                throw new SQLException(&quot;Error closing pool &quot; + name, e);</span>
+<span class="fc" id="L127">            }</span>
+        }
+<span class="fc" id="L129">    }</span>
+
+    /**
+     * Gets the pool names.
+     *
+     * @return the pool names.
+     */
+    public synchronized String[] getPoolNames() {
+<span class="nc" id="L137">        final Set&lt;String&gt; names = pools.keySet();</span>
+<span class="nc" id="L138">        return names.toArray(new String[names.size()]);</span>
+    }
+
+    @Override
+    public boolean acceptsURL(final String url) throws SQLException {
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">        return url == null ? false : url.startsWith(URL_PREFIX);</span>
+    }
+
+    @Override
+    public Connection connect(final String url, final Properties info) throws SQLException {
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        if (acceptsURL(url)) {</span>
+<span class="fc" id="L149">            final ObjectPool&lt;? extends Connection&gt; pool = getConnectionPool(url.substring(URL_PREFIX_LEN));</span>
+
+            try {
+<span class="fc" id="L152">                final Connection conn = pool.borrowObject();</span>
+<span class="pc bpc" id="L153" title="1 of 2 branches missed.">                if (conn == null) {</span>
+<span class="nc" id="L154">                    return null;</span>
+                }
+<span class="fc" id="L156">                return new PoolGuardConnectionWrapper(pool, conn);</span>
+<span class="nc" id="L157">            } catch (final SQLException e) {</span>
+<span class="nc" id="L158">                throw e;</span>
+<span class="fc" id="L159">            } catch (final NoSuchElementException e) {</span>
+<span class="fc" id="L160">                throw new SQLException(&quot;Cannot get a connection, pool error: &quot; + e.getMessage(), e);</span>
+<span class="nc" id="L161">            } catch (final RuntimeException e) {</span>
+<span class="nc" id="L162">                throw e;</span>
+<span class="nc" id="L163">            } catch (final Exception e) {</span>
+<span class="nc" id="L164">                throw new SQLException(&quot;Cannot get a connection, general error: &quot; + e.getMessage(), e);</span>
+            }
+        }
+<span class="fc" id="L167">        return null;</span>
+    }
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+<span class="nc" id="L172">        throw new SQLFeatureNotSupportedException();</span>
+    }
+
+    /**
+     * Invalidates the given connection.
+     *
+     * @param conn
+     *            connection to invalidate
+     * @throws SQLException
+     *             if the connection is not a &lt;code&gt;PoolGuardConnectionWrapper&lt;/code&gt; or an error occurs invalidating
+     *             the connection
+     */
+    public void invalidateConnection(final Connection conn) throws SQLException {
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">        if (conn instanceof PoolGuardConnectionWrapper) { // normal case</span>
+<span class="fc" id="L186">            final PoolGuardConnectionWrapper pgconn = (PoolGuardConnectionWrapper) conn;</span>
+            @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L188">            final ObjectPool&lt;Connection&gt; pool = (ObjectPool&lt;Connection&gt;) pgconn.pool;</span>
+            try {
+<span class="fc" id="L190">                pool.invalidateObject(pgconn.getDelegateInternal());</span>
+<span class="nc" id="L191">            } catch (final Exception e) {</span>
+                // Ignore.
+<span class="fc" id="L193">            }</span>
+<span class="fc" id="L194">        } else {</span>
+<span class="nc" id="L195">            throw new SQLException(&quot;Invalid connection class&quot;);</span>
+        }
+<span class="fc" id="L197">    }</span>
+
+    @Override
+    public int getMajorVersion() {
+<span class="nc" id="L201">        return MAJOR_VERSION;</span>
+    }
+
+    @Override
+    public int getMinorVersion() {
+<span class="nc" id="L206">        return MINOR_VERSION;</span>
+    }
+
+    @Override
+    public boolean jdbcCompliant() {
+<span class="nc" id="L211">        return true;</span>
+    }
+
+    @Override
+    public DriverPropertyInfo[] getPropertyInfo(final String url, final Properties info) {
+<span class="nc" id="L216">        return new DriverPropertyInfo[0];</span>
+    }
+
+    /** My URL prefix */
+    public static final String URL_PREFIX = &quot;jdbc:apache:commons:dbcp:&quot;;
+<span class="fc" id="L221">    protected static final int URL_PREFIX_LEN = URL_PREFIX.length();</span>
+
+    // version numbers
+    protected static final int MAJOR_VERSION = 1;
+    protected static final int MINOR_VERSION = 0;
+
+    /**
+     * PoolGuardConnectionWrapper is a Connection wrapper that makes sure a closed connection cannot be used anymore.
+     *
+     * @since 2.0
+     */
+    private class PoolGuardConnectionWrapper extends DelegatingConnection&lt;Connection&gt; {
+
+        private final ObjectPool&lt;? extends Connection&gt; pool;
+
+<span class="fc" id="L236">        PoolGuardConnectionWrapper(final ObjectPool&lt;? extends Connection&gt; pool, final Connection delegate) {</span>
+<span class="fc" id="L237">            super(delegate);</span>
+<span class="fc" id="L238">            this.pool = pool;</span>
+<span class="fc" id="L239">        }</span>
+
+        /**
+         * @see org.apache.commons.dbcp2.DelegatingConnection#getDelegate()
+         */
+        @Override
+        public Connection getDelegate() {
+<span class="nc bnc" id="L246" title="All 2 branches missed.">            if (isAccessToUnderlyingConnectionAllowed()) {</span>
+<span class="nc" id="L247">                return super.getDelegate();</span>
+            }
+<span class="nc" id="L249">            return null;</span>
+        }
+
+        /**
+         * @see org.apache.commons.dbcp2.DelegatingConnection#getInnermostDelegate()
+         */
+        @Override
+        public Connection getInnermostDelegate() {
+<span class="pc bpc" id="L257" title="1 of 2 branches missed.">            if (isAccessToUnderlyingConnectionAllowed()) {</span>
+<span class="fc" id="L258">                return super.getInnermostDelegate();</span>
+            }
+<span class="nc" id="L260">            return null;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

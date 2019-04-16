@@ -1,0 +1,1382 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DelegatingCallableStatement.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2</a> &gt; <span class="el_source">DelegatingCallableStatement.java</span></div><h1>DelegatingCallableStatement.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.dbcp2;
+
+import java.io.InputStream;
+import java.io.Reader;
+import java.math.BigDecimal;
+import java.net.URL;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.CallableStatement;
+import java.sql.Clob;
+import java.sql.Date;
+import java.sql.NClob;
+import java.sql.Ref;
+import java.sql.RowId;
+import java.sql.SQLException;
+import java.sql.SQLType;
+import java.sql.SQLXML;
+import java.sql.Time;
+import java.sql.Timestamp;
+import java.util.Calendar;
+import java.util.Map;
+
+/**
+ * A base delegating implementation of {@link CallableStatement}.
+ * &lt;p&gt;
+ * All of the methods from the {@link CallableStatement} interface simply call the corresponding method on the
+ * &quot;delegate&quot; provided in my constructor.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Extends AbandonedTrace to implement Statement tracking and logging of code which created the Statement. Tracking the
+ * Statement ensures that the Connection which created it can close any open Statement's on Connection close.
+ * &lt;/p&gt;
+ *
+ * @since 2.0
+ */
+public class DelegatingCallableStatement extends DelegatingPreparedStatement implements CallableStatement {
+
+    /**
+     * Creates a wrapper for the Statement which traces this Statement to the Connection which created it and the code
+     * which created it.
+     *
+     * @param connection
+     *            the {@link DelegatingConnection} that created this statement
+     * @param statement
+     *            the {@link CallableStatement} to delegate all calls to
+     */
+    public DelegatingCallableStatement(final DelegatingConnection&lt;?&gt; connection, final CallableStatement statement) {
+<span class="fc" id="L65">        super(connection, statement);</span>
+<span class="fc" id="L66">    }</span>
+
+    @Override
+    public Array getArray(final int parameterIndex) throws SQLException {
+<span class="fc" id="L70">        checkOpen();</span>
+        try {
+<span class="fc" id="L72">            return getDelegateCallableStatement().getArray(parameterIndex);</span>
+<span class="nc" id="L73">        } catch (final SQLException e) {</span>
+<span class="nc" id="L74">            handleException(e);</span>
+<span class="nc" id="L75">            return null;</span>
+        }
+    }
+
+    @Override
+    public Array getArray(final String parameterName) throws SQLException {
+<span class="fc" id="L81">        checkOpen();</span>
+        try {
+<span class="fc" id="L83">            return getDelegateCallableStatement().getArray(parameterName);</span>
+<span class="nc" id="L84">        } catch (final SQLException e) {</span>
+<span class="nc" id="L85">            handleException(e);</span>
+<span class="nc" id="L86">            return null;</span>
+        }
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(final int parameterIndex) throws SQLException {
+<span class="fc" id="L92">        checkOpen();</span>
+        try {
+<span class="fc" id="L94">            return getDelegateCallableStatement().getBigDecimal(parameterIndex);</span>
+<span class="nc" id="L95">        } catch (final SQLException e) {</span>
+<span class="nc" id="L96">            handleException(e);</span>
+<span class="nc" id="L97">            return null;</span>
+        }
+    }
+
+    /** @deprecated Use {@link #getBigDecimal(int)} or {@link #getBigDecimal(String)} */
+    @Override
+    @Deprecated
+    public BigDecimal getBigDecimal(final int parameterIndex, final int scale) throws SQLException {
+<span class="fc" id="L105">        checkOpen();</span>
+        try {
+<span class="fc" id="L107">            return getDelegateCallableStatement().getBigDecimal(parameterIndex, scale);</span>
+<span class="nc" id="L108">        } catch (final SQLException e) {</span>
+<span class="nc" id="L109">            handleException(e);</span>
+<span class="nc" id="L110">            return null;</span>
+        }
+    }
+
+    @Override
+    public BigDecimal getBigDecimal(final String parameterName) throws SQLException {
+<span class="fc" id="L116">        checkOpen();</span>
+        try {
+<span class="fc" id="L118">            return getDelegateCallableStatement().getBigDecimal(parameterName);</span>
+<span class="nc" id="L119">        } catch (final SQLException e) {</span>
+<span class="nc" id="L120">            handleException(e);</span>
+<span class="nc" id="L121">            return null;</span>
+        }
+    }
+
+    @Override
+    public Blob getBlob(final int parameterIndex) throws SQLException {
+<span class="fc" id="L127">        checkOpen();</span>
+        try {
+<span class="fc" id="L129">            return getDelegateCallableStatement().getBlob(parameterIndex);</span>
+<span class="nc" id="L130">        } catch (final SQLException e) {</span>
+<span class="nc" id="L131">            handleException(e);</span>
+<span class="nc" id="L132">            return null;</span>
+        }
+    }
+
+    @Override
+    public Blob getBlob(final String parameterName) throws SQLException {
+<span class="fc" id="L138">        checkOpen();</span>
+        try {
+<span class="fc" id="L140">            return getDelegateCallableStatement().getBlob(parameterName);</span>
+<span class="nc" id="L141">        } catch (final SQLException e) {</span>
+<span class="nc" id="L142">            handleException(e);</span>
+<span class="nc" id="L143">            return null;</span>
+        }
+    }
+
+    @Override
+    public boolean getBoolean(final int parameterIndex) throws SQLException {
+<span class="fc" id="L149">        checkOpen();</span>
+        try {
+<span class="fc" id="L151">            return getDelegateCallableStatement().getBoolean(parameterIndex);</span>
+<span class="nc" id="L152">        } catch (final SQLException e) {</span>
+<span class="nc" id="L153">            handleException(e);</span>
+<span class="nc" id="L154">            return false;</span>
+        }
+    }
+
+    @Override
+    public boolean getBoolean(final String parameterName) throws SQLException {
+<span class="fc" id="L160">        checkOpen();</span>
+        try {
+<span class="fc" id="L162">            return getDelegateCallableStatement().getBoolean(parameterName);</span>
+<span class="nc" id="L163">        } catch (final SQLException e) {</span>
+<span class="nc" id="L164">            handleException(e);</span>
+<span class="nc" id="L165">            return false;</span>
+        }
+    }
+
+    @Override
+    public byte getByte(final int parameterIndex) throws SQLException {
+<span class="fc" id="L171">        checkOpen();</span>
+        try {
+<span class="fc" id="L173">            return getDelegateCallableStatement().getByte(parameterIndex);</span>
+<span class="nc" id="L174">        } catch (final SQLException e) {</span>
+<span class="nc" id="L175">            handleException(e);</span>
+<span class="nc" id="L176">            return 0;</span>
+        }
+    }
+
+    @Override
+    public byte getByte(final String parameterName) throws SQLException {
+<span class="fc" id="L182">        checkOpen();</span>
+        try {
+<span class="fc" id="L184">            return getDelegateCallableStatement().getByte(parameterName);</span>
+<span class="nc" id="L185">        } catch (final SQLException e) {</span>
+<span class="nc" id="L186">            handleException(e);</span>
+<span class="nc" id="L187">            return 0;</span>
+        }
+    }
+
+    @Override
+    public byte[] getBytes(final int parameterIndex) throws SQLException {
+<span class="fc" id="L193">        checkOpen();</span>
+        try {
+<span class="fc" id="L195">            return getDelegateCallableStatement().getBytes(parameterIndex);</span>
+<span class="nc" id="L196">        } catch (final SQLException e) {</span>
+<span class="nc" id="L197">            handleException(e);</span>
+<span class="nc" id="L198">            return null;</span>
+        }
+    }
+
+    @Override
+    public byte[] getBytes(final String parameterName) throws SQLException {
+<span class="fc" id="L204">        checkOpen();</span>
+        try {
+<span class="fc" id="L206">            return getDelegateCallableStatement().getBytes(parameterName);</span>
+<span class="nc" id="L207">        } catch (final SQLException e) {</span>
+<span class="nc" id="L208">            handleException(e);</span>
+<span class="nc" id="L209">            return null;</span>
+        }
+    }
+
+    @Override
+    public Reader getCharacterStream(final int parameterIndex) throws SQLException {
+<span class="fc" id="L215">        checkOpen();</span>
+        try {
+<span class="fc" id="L217">            return getDelegateCallableStatement().getCharacterStream(parameterIndex);</span>
+<span class="nc" id="L218">        } catch (final SQLException e) {</span>
+<span class="nc" id="L219">            handleException(e);</span>
+<span class="nc" id="L220">            return null;</span>
+        }
+    }
+
+    @Override
+    public Reader getCharacterStream(final String parameterName) throws SQLException {
+<span class="fc" id="L226">        checkOpen();</span>
+        try {
+<span class="fc" id="L228">            return getDelegateCallableStatement().getCharacterStream(parameterName);</span>
+<span class="nc" id="L229">        } catch (final SQLException e) {</span>
+<span class="nc" id="L230">            handleException(e);</span>
+<span class="nc" id="L231">            return null;</span>
+        }
+    }
+
+    @Override
+    public Clob getClob(final int parameterIndex) throws SQLException {
+<span class="fc" id="L237">        checkOpen();</span>
+        try {
+<span class="fc" id="L239">            return getDelegateCallableStatement().getClob(parameterIndex);</span>
+<span class="nc" id="L240">        } catch (final SQLException e) {</span>
+<span class="nc" id="L241">            handleException(e);</span>
+<span class="nc" id="L242">            return null;</span>
+        }
+    }
+
+    @Override
+    public Clob getClob(final String parameterName) throws SQLException {
+<span class="fc" id="L248">        checkOpen();</span>
+        try {
+<span class="fc" id="L250">            return getDelegateCallableStatement().getClob(parameterName);</span>
+<span class="nc" id="L251">        } catch (final SQLException e) {</span>
+<span class="nc" id="L252">            handleException(e);</span>
+<span class="nc" id="L253">            return null;</span>
+        }
+    }
+
+    @Override
+    public Date getDate(final int parameterIndex) throws SQLException {
+<span class="fc" id="L259">        checkOpen();</span>
+        try {
+<span class="fc" id="L261">            return getDelegateCallableStatement().getDate(parameterIndex);</span>
+<span class="nc" id="L262">        } catch (final SQLException e) {</span>
+<span class="nc" id="L263">            handleException(e);</span>
+<span class="nc" id="L264">            return null;</span>
+        }
+    }
+
+    @Override
+    public Date getDate(final int parameterIndex, final Calendar cal) throws SQLException {
+<span class="fc" id="L270">        checkOpen();</span>
+        try {
+<span class="fc" id="L272">            return getDelegateCallableStatement().getDate(parameterIndex, cal);</span>
+<span class="nc" id="L273">        } catch (final SQLException e) {</span>
+<span class="nc" id="L274">            handleException(e);</span>
+<span class="nc" id="L275">            return null;</span>
+        }
+    }
+
+    @Override
+    public Date getDate(final String parameterName) throws SQLException {
+<span class="fc" id="L281">        checkOpen();</span>
+        try {
+<span class="fc" id="L283">            return getDelegateCallableStatement().getDate(parameterName);</span>
+<span class="nc" id="L284">        } catch (final SQLException e) {</span>
+<span class="nc" id="L285">            handleException(e);</span>
+<span class="nc" id="L286">            return null;</span>
+        }
+    }
+
+    @Override
+    public Date getDate(final String parameterName, final Calendar cal) throws SQLException {
+<span class="fc" id="L292">        checkOpen();</span>
+        try {
+<span class="fc" id="L294">            return getDelegateCallableStatement().getDate(parameterName, cal);</span>
+<span class="nc" id="L295">        } catch (final SQLException e) {</span>
+<span class="nc" id="L296">            handleException(e);</span>
+<span class="nc" id="L297">            return null;</span>
+        }
+    }
+
+    private CallableStatement getDelegateCallableStatement() {
+<span class="fc" id="L302">        return (CallableStatement) getDelegate();</span>
+    }
+
+    @Override
+    public double getDouble(final int parameterIndex) throws SQLException {
+<span class="fc" id="L307">        checkOpen();</span>
+        try {
+<span class="fc" id="L309">            return getDelegateCallableStatement().getDouble(parameterIndex);</span>
+<span class="nc" id="L310">        } catch (final SQLException e) {</span>
+<span class="nc" id="L311">            handleException(e);</span>
+<span class="nc" id="L312">            return 0;</span>
+        }
+    }
+
+    @Override
+    public double getDouble(final String parameterName) throws SQLException {
+<span class="fc" id="L318">        checkOpen();</span>
+        try {
+<span class="fc" id="L320">            return getDelegateCallableStatement().getDouble(parameterName);</span>
+<span class="nc" id="L321">        } catch (final SQLException e) {</span>
+<span class="nc" id="L322">            handleException(e);</span>
+<span class="nc" id="L323">            return 0;</span>
+        }
+    }
+
+    @Override
+    public float getFloat(final int parameterIndex) throws SQLException {
+<span class="fc" id="L329">        checkOpen();</span>
+        try {
+<span class="fc" id="L331">            return getDelegateCallableStatement().getFloat(parameterIndex);</span>
+<span class="nc" id="L332">        } catch (final SQLException e) {</span>
+<span class="nc" id="L333">            handleException(e);</span>
+<span class="nc" id="L334">            return 0;</span>
+        }
+    }
+
+    @Override
+    public float getFloat(final String parameterName) throws SQLException {
+<span class="fc" id="L340">        checkOpen();</span>
+        try {
+<span class="fc" id="L342">            return getDelegateCallableStatement().getFloat(parameterName);</span>
+<span class="nc" id="L343">        } catch (final SQLException e) {</span>
+<span class="nc" id="L344">            handleException(e);</span>
+<span class="nc" id="L345">            return 0;</span>
+        }
+    }
+
+    @Override
+    public int getInt(final int parameterIndex) throws SQLException {
+<span class="fc" id="L351">        checkOpen();</span>
+        try {
+<span class="fc" id="L353">            return getDelegateCallableStatement().getInt(parameterIndex);</span>
+<span class="nc" id="L354">        } catch (final SQLException e) {</span>
+<span class="nc" id="L355">            handleException(e);</span>
+<span class="nc" id="L356">            return 0;</span>
+        }
+    }
+
+    @Override
+    public int getInt(final String parameterName) throws SQLException {
+<span class="fc" id="L362">        checkOpen();</span>
+        try {
+<span class="fc" id="L364">            return getDelegateCallableStatement().getInt(parameterName);</span>
+<span class="nc" id="L365">        } catch (final SQLException e) {</span>
+<span class="nc" id="L366">            handleException(e);</span>
+<span class="nc" id="L367">            return 0;</span>
+        }
+    }
+
+    @Override
+    public long getLong(final int parameterIndex) throws SQLException {
+<span class="fc" id="L373">        checkOpen();</span>
+        try {
+<span class="fc" id="L375">            return getDelegateCallableStatement().getLong(parameterIndex);</span>
+<span class="nc" id="L376">        } catch (final SQLException e) {</span>
+<span class="nc" id="L377">            handleException(e);</span>
+<span class="nc" id="L378">            return 0;</span>
+        }
+    }
+
+    @Override
+    public long getLong(final String parameterName) throws SQLException {
+<span class="fc" id="L384">        checkOpen();</span>
+        try {
+<span class="fc" id="L386">            return getDelegateCallableStatement().getLong(parameterName);</span>
+<span class="nc" id="L387">        } catch (final SQLException e) {</span>
+<span class="nc" id="L388">            handleException(e);</span>
+<span class="nc" id="L389">            return 0;</span>
+        }
+    }
+
+    @Override
+    public Reader getNCharacterStream(final int parameterIndex) throws SQLException {
+<span class="fc" id="L395">        checkOpen();</span>
+        try {
+<span class="fc" id="L397">            return getDelegateCallableStatement().getNCharacterStream(parameterIndex);</span>
+<span class="nc" id="L398">        } catch (final SQLException e) {</span>
+<span class="nc" id="L399">            handleException(e);</span>
+<span class="nc" id="L400">            return null;</span>
+        }
+    }
+
+    @Override
+    public Reader getNCharacterStream(final String parameterName) throws SQLException {
+<span class="fc" id="L406">        checkOpen();</span>
+        try {
+<span class="fc" id="L408">            return getDelegateCallableStatement().getNCharacterStream(parameterName);</span>
+<span class="nc" id="L409">        } catch (final SQLException e) {</span>
+<span class="nc" id="L410">            handleException(e);</span>
+<span class="nc" id="L411">            return null;</span>
+        }
+    }
+
+    @Override
+    public NClob getNClob(final int parameterIndex) throws SQLException {
+<span class="fc" id="L417">        checkOpen();</span>
+        try {
+<span class="fc" id="L419">            return getDelegateCallableStatement().getNClob(parameterIndex);</span>
+<span class="nc" id="L420">        } catch (final SQLException e) {</span>
+<span class="nc" id="L421">            handleException(e);</span>
+<span class="nc" id="L422">            return null;</span>
+        }
+    }
+
+    @Override
+    public NClob getNClob(final String parameterName) throws SQLException {
+<span class="fc" id="L428">        checkOpen();</span>
+        try {
+<span class="fc" id="L430">            return getDelegateCallableStatement().getNClob(parameterName);</span>
+<span class="nc" id="L431">        } catch (final SQLException e) {</span>
+<span class="nc" id="L432">            handleException(e);</span>
+<span class="nc" id="L433">            return null;</span>
+        }
+    }
+
+    @Override
+    public String getNString(final int parameterIndex) throws SQLException {
+<span class="fc" id="L439">        checkOpen();</span>
+        try {
+<span class="fc" id="L441">            return getDelegateCallableStatement().getNString(parameterIndex);</span>
+<span class="nc" id="L442">        } catch (final SQLException e) {</span>
+<span class="nc" id="L443">            handleException(e);</span>
+<span class="nc" id="L444">            return null;</span>
+        }
+    }
+
+    @Override
+    public String getNString(final String parameterName) throws SQLException {
+<span class="fc" id="L450">        checkOpen();</span>
+        try {
+<span class="fc" id="L452">            return getDelegateCallableStatement().getNString(parameterName);</span>
+<span class="nc" id="L453">        } catch (final SQLException e) {</span>
+<span class="nc" id="L454">            handleException(e);</span>
+<span class="nc" id="L455">            return null;</span>
+        }
+    }
+
+    @Override
+    public Object getObject(final int parameterIndex) throws SQLException {
+<span class="fc" id="L461">        checkOpen();</span>
+        try {
+<span class="fc" id="L463">            return getDelegateCallableStatement().getObject(parameterIndex);</span>
+<span class="nc" id="L464">        } catch (final SQLException e) {</span>
+<span class="nc" id="L465">            handleException(e);</span>
+<span class="nc" id="L466">            return null;</span>
+        }
+    }
+
+    @Override
+    public &lt;T&gt; T getObject(final int parameterIndex, final Class&lt;T&gt; type) throws SQLException {
+<span class="fc" id="L472">        checkOpen();</span>
+        try {
+<span class="fc" id="L474">            return getDelegateCallableStatement().getObject(parameterIndex, type);</span>
+<span class="nc" id="L475">        } catch (final SQLException e) {</span>
+<span class="nc" id="L476">            handleException(e);</span>
+<span class="nc" id="L477">            return null;</span>
+        }
+    }
+
+    @Override
+    public Object getObject(final int i, final Map&lt;String, Class&lt;?&gt;&gt; map) throws SQLException {
+<span class="fc" id="L483">        checkOpen();</span>
+        try {
+<span class="fc" id="L485">            return getDelegateCallableStatement().getObject(i, map);</span>
+<span class="nc" id="L486">        } catch (final SQLException e) {</span>
+<span class="nc" id="L487">            handleException(e);</span>
+<span class="nc" id="L488">            return null;</span>
+        }
+    }
+
+    @Override
+    public Object getObject(final String parameterName) throws SQLException {
+<span class="fc" id="L494">        checkOpen();</span>
+        try {
+<span class="fc" id="L496">            return getDelegateCallableStatement().getObject(parameterName);</span>
+<span class="nc" id="L497">        } catch (final SQLException e) {</span>
+<span class="nc" id="L498">            handleException(e);</span>
+<span class="nc" id="L499">            return null;</span>
+        }
+    }
+
+    @Override
+    public &lt;T&gt; T getObject(final String parameterName, final Class&lt;T&gt; type) throws SQLException {
+<span class="fc" id="L505">        checkOpen();</span>
+        try {
+<span class="fc" id="L507">            return getDelegateCallableStatement().getObject(parameterName, type);</span>
+<span class="nc" id="L508">        } catch (final SQLException e) {</span>
+<span class="nc" id="L509">            handleException(e);</span>
+<span class="nc" id="L510">            return null;</span>
+        }
+    }
+
+    @Override
+    public Object getObject(final String parameterName, final Map&lt;String, Class&lt;?&gt;&gt; map) throws SQLException {
+<span class="fc" id="L516">        checkOpen();</span>
+        try {
+<span class="fc" id="L518">            return getDelegateCallableStatement().getObject(parameterName, map);</span>
+<span class="nc" id="L519">        } catch (final SQLException e) {</span>
+<span class="nc" id="L520">            handleException(e);</span>
+<span class="nc" id="L521">            return null;</span>
+        }
+    }
+
+    @Override
+    public Ref getRef(final int parameterIndex) throws SQLException {
+<span class="fc" id="L527">        checkOpen();</span>
+        try {
+<span class="fc" id="L529">            return getDelegateCallableStatement().getRef(parameterIndex);</span>
+<span class="nc" id="L530">        } catch (final SQLException e) {</span>
+<span class="nc" id="L531">            handleException(e);</span>
+<span class="nc" id="L532">            return null;</span>
+        }
+    }
+
+    @Override
+    public Ref getRef(final String parameterName) throws SQLException {
+<span class="fc" id="L538">        checkOpen();</span>
+        try {
+<span class="fc" id="L540">            return getDelegateCallableStatement().getRef(parameterName);</span>
+<span class="nc" id="L541">        } catch (final SQLException e) {</span>
+<span class="nc" id="L542">            handleException(e);</span>
+<span class="nc" id="L543">            return null;</span>
+        }
+    }
+
+    @Override
+    public RowId getRowId(final int parameterIndex) throws SQLException {
+<span class="fc" id="L549">        checkOpen();</span>
+        try {
+<span class="fc" id="L551">            return getDelegateCallableStatement().getRowId(parameterIndex);</span>
+<span class="nc" id="L552">        } catch (final SQLException e) {</span>
+<span class="nc" id="L553">            handleException(e);</span>
+<span class="nc" id="L554">            return null;</span>
+        }
+    }
+
+    @Override
+    public RowId getRowId(final String parameterName) throws SQLException {
+<span class="fc" id="L560">        checkOpen();</span>
+        try {
+<span class="fc" id="L562">            return getDelegateCallableStatement().getRowId(parameterName);</span>
+<span class="nc" id="L563">        } catch (final SQLException e) {</span>
+<span class="nc" id="L564">            handleException(e);</span>
+<span class="nc" id="L565">            return null;</span>
+        }
+    }
+
+    @Override
+    public short getShort(final int parameterIndex) throws SQLException {
+<span class="fc" id="L571">        checkOpen();</span>
+        try {
+<span class="fc" id="L573">            return getDelegateCallableStatement().getShort(parameterIndex);</span>
+<span class="nc" id="L574">        } catch (final SQLException e) {</span>
+<span class="nc" id="L575">            handleException(e);</span>
+<span class="nc" id="L576">            return 0;</span>
+        }
+    }
+
+    @Override
+    public short getShort(final String parameterName) throws SQLException {
+<span class="fc" id="L582">        checkOpen();</span>
+        try {
+<span class="fc" id="L584">            return getDelegateCallableStatement().getShort(parameterName);</span>
+<span class="nc" id="L585">        } catch (final SQLException e) {</span>
+<span class="nc" id="L586">            handleException(e);</span>
+<span class="nc" id="L587">            return 0;</span>
+        }
+    }
+
+    @Override
+    public SQLXML getSQLXML(final int parameterIndex) throws SQLException {
+<span class="fc" id="L593">        checkOpen();</span>
+        try {
+<span class="fc" id="L595">            return getDelegateCallableStatement().getSQLXML(parameterIndex);</span>
+<span class="nc" id="L596">        } catch (final SQLException e) {</span>
+<span class="nc" id="L597">            handleException(e);</span>
+<span class="nc" id="L598">            return null;</span>
+        }
+    }
+
+    @Override
+    public SQLXML getSQLXML(final String parameterName) throws SQLException {
+<span class="fc" id="L604">        checkOpen();</span>
+        try {
+<span class="fc" id="L606">            return getDelegateCallableStatement().getSQLXML(parameterName);</span>
+<span class="nc" id="L607">        } catch (final SQLException e) {</span>
+<span class="nc" id="L608">            handleException(e);</span>
+<span class="nc" id="L609">            return null;</span>
+        }
+    }
+
+    @Override
+    public String getString(final int parameterIndex) throws SQLException {
+<span class="fc" id="L615">        checkOpen();</span>
+        try {
+<span class="fc" id="L617">            return getDelegateCallableStatement().getString(parameterIndex);</span>
+<span class="nc" id="L618">        } catch (final SQLException e) {</span>
+<span class="nc" id="L619">            handleException(e);</span>
+<span class="nc" id="L620">            return null;</span>
+        }
+    }
+
+    @Override
+    public String getString(final String parameterName) throws SQLException {
+<span class="fc" id="L626">        checkOpen();</span>
+        try {
+<span class="fc" id="L628">            return getDelegateCallableStatement().getString(parameterName);</span>
+<span class="nc" id="L629">        } catch (final SQLException e) {</span>
+<span class="nc" id="L630">            handleException(e);</span>
+<span class="nc" id="L631">            return null;</span>
+        }
+    }
+
+    @Override
+    public Time getTime(final int parameterIndex) throws SQLException {
+<span class="fc" id="L637">        checkOpen();</span>
+        try {
+<span class="fc" id="L639">            return getDelegateCallableStatement().getTime(parameterIndex);</span>
+<span class="nc" id="L640">        } catch (final SQLException e) {</span>
+<span class="nc" id="L641">            handleException(e);</span>
+<span class="nc" id="L642">            return null;</span>
+        }
+    }
+
+    @Override
+    public Time getTime(final int parameterIndex, final Calendar cal) throws SQLException {
+<span class="fc" id="L648">        checkOpen();</span>
+        try {
+<span class="fc" id="L650">            return getDelegateCallableStatement().getTime(parameterIndex, cal);</span>
+<span class="nc" id="L651">        } catch (final SQLException e) {</span>
+<span class="nc" id="L652">            handleException(e);</span>
+<span class="nc" id="L653">            return null;</span>
+        }
+    }
+
+    @Override
+    public Time getTime(final String parameterName) throws SQLException {
+<span class="fc" id="L659">        checkOpen();</span>
+        try {
+<span class="fc" id="L661">            return getDelegateCallableStatement().getTime(parameterName);</span>
+<span class="nc" id="L662">        } catch (final SQLException e) {</span>
+<span class="nc" id="L663">            handleException(e);</span>
+<span class="nc" id="L664">            return null;</span>
+        }
+    }
+
+    @Override
+    public Time getTime(final String parameterName, final Calendar cal) throws SQLException {
+<span class="fc" id="L670">        checkOpen();</span>
+        try {
+<span class="fc" id="L672">            return getDelegateCallableStatement().getTime(parameterName, cal);</span>
+<span class="nc" id="L673">        } catch (final SQLException e) {</span>
+<span class="nc" id="L674">            handleException(e);</span>
+<span class="nc" id="L675">            return null;</span>
+        }
+    }
+
+    @Override
+    public Timestamp getTimestamp(final int parameterIndex) throws SQLException {
+<span class="fc" id="L681">        checkOpen();</span>
+        try {
+<span class="fc" id="L683">            return getDelegateCallableStatement().getTimestamp(parameterIndex);</span>
+<span class="nc" id="L684">        } catch (final SQLException e) {</span>
+<span class="nc" id="L685">            handleException(e);</span>
+<span class="nc" id="L686">            return null;</span>
+        }
+    }
+
+    @Override
+    public Timestamp getTimestamp(final int parameterIndex, final Calendar cal) throws SQLException {
+<span class="fc" id="L692">        checkOpen();</span>
+        try {
+<span class="fc" id="L694">            return getDelegateCallableStatement().getTimestamp(parameterIndex, cal);</span>
+<span class="nc" id="L695">        } catch (final SQLException e) {</span>
+<span class="nc" id="L696">            handleException(e);</span>
+<span class="nc" id="L697">            return null;</span>
+        }
+    }
+
+    @Override
+    public Timestamp getTimestamp(final String parameterName) throws SQLException {
+<span class="fc" id="L703">        checkOpen();</span>
+        try {
+<span class="fc" id="L705">            return getDelegateCallableStatement().getTimestamp(parameterName);</span>
+<span class="nc" id="L706">        } catch (final SQLException e) {</span>
+<span class="nc" id="L707">            handleException(e);</span>
+<span class="nc" id="L708">            return null;</span>
+        }
+    }
+
+    @Override
+    public Timestamp getTimestamp(final String parameterName, final Calendar cal) throws SQLException {
+<span class="fc" id="L714">        checkOpen();</span>
+        try {
+<span class="fc" id="L716">            return getDelegateCallableStatement().getTimestamp(parameterName, cal);</span>
+<span class="nc" id="L717">        } catch (final SQLException e) {</span>
+<span class="nc" id="L718">            handleException(e);</span>
+<span class="nc" id="L719">            return null;</span>
+        }
+    }
+
+    @Override
+    public URL getURL(final int parameterIndex) throws SQLException {
+<span class="fc" id="L725">        checkOpen();</span>
+        try {
+<span class="fc" id="L727">            return getDelegateCallableStatement().getURL(parameterIndex);</span>
+<span class="nc" id="L728">        } catch (final SQLException e) {</span>
+<span class="nc" id="L729">            handleException(e);</span>
+<span class="nc" id="L730">            return null;</span>
+        }
+    }
+
+    @Override
+    public URL getURL(final String parameterName) throws SQLException {
+<span class="fc" id="L736">        checkOpen();</span>
+        try {
+<span class="fc" id="L738">            return getDelegateCallableStatement().getURL(parameterName);</span>
+<span class="nc" id="L739">        } catch (final SQLException e) {</span>
+<span class="nc" id="L740">            handleException(e);</span>
+<span class="nc" id="L741">            return null;</span>
+        }
+    }
+
+    @Override
+    public void registerOutParameter(final int parameterIndex, final int sqlType) throws SQLException {
+<span class="fc" id="L747">        checkOpen();</span>
+        try {
+<span class="fc" id="L749">            getDelegateCallableStatement().registerOutParameter(parameterIndex, sqlType);</span>
+<span class="nc" id="L750">        } catch (final SQLException e) {</span>
+<span class="nc" id="L751">            handleException(e);</span>
+<span class="fc" id="L752">        }</span>
+<span class="fc" id="L753">    }</span>
+
+    @Override
+    public void registerOutParameter(final int parameterIndex, final int sqlType, final int scale) throws SQLException {
+<span class="fc" id="L757">        checkOpen();</span>
+        try {
+<span class="fc" id="L759">            getDelegateCallableStatement().registerOutParameter(parameterIndex, sqlType, scale);</span>
+<span class="nc" id="L760">        } catch (final SQLException e) {</span>
+<span class="nc" id="L761">            handleException(e);</span>
+<span class="fc" id="L762">        }</span>
+<span class="fc" id="L763">    }</span>
+
+    @Override
+    public void registerOutParameter(final int paramIndex, final int sqlType, final String typeName)
+            throws SQLException {
+<span class="fc" id="L768">        checkOpen();</span>
+        try {
+<span class="fc" id="L770">            getDelegateCallableStatement().registerOutParameter(paramIndex, sqlType, typeName);</span>
+<span class="nc" id="L771">        } catch (final SQLException e) {</span>
+<span class="nc" id="L772">            handleException(e);</span>
+<span class="fc" id="L773">        }</span>
+<span class="fc" id="L774">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final int parameterIndex, final SQLType sqlType) throws SQLException {
+<span class="fc" id="L781">        checkOpen();</span>
+        try {
+<span class="fc" id="L783">            getDelegateCallableStatement().registerOutParameter(parameterIndex, sqlType);</span>
+<span class="nc" id="L784">        } catch (final SQLException e) {</span>
+<span class="nc" id="L785">            handleException(e);</span>
+<span class="fc" id="L786">        }</span>
+<span class="fc" id="L787">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final int parameterIndex, final SQLType sqlType, final int scale)
+            throws SQLException {
+<span class="fc" id="L795">        checkOpen();</span>
+        try {
+<span class="fc" id="L797">            getDelegateCallableStatement().registerOutParameter(parameterIndex, sqlType, scale);</span>
+<span class="nc" id="L798">        } catch (final SQLException e) {</span>
+<span class="nc" id="L799">            handleException(e);</span>
+<span class="fc" id="L800">        }</span>
+<span class="fc" id="L801">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final int parameterIndex, final SQLType sqlType, final String typeName)
+            throws SQLException {
+<span class="fc" id="L809">        checkOpen();</span>
+        try {
+<span class="fc" id="L811">            getDelegateCallableStatement().registerOutParameter(parameterIndex, sqlType, typeName);</span>
+<span class="nc" id="L812">        } catch (final SQLException e) {</span>
+<span class="nc" id="L813">            handleException(e);</span>
+<span class="fc" id="L814">        }</span>
+<span class="fc" id="L815">    }</span>
+
+    @Override
+    public void registerOutParameter(final String parameterName, final int sqlType) throws SQLException {
+<span class="fc" id="L819">        checkOpen();</span>
+        try {
+<span class="fc" id="L821">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType);</span>
+<span class="nc" id="L822">        } catch (final SQLException e) {</span>
+<span class="nc" id="L823">            handleException(e);</span>
+<span class="fc" id="L824">        }</span>
+<span class="fc" id="L825">    }</span>
+
+    @Override
+    public void registerOutParameter(final String parameterName, final int sqlType, final int scale)
+            throws SQLException {
+<span class="fc" id="L830">        checkOpen();</span>
+        try {
+<span class="fc" id="L832">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType, scale);</span>
+<span class="nc" id="L833">        } catch (final SQLException e) {</span>
+<span class="nc" id="L834">            handleException(e);</span>
+<span class="fc" id="L835">        }</span>
+<span class="fc" id="L836">    }</span>
+
+    @Override
+    public void registerOutParameter(final String parameterName, final int sqlType, final String typeName)
+            throws SQLException {
+<span class="fc" id="L841">        checkOpen();</span>
+        try {
+<span class="fc" id="L843">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType, typeName);</span>
+<span class="nc" id="L844">        } catch (final SQLException e) {</span>
+<span class="nc" id="L845">            handleException(e);</span>
+<span class="fc" id="L846">        }</span>
+<span class="fc" id="L847">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final String parameterName, final SQLType sqlType) throws SQLException {
+<span class="fc" id="L854">        checkOpen();</span>
+        try {
+<span class="fc" id="L856">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType);</span>
+<span class="nc" id="L857">        } catch (final SQLException e) {</span>
+<span class="nc" id="L858">            handleException(e);</span>
+<span class="fc" id="L859">        }</span>
+<span class="fc" id="L860">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final String parameterName, final SQLType sqlType, final int scale)
+            throws SQLException {
+<span class="fc" id="L868">        checkOpen();</span>
+        try {
+<span class="fc" id="L870">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType, scale);</span>
+<span class="nc" id="L871">        } catch (final SQLException e) {</span>
+<span class="nc" id="L872">            handleException(e);</span>
+<span class="fc" id="L873">        }</span>
+<span class="fc" id="L874">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void registerOutParameter(final String parameterName, final SQLType sqlType, final String typeName)
+            throws SQLException {
+<span class="fc" id="L882">        checkOpen();</span>
+        try {
+<span class="fc" id="L884">            getDelegateCallableStatement().registerOutParameter(parameterName, sqlType, typeName);</span>
+<span class="nc" id="L885">        } catch (final SQLException e) {</span>
+<span class="nc" id="L886">            handleException(e);</span>
+<span class="fc" id="L887">        }</span>
+<span class="fc" id="L888">    }</span>
+
+    @Override
+    public void setAsciiStream(final String parameterName, final InputStream inputStream) throws SQLException {
+<span class="fc" id="L892">        checkOpen();</span>
+        try {
+<span class="fc" id="L894">            getDelegateCallableStatement().setAsciiStream(parameterName, inputStream);</span>
+<span class="nc" id="L895">        } catch (final SQLException e) {</span>
+<span class="nc" id="L896">            handleException(e);</span>
+<span class="fc" id="L897">        }</span>
+<span class="fc" id="L898">    }</span>
+
+    @Override
+    public void setAsciiStream(final String parameterName, final InputStream x, final int length) throws SQLException {
+<span class="fc" id="L902">        checkOpen();</span>
+        try {
+<span class="fc" id="L904">            getDelegateCallableStatement().setAsciiStream(parameterName, x, length);</span>
+<span class="nc" id="L905">        } catch (final SQLException e) {</span>
+<span class="nc" id="L906">            handleException(e);</span>
+<span class="fc" id="L907">        }</span>
+<span class="fc" id="L908">    }</span>
+
+    @Override
+    public void setAsciiStream(final String parameterName, final InputStream inputStream, final long length)
+            throws SQLException {
+<span class="fc" id="L913">        checkOpen();</span>
+        try {
+<span class="fc" id="L915">            getDelegateCallableStatement().setAsciiStream(parameterName, inputStream, length);</span>
+<span class="nc" id="L916">        } catch (final SQLException e) {</span>
+<span class="nc" id="L917">            handleException(e);</span>
+<span class="fc" id="L918">        }</span>
+<span class="fc" id="L919">    }</span>
+
+    @Override
+    public void setBigDecimal(final String parameterName, final BigDecimal x) throws SQLException {
+<span class="fc" id="L923">        checkOpen();</span>
+        try {
+<span class="fc" id="L925">            getDelegateCallableStatement().setBigDecimal(parameterName, x);</span>
+<span class="nc" id="L926">        } catch (final SQLException e) {</span>
+<span class="nc" id="L927">            handleException(e);</span>
+<span class="fc" id="L928">        }</span>
+<span class="fc" id="L929">    }</span>
+
+    @Override
+    public void setBinaryStream(final String parameterName, final InputStream inputStream) throws SQLException {
+<span class="fc" id="L933">        checkOpen();</span>
+        try {
+<span class="fc" id="L935">            getDelegateCallableStatement().setBinaryStream(parameterName, inputStream);</span>
+<span class="nc" id="L936">        } catch (final SQLException e) {</span>
+<span class="nc" id="L937">            handleException(e);</span>
+<span class="fc" id="L938">        }</span>
+<span class="fc" id="L939">    }</span>
+
+    @Override
+    public void setBinaryStream(final String parameterName, final InputStream x, final int length) throws SQLException {
+<span class="fc" id="L943">        checkOpen();</span>
+        try {
+<span class="fc" id="L945">            getDelegateCallableStatement().setBinaryStream(parameterName, x, length);</span>
+<span class="nc" id="L946">        } catch (final SQLException e) {</span>
+<span class="nc" id="L947">            handleException(e);</span>
+<span class="fc" id="L948">        }</span>
+<span class="fc" id="L949">    }</span>
+
+    @Override
+    public void setBinaryStream(final String parameterName, final InputStream inputStream, final long length)
+            throws SQLException {
+<span class="fc" id="L954">        checkOpen();</span>
+        try {
+<span class="fc" id="L956">            getDelegateCallableStatement().setBinaryStream(parameterName, inputStream, length);</span>
+<span class="nc" id="L957">        } catch (final SQLException e) {</span>
+<span class="nc" id="L958">            handleException(e);</span>
+<span class="fc" id="L959">        }</span>
+<span class="fc" id="L960">    }</span>
+
+    @Override
+    public void setBlob(final String parameterName, final Blob blob) throws SQLException {
+<span class="fc" id="L964">        checkOpen();</span>
+        try {
+<span class="fc" id="L966">            getDelegateCallableStatement().setBlob(parameterName, blob);</span>
+<span class="nc" id="L967">        } catch (final SQLException e) {</span>
+<span class="nc" id="L968">            handleException(e);</span>
+<span class="fc" id="L969">        }</span>
+<span class="fc" id="L970">    }</span>
+
+    @Override
+    public void setBlob(final String parameterName, final InputStream inputStream) throws SQLException {
+<span class="fc" id="L974">        checkOpen();</span>
+        try {
+<span class="fc" id="L976">            getDelegateCallableStatement().setBlob(parameterName, inputStream);</span>
+<span class="nc" id="L977">        } catch (final SQLException e) {</span>
+<span class="nc" id="L978">            handleException(e);</span>
+<span class="fc" id="L979">        }</span>
+<span class="fc" id="L980">    }</span>
+
+    @Override
+    public void setBlob(final String parameterName, final InputStream inputStream, final long length)
+            throws SQLException {
+<span class="fc" id="L985">        checkOpen();</span>
+        try {
+<span class="fc" id="L987">            getDelegateCallableStatement().setBlob(parameterName, inputStream, length);</span>
+<span class="nc" id="L988">        } catch (final SQLException e) {</span>
+<span class="nc" id="L989">            handleException(e);</span>
+<span class="fc" id="L990">        }</span>
+<span class="fc" id="L991">    }</span>
+
+    @Override
+    public void setBoolean(final String parameterName, final boolean x) throws SQLException {
+<span class="fc" id="L995">        checkOpen();</span>
+        try {
+<span class="fc" id="L997">            getDelegateCallableStatement().setBoolean(parameterName, x);</span>
+<span class="nc" id="L998">        } catch (final SQLException e) {</span>
+<span class="nc" id="L999">            handleException(e);</span>
+<span class="fc" id="L1000">        }</span>
+<span class="fc" id="L1001">    }</span>
+
+    @Override
+    public void setByte(final String parameterName, final byte x) throws SQLException {
+<span class="fc" id="L1005">        checkOpen();</span>
+        try {
+<span class="fc" id="L1007">            getDelegateCallableStatement().setByte(parameterName, x);</span>
+<span class="nc" id="L1008">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1009">            handleException(e);</span>
+<span class="fc" id="L1010">        }</span>
+<span class="fc" id="L1011">    }</span>
+
+    @Override
+    public void setBytes(final String parameterName, final byte[] x) throws SQLException {
+<span class="fc" id="L1015">        checkOpen();</span>
+        try {
+<span class="fc" id="L1017">            getDelegateCallableStatement().setBytes(parameterName, x);</span>
+<span class="nc" id="L1018">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1019">            handleException(e);</span>
+<span class="fc" id="L1020">        }</span>
+<span class="fc" id="L1021">    }</span>
+
+    @Override
+    public void setCharacterStream(final String parameterName, final Reader reader) throws SQLException {
+<span class="fc" id="L1025">        checkOpen();</span>
+        try {
+<span class="fc" id="L1027">            getDelegateCallableStatement().setCharacterStream(parameterName, reader);</span>
+<span class="nc" id="L1028">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1029">            handleException(e);</span>
+<span class="fc" id="L1030">        }</span>
+<span class="fc" id="L1031">    }</span>
+
+    @Override
+    public void setCharacterStream(final String parameterName, final Reader reader, final int length)
+            throws SQLException {
+<span class="fc" id="L1036">        checkOpen();</span>
+<span class="fc" id="L1037">        getDelegateCallableStatement().setCharacterStream(parameterName, reader, length);</span>
+<span class="fc" id="L1038">    }</span>
+
+    @Override
+    public void setCharacterStream(final String parameterName, final Reader reader, final long length)
+            throws SQLException {
+<span class="fc" id="L1043">        checkOpen();</span>
+        try {
+<span class="fc" id="L1045">            getDelegateCallableStatement().setCharacterStream(parameterName, reader, length);</span>
+<span class="nc" id="L1046">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1047">            handleException(e);</span>
+<span class="fc" id="L1048">        }</span>
+<span class="fc" id="L1049">    }</span>
+
+    @Override
+    public void setClob(final String parameterName, final Clob clob) throws SQLException {
+<span class="fc" id="L1053">        checkOpen();</span>
+        try {
+<span class="fc" id="L1055">            getDelegateCallableStatement().setClob(parameterName, clob);</span>
+<span class="nc" id="L1056">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1057">            handleException(e);</span>
+<span class="fc" id="L1058">        }</span>
+<span class="fc" id="L1059">    }</span>
+
+    @Override
+    public void setClob(final String parameterName, final Reader reader) throws SQLException {
+<span class="fc" id="L1063">        checkOpen();</span>
+        try {
+<span class="fc" id="L1065">            getDelegateCallableStatement().setClob(parameterName, reader);</span>
+<span class="nc" id="L1066">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1067">            handleException(e);</span>
+<span class="fc" id="L1068">        }</span>
+<span class="fc" id="L1069">    }</span>
+
+    @Override
+    public void setClob(final String parameterName, final Reader reader, final long length) throws SQLException {
+<span class="fc" id="L1073">        checkOpen();</span>
+        try {
+<span class="fc" id="L1075">            getDelegateCallableStatement().setClob(parameterName, reader, length);</span>
+<span class="nc" id="L1076">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1077">            handleException(e);</span>
+<span class="fc" id="L1078">        }</span>
+<span class="fc" id="L1079">    }</span>
+
+    @Override
+    public void setDate(final String parameterName, final Date x) throws SQLException {
+<span class="fc" id="L1083">        checkOpen();</span>
+        try {
+<span class="fc" id="L1085">            getDelegateCallableStatement().setDate(parameterName, x);</span>
+<span class="nc" id="L1086">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1087">            handleException(e);</span>
+<span class="fc" id="L1088">        }</span>
+<span class="fc" id="L1089">    }</span>
+
+    @Override
+    public void setDate(final String parameterName, final Date x, final Calendar cal) throws SQLException {
+<span class="fc" id="L1093">        checkOpen();</span>
+        try {
+<span class="fc" id="L1095">            getDelegateCallableStatement().setDate(parameterName, x, cal);</span>
+<span class="nc" id="L1096">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1097">            handleException(e);</span>
+<span class="fc" id="L1098">        }</span>
+<span class="fc" id="L1099">    }</span>
+
+    @Override
+    public void setDouble(final String parameterName, final double x) throws SQLException {
+<span class="fc" id="L1103">        checkOpen();</span>
+        try {
+<span class="fc" id="L1105">            getDelegateCallableStatement().setDouble(parameterName, x);</span>
+<span class="nc" id="L1106">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1107">            handleException(e);</span>
+<span class="fc" id="L1108">        }</span>
+<span class="fc" id="L1109">    }</span>
+
+    @Override
+    public void setFloat(final String parameterName, final float x) throws SQLException {
+<span class="fc" id="L1113">        checkOpen();</span>
+        try {
+<span class="fc" id="L1115">            getDelegateCallableStatement().setFloat(parameterName, x);</span>
+<span class="nc" id="L1116">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1117">            handleException(e);</span>
+<span class="fc" id="L1118">        }</span>
+<span class="fc" id="L1119">    }</span>
+
+    @Override
+    public void setInt(final String parameterName, final int x) throws SQLException {
+<span class="fc" id="L1123">        checkOpen();</span>
+        try {
+<span class="fc" id="L1125">            getDelegateCallableStatement().setInt(parameterName, x);</span>
+<span class="nc" id="L1126">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1127">            handleException(e);</span>
+<span class="fc" id="L1128">        }</span>
+<span class="fc" id="L1129">    }</span>
+
+    @Override
+    public void setLong(final String parameterName, final long x) throws SQLException {
+<span class="fc" id="L1133">        checkOpen();</span>
+        try {
+<span class="fc" id="L1135">            getDelegateCallableStatement().setLong(parameterName, x);</span>
+<span class="nc" id="L1136">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1137">            handleException(e);</span>
+<span class="fc" id="L1138">        }</span>
+<span class="fc" id="L1139">    }</span>
+
+    @Override
+    public void setNCharacterStream(final String parameterName, final Reader reader) throws SQLException {
+<span class="fc" id="L1143">        checkOpen();</span>
+        try {
+<span class="fc" id="L1145">            getDelegateCallableStatement().setNCharacterStream(parameterName, reader);</span>
+<span class="nc" id="L1146">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1147">            handleException(e);</span>
+<span class="fc" id="L1148">        }</span>
+<span class="fc" id="L1149">    }</span>
+
+    @Override
+    public void setNCharacterStream(final String parameterName, final Reader reader, final long length)
+            throws SQLException {
+<span class="fc" id="L1154">        checkOpen();</span>
+        try {
+<span class="fc" id="L1156">            getDelegateCallableStatement().setNCharacterStream(parameterName, reader, length);</span>
+<span class="nc" id="L1157">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1158">            handleException(e);</span>
+<span class="fc" id="L1159">        }</span>
+<span class="fc" id="L1160">    }</span>
+
+    @Override
+    public void setNClob(final String parameterName, final NClob value) throws SQLException {
+<span class="fc" id="L1164">        checkOpen();</span>
+        try {
+<span class="fc" id="L1166">            getDelegateCallableStatement().setNClob(parameterName, value);</span>
+<span class="nc" id="L1167">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1168">            handleException(e);</span>
+<span class="fc" id="L1169">        }</span>
+<span class="fc" id="L1170">    }</span>
+
+    @Override
+    public void setNClob(final String parameterName, final Reader reader) throws SQLException {
+<span class="fc" id="L1174">        checkOpen();</span>
+        try {
+<span class="fc" id="L1176">            getDelegateCallableStatement().setNClob(parameterName, reader);</span>
+<span class="nc" id="L1177">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1178">            handleException(e);</span>
+<span class="fc" id="L1179">        }</span>
+<span class="fc" id="L1180">    }</span>
+
+    @Override
+    public void setNClob(final String parameterName, final Reader reader, final long length) throws SQLException {
+<span class="fc" id="L1184">        checkOpen();</span>
+        try {
+<span class="fc" id="L1186">            getDelegateCallableStatement().setNClob(parameterName, reader, length);</span>
+<span class="nc" id="L1187">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1188">            handleException(e);</span>
+<span class="fc" id="L1189">        }</span>
+<span class="fc" id="L1190">    }</span>
+
+    @Override
+    public void setNString(final String parameterName, final String value) throws SQLException {
+<span class="fc" id="L1194">        checkOpen();</span>
+        try {
+<span class="fc" id="L1196">            getDelegateCallableStatement().setNString(parameterName, value);</span>
+<span class="nc" id="L1197">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1198">            handleException(e);</span>
+<span class="fc" id="L1199">        }</span>
+<span class="fc" id="L1200">    }</span>
+
+    @Override
+    public void setNull(final String parameterName, final int sqlType) throws SQLException {
+<span class="fc" id="L1204">        checkOpen();</span>
+        try {
+<span class="fc" id="L1206">            getDelegateCallableStatement().setNull(parameterName, sqlType);</span>
+<span class="nc" id="L1207">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1208">            handleException(e);</span>
+<span class="fc" id="L1209">        }</span>
+<span class="fc" id="L1210">    }</span>
+
+    @Override
+    public void setNull(final String parameterName, final int sqlType, final String typeName) throws SQLException {
+<span class="fc" id="L1214">        checkOpen();</span>
+        try {
+<span class="fc" id="L1216">            getDelegateCallableStatement().setNull(parameterName, sqlType, typeName);</span>
+<span class="nc" id="L1217">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1218">            handleException(e);</span>
+<span class="fc" id="L1219">        }</span>
+<span class="fc" id="L1220">    }</span>
+
+    @Override
+    public void setObject(final String parameterName, final Object x) throws SQLException {
+<span class="fc" id="L1224">        checkOpen();</span>
+        try {
+<span class="fc" id="L1226">            getDelegateCallableStatement().setObject(parameterName, x);</span>
+<span class="nc" id="L1227">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1228">            handleException(e);</span>
+<span class="fc" id="L1229">        }</span>
+<span class="fc" id="L1230">    }</span>
+
+    @Override
+    public void setObject(final String parameterName, final Object x, final int targetSqlType) throws SQLException {
+<span class="fc" id="L1234">        checkOpen();</span>
+        try {
+<span class="fc" id="L1236">            getDelegateCallableStatement().setObject(parameterName, x, targetSqlType);</span>
+<span class="nc" id="L1237">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1238">            handleException(e);</span>
+<span class="fc" id="L1239">        }</span>
+<span class="fc" id="L1240">    }</span>
+
+    @Override
+    public void setObject(final String parameterName, final Object x, final int targetSqlType, final int scale)
+            throws SQLException {
+<span class="fc" id="L1245">        checkOpen();</span>
+        try {
+<span class="fc" id="L1247">            getDelegateCallableStatement().setObject(parameterName, x, targetSqlType, scale);</span>
+<span class="nc" id="L1248">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1249">            handleException(e);</span>
+<span class="fc" id="L1250">        }</span>
+<span class="fc" id="L1251">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void setObject(final String parameterName, final Object x, final SQLType targetSqlType) throws SQLException {
+<span class="fc" id="L1258">        checkOpen();</span>
+        try {
+<span class="fc" id="L1260">            getDelegateCallableStatement().setObject(parameterName, x, targetSqlType);</span>
+<span class="nc" id="L1261">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1262">            handleException(e);</span>
+<span class="fc" id="L1263">        }</span>
+<span class="fc" id="L1264">    }</span>
+
+    /**
+     * @since 2.5.0
+     */
+    @Override
+    public void setObject(final String parameterName, final Object x, final SQLType targetSqlType,
+            final int scaleOrLength) throws SQLException {
+<span class="fc" id="L1272">        checkOpen();</span>
+        try {
+<span class="fc" id="L1274">            getDelegateCallableStatement().setObject(parameterName, x, targetSqlType, scaleOrLength);</span>
+<span class="nc" id="L1275">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1276">            handleException(e);</span>
+<span class="fc" id="L1277">        }</span>
+<span class="fc" id="L1278">    }</span>
+
+    @Override
+    public void setRowId(final String parameterName, final RowId value) throws SQLException {
+<span class="fc" id="L1282">        checkOpen();</span>
+        try {
+<span class="fc" id="L1284">            getDelegateCallableStatement().setRowId(parameterName, value);</span>
+<span class="nc" id="L1285">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1286">            handleException(e);</span>
+<span class="fc" id="L1287">        }</span>
+<span class="fc" id="L1288">    }</span>
+
+    @Override
+    public void setShort(final String parameterName, final short x) throws SQLException {
+<span class="fc" id="L1292">        checkOpen();</span>
+        try {
+<span class="fc" id="L1294">            getDelegateCallableStatement().setShort(parameterName, x);</span>
+<span class="nc" id="L1295">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1296">            handleException(e);</span>
+<span class="fc" id="L1297">        }</span>
+<span class="fc" id="L1298">    }</span>
+
+    @Override
+    public void setSQLXML(final String parameterName, final SQLXML value) throws SQLException {
+<span class="fc" id="L1302">        checkOpen();</span>
+        try {
+<span class="fc" id="L1304">            getDelegateCallableStatement().setSQLXML(parameterName, value);</span>
+<span class="nc" id="L1305">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1306">            handleException(e);</span>
+<span class="fc" id="L1307">        }</span>
+<span class="fc" id="L1308">    }</span>
+
+    @Override
+    public void setString(final String parameterName, final String x) throws SQLException {
+<span class="fc" id="L1312">        checkOpen();</span>
+        try {
+<span class="fc" id="L1314">            getDelegateCallableStatement().setString(parameterName, x);</span>
+<span class="nc" id="L1315">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1316">            handleException(e);</span>
+<span class="fc" id="L1317">        }</span>
+<span class="fc" id="L1318">    }</span>
+
+    @Override
+    public void setTime(final String parameterName, final Time x) throws SQLException {
+<span class="fc" id="L1322">        checkOpen();</span>
+        try {
+<span class="fc" id="L1324">            getDelegateCallableStatement().setTime(parameterName, x);</span>
+<span class="nc" id="L1325">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1326">            handleException(e);</span>
+<span class="fc" id="L1327">        }</span>
+<span class="fc" id="L1328">    }</span>
+
+    @Override
+    public void setTime(final String parameterName, final Time x, final Calendar cal) throws SQLException {
+<span class="fc" id="L1332">        checkOpen();</span>
+        try {
+<span class="fc" id="L1334">            getDelegateCallableStatement().setTime(parameterName, x, cal);</span>
+<span class="nc" id="L1335">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1336">            handleException(e);</span>
+<span class="fc" id="L1337">        }</span>
+<span class="fc" id="L1338">    }</span>
+
+    @Override
+    public void setTimestamp(final String parameterName, final Timestamp x) throws SQLException {
+<span class="fc" id="L1342">        checkOpen();</span>
+        try {
+<span class="fc" id="L1344">            getDelegateCallableStatement().setTimestamp(parameterName, x);</span>
+<span class="nc" id="L1345">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1346">            handleException(e);</span>
+<span class="fc" id="L1347">        }</span>
+<span class="fc" id="L1348">    }</span>
+
+    @Override
+    public void setTimestamp(final String parameterName, final Timestamp x, final Calendar cal) throws SQLException {
+<span class="fc" id="L1352">        checkOpen();</span>
+        try {
+<span class="fc" id="L1354">            getDelegateCallableStatement().setTimestamp(parameterName, x, cal);</span>
+<span class="nc" id="L1355">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1356">            handleException(e);</span>
+<span class="fc" id="L1357">        }</span>
+<span class="fc" id="L1358">    }</span>
+
+    @Override
+    public void setURL(final String parameterName, final URL val) throws SQLException {
+<span class="fc" id="L1362">        checkOpen();</span>
+        try {
+<span class="fc" id="L1364">            getDelegateCallableStatement().setURL(parameterName, val);</span>
+<span class="nc" id="L1365">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1366">            handleException(e);</span>
+<span class="fc" id="L1367">        }</span>
+<span class="fc" id="L1368">    }</span>
+
+    @Override
+    public boolean wasNull() throws SQLException {
+<span class="fc" id="L1372">        checkOpen();</span>
+        try {
+<span class="fc" id="L1374">            return getDelegateCallableStatement().wasNull();</span>
+<span class="nc" id="L1375">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1376">            handleException(e);</span>
+<span class="nc" id="L1377">            return false;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

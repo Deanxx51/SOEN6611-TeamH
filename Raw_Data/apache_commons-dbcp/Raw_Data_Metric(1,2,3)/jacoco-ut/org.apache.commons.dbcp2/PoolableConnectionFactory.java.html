@@ -1,0 +1,658 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PoolableConnectionFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2</a> &gt; <span class="el_source">PoolableConnectionFactory.java</span></div><h1>PoolableConnectionFactory.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.dbcp2;
+
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+
+import javax.management.ObjectName;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.pool2.KeyedObjectPool;
+import org.apache.commons.pool2.ObjectPool;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.PooledObjectFactory;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPool;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.apache.commons.pool2.impl.DefaultPooledObject;
+
+/**
+ * A {@link PooledObjectFactory} that creates {@link PoolableConnection}s.
+ *
+ * @since 2.0
+ */
+public class PoolableConnectionFactory implements PooledObjectFactory&lt;PoolableConnection&gt; {
+
+<span class="fc" id="L46">    private static final Log log = LogFactory.getLog(PoolableConnectionFactory.class);</span>
+
+    /**
+     * Internal constant to indicate the level is not set.
+     */
+    static final int UNKNOWN_TRANSACTION_ISOLATION = -1;
+
+    private final ConnectionFactory connectionFactory;
+
+    private final ObjectName dataSourceJmxObjectName;
+
+    private volatile String validationQuery;
+
+<span class="fc" id="L59">    private volatile int validationQueryTimeoutSeconds = -1;</span>
+
+    private Collection&lt;String&gt; connectionInitSqls;
+
+    private Collection&lt;String&gt; disconnectionSqlCodes;
+
+<span class="fc" id="L65">    private boolean fastFailValidation = true;</span>
+
+    private volatile ObjectPool&lt;PoolableConnection&gt; pool;
+
+    private Boolean defaultReadOnly;
+
+    private Boolean defaultAutoCommit;
+
+<span class="fc" id="L73">    private boolean autoCommitOnReturn = true;</span>
+
+<span class="fc" id="L75">    private boolean rollbackOnReturn = true;</span>
+
+<span class="fc" id="L77">    private int defaultTransactionIsolation = UNKNOWN_TRANSACTION_ISOLATION;</span>
+
+    private String defaultCatalog;
+
+    private String defaultSchema;
+
+    private boolean cacheState;
+
+    private boolean poolStatements;
+
+<span class="fc" id="L87">    private int maxOpenPreparedStatements = GenericKeyedObjectPoolConfig.DEFAULT_MAX_TOTAL_PER_KEY;</span>
+
+<span class="fc" id="L89">    private long maxConnLifetimeMillis = -1;</span>
+
+<span class="fc" id="L91">    private final AtomicLong connectionIndex = new AtomicLong(0);</span>
+
+    private Integer defaultQueryTimeoutSeconds;
+
+    /**
+     * Creates a new {@code PoolableConnectionFactory}.
+     *
+     * @param connFactory
+     *            the {@link ConnectionFactory} from which to obtain base {@link Connection}s
+     * @param dataSourceJmxObjectName
+     *            The JMX object name, may be null.
+     */
+<span class="fc" id="L103">    public PoolableConnectionFactory(final ConnectionFactory connFactory, final ObjectName dataSourceJmxObjectName) {</span>
+<span class="fc" id="L104">        this.connectionFactory = connFactory;</span>
+<span class="fc" id="L105">        this.dataSourceJmxObjectName = dataSourceJmxObjectName;</span>
+<span class="fc" id="L106">    }</span>
+
+    @Override
+    public void activateObject(final PooledObject&lt;PoolableConnection&gt; p) throws Exception {
+
+<span class="fc" id="L111">        validateLifetime(p);</span>
+
+<span class="fc" id="L113">        final PoolableConnection conn = p.getObject();</span>
+<span class="fc" id="L114">        conn.activate();</span>
+
+<span class="fc bfc" id="L116" title="All 4 branches covered.">        if (defaultAutoCommit != null &amp;&amp; conn.getAutoCommit() != defaultAutoCommit.booleanValue()) {</span>
+<span class="fc" id="L117">            conn.setAutoCommit(defaultAutoCommit.booleanValue());</span>
+        }
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        if (defaultTransactionIsolation != UNKNOWN_TRANSACTION_ISOLATION</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">                &amp;&amp; conn.getTransactionIsolation() != defaultTransactionIsolation) {</span>
+<span class="fc" id="L121">            conn.setTransactionIsolation(defaultTransactionIsolation);</span>
+        }
+<span class="fc bfc" id="L123" title="All 4 branches covered.">        if (defaultReadOnly != null &amp;&amp; conn.isReadOnly() != defaultReadOnly.booleanValue()) {</span>
+<span class="fc" id="L124">            conn.setReadOnly(defaultReadOnly.booleanValue());</span>
+        }
+<span class="fc bfc" id="L126" title="All 4 branches covered.">        if (defaultCatalog != null &amp;&amp; !defaultCatalog.equals(conn.getCatalog())) {</span>
+<span class="fc" id="L127">            conn.setCatalog(defaultCatalog);</span>
+        }
+<span class="pc bpc" id="L129" title="1 of 4 branches missed.">        if (defaultSchema != null &amp;&amp; !defaultSchema.equals(Jdbc41Bridge.getSchema(conn))) {</span>
+<span class="fc" id="L130">            Jdbc41Bridge.setSchema(conn, defaultSchema);</span>
+        }
+<span class="fc" id="L132">        conn.setDefaultQueryTimeout(defaultQueryTimeoutSeconds);</span>
+<span class="fc" id="L133">    }</span>
+
+    @Override
+    public void destroyObject(final PooledObject&lt;PoolableConnection&gt; p) throws Exception {
+<span class="fc" id="L137">        p.getObject().reallyClose();</span>
+<span class="fc" id="L138">    }</span>
+
+    /**
+     * @return The cache state.
+     * @since Made public in 2.6.0.
+     */
+    public boolean getCacheState() {
+<span class="fc" id="L145">        return cacheState;</span>
+    }
+
+    /**
+     * @return The connection factory.
+     * @since Made public in 2.6.0.
+     */
+    public ConnectionFactory getConnectionFactory() {
+<span class="fc" id="L153">        return connectionFactory;</span>
+    }
+
+    protected AtomicLong getConnectionIndex() {
+<span class="fc" id="L157">        return connectionIndex;</span>
+    }
+
+    /**
+     * @return The collection of initialization SQL statements.
+     * @since 2.6.0
+     */
+    public Collection&lt;String&gt; getConnectionInitSqls() {
+<span class="nc" id="L165">        return connectionInitSqls;</span>
+    }
+
+    /**
+     * @return The data source JMX ObjectName
+     * @since Made public in 2.6.0.
+     */
+    public ObjectName getDataSourceJmxName() {
+<span class="fc" id="L173">        return dataSourceJmxObjectName;</span>
+    }
+
+    /**
+     * @return The data source JMS ObjectName.
+     * @since 2.6.0
+     */
+    public ObjectName getDataSourceJmxObjectName() {
+<span class="nc" id="L181">        return dataSourceJmxObjectName;</span>
+    }
+
+    /**
+     * @return Default auto-commit value.
+     * @since 2.6.0
+     */
+    public Boolean getDefaultAutoCommit() {
+<span class="nc" id="L189">        return defaultAutoCommit;</span>
+    }
+
+    /**
+     * @return Default catalog.
+     * @since 2.6.0
+     */
+    public String getDefaultCatalog() {
+<span class="nc" id="L197">        return defaultCatalog;</span>
+    }
+
+    /**
+     * @return Default query timeout in seconds.
+     */
+    public Integer getDefaultQueryTimeout() {
+<span class="nc" id="L204">        return defaultQueryTimeoutSeconds;</span>
+    }
+
+    /**
+     * @return Default query timeout in seconds.
+     * @since 2.6.0
+     */
+    public Integer getDefaultQueryTimeoutSeconds() {
+<span class="nc" id="L212">        return defaultQueryTimeoutSeconds;</span>
+    }
+
+    /**
+     * @return Default read-only-value.
+     * @since 2.6.0
+     */
+    public Boolean getDefaultReadOnly() {
+<span class="nc" id="L220">        return defaultReadOnly;</span>
+    }
+
+    /**
+     * @return Default schema.
+     * @since 2.6.0
+     */
+    public String getDefaultSchema() {
+<span class="nc" id="L228">        return defaultSchema;</span>
+    }
+
+    /**
+     * @return Default transaction isolation.
+     * @since 2.6.0
+     */
+    public int getDefaultTransactionIsolation() {
+<span class="nc" id="L236">        return defaultTransactionIsolation;</span>
+    }
+
+    /**
+     * SQL_STATE codes considered to signal fatal conditions.
+     * &lt;p&gt;
+     * Overrides the defaults in {@link Utils#DISCONNECTION_SQL_CODES} (plus anything starting with
+     * {@link Utils#DISCONNECTION_SQL_CODE_PREFIX}). If this property is non-null and {@link #isFastFailValidation()} is
+     * {@code true}, whenever connections created by this factory generate exceptions with SQL_STATE codes in this list,
+     * they will be marked as &quot;fatally disconnected&quot; and subsequent validations will fail fast (no attempt at isValid or
+     * validation query).
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * If {@link #isFastFailValidation()} is {@code false} setting this property has no effect.
+     * &lt;/p&gt;
+     *
+     * @return SQL_STATE codes overriding defaults
+     * @since 2.1
+     */
+    public Collection&lt;String&gt; getDisconnectionSqlCodes() {
+<span class="fc" id="L256">        return disconnectionSqlCodes;</span>
+    }
+
+    /**
+     * @return Maximum connection lifetime in milliseconds.
+     * @since 2.6.0
+     */
+    public long getMaxConnLifetimeMillis() {
+<span class="nc" id="L264">        return maxConnLifetimeMillis;</span>
+    }
+
+    protected int getMaxOpenPreparedStatements() {
+<span class="fc" id="L268">        return maxOpenPreparedStatements;</span>
+    }
+
+    /**
+     * Returns the {@link ObjectPool} in which {@link Connection}s are pooled.
+     *
+     * @return the connection pool
+     */
+    public synchronized ObjectPool&lt;PoolableConnection&gt; getPool() {
+<span class="fc" id="L277">        return pool;</span>
+    }
+
+    /**
+     * @return Whether to pool statements.
+     * @since Made public in 2.6.0.
+     */
+    public boolean getPoolStatements() {
+<span class="fc" id="L285">        return poolStatements;</span>
+    }
+    /**
+     * @return Validation query.
+     * @since 2.6.0
+     */
+    public String getValidationQuery() {
+<span class="nc" id="L292">        return validationQuery;</span>
+    }
+    /**
+     * @return Validation query timeout in seconds.
+     * @since 2.6.0
+     */
+    public int getValidationQueryTimeoutSeconds() {
+<span class="nc" id="L299">        return validationQueryTimeoutSeconds;</span>
+    }
+    protected void initializeConnection(final Connection conn) throws SQLException {
+<span class="fc" id="L302">        final Collection&lt;String&gt; sqls = connectionInitSqls;</span>
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">        if (conn.isClosed()) {</span>
+<span class="nc" id="L304">            throw new SQLException(&quot;initializeConnection: connection closed&quot;);</span>
+        }
+<span class="fc bfc" id="L306" title="All 2 branches covered.">        if (null != sqls) {</span>
+<span class="fc" id="L307">            try (Statement stmt = conn.createStatement()) {</span>
+<span class="fc bfc" id="L308" title="All 2 branches covered.">                for (final String sql : sqls) {</span>
+<span class="fc" id="L309">                    Objects.requireNonNull(sql, &quot;null connectionInitSqls element&quot;);</span>
+<span class="fc" id="L310">                    stmt.execute(sql);</span>
+<span class="fc" id="L311">                }</span>
+            }
+        }
+<span class="fc" id="L314">    }</span>
+    
+    /**
+     * @return Whether to auto-commit on return.
+     * @since 2.6.0
+     */
+    public boolean isAutoCommitOnReturn() {
+<span class="nc" id="L321">        return autoCommitOnReturn;</span>
+    }
+
+    /**
+     * @return Whether to auto-commit on return.
+     * @deprecated Use {@link #isAutoCommitOnReturn()}.
+     */
+    @Deprecated
+    public boolean isEnableAutoCommitOnReturn() {
+<span class="nc" id="L330">        return autoCommitOnReturn;</span>
+    }
+    
+    /**
+     * True means that validation will fail immediately for connections that have previously thrown SQLExceptions with
+     * SQL_STATE indicating fatal disconnection errors.
+     *
+     * @return true if connections created by this factory will fast fail validation.
+     * @see #setDisconnectionSqlCodes(Collection)
+     * @since 2.1
+     * @since 2.5.0 Defaults to true, previous versions defaulted to false.
+     */
+    public boolean isFastFailValidation() {
+<span class="fc" id="L343">        return fastFailValidation;</span>
+    }
+    
+    /**
+     * @return Whether to rollback on return.
+     */
+    public boolean isRollbackOnReturn() {
+<span class="nc" id="L350">        return rollbackOnReturn;</span>
+    }
+    
+    @Override
+    public PooledObject&lt;PoolableConnection&gt; makeObject() throws Exception {
+<span class="fc" id="L355">        Connection conn = connectionFactory.createConnection();</span>
+<span class="pc bpc" id="L356" title="1 of 2 branches missed.">        if (conn == null) {</span>
+<span class="nc" id="L357">            throw new IllegalStateException(&quot;Connection factory returned null from createConnection&quot;);</span>
+        }
+        try {
+<span class="fc" id="L360">            initializeConnection(conn);</span>
+<span class="fc" id="L361">        } catch (final SQLException sqle) {</span>
+            // Make sure the connection is closed
+            try {
+<span class="fc" id="L364">                conn.close();</span>
+<span class="nc" id="L365">            } catch (final SQLException ignore) {</span>
+                // ignore
+<span class="fc" id="L367">            }</span>
+            // Rethrow original exception so it is visible to caller
+<span class="fc" id="L369">            throw sqle;</span>
+<span class="fc" id="L370">        }</span>
+
+<span class="fc" id="L372">        final long connIndex = connectionIndex.getAndIncrement();</span>
+
+<span class="fc bfc" id="L374" title="All 2 branches covered.">        if (poolStatements) {</span>
+<span class="fc" id="L375">            conn = new PoolingConnection(conn);</span>
+<span class="fc" id="L376">            final GenericKeyedObjectPoolConfig&lt;DelegatingPreparedStatement&gt; config = new GenericKeyedObjectPoolConfig&lt;&gt;();</span>
+<span class="fc" id="L377">            config.setMaxTotalPerKey(-1);</span>
+<span class="fc" id="L378">            config.setBlockWhenExhausted(false);</span>
+<span class="fc" id="L379">            config.setMaxWaitMillis(0);</span>
+<span class="fc" id="L380">            config.setMaxIdlePerKey(1);</span>
+<span class="fc" id="L381">            config.setMaxTotal(maxOpenPreparedStatements);</span>
+<span class="fc bfc" id="L382" title="All 2 branches covered.">            if (dataSourceJmxObjectName != null) {</span>
+<span class="fc" id="L383">                final StringBuilder base = new StringBuilder(dataSourceJmxObjectName.toString());</span>
+<span class="fc" id="L384">                base.append(Constants.JMX_CONNECTION_BASE_EXT);</span>
+<span class="fc" id="L385">                base.append(Long.toString(connIndex));</span>
+<span class="fc" id="L386">                config.setJmxNameBase(base.toString());</span>
+<span class="fc" id="L387">                config.setJmxNamePrefix(Constants.JMX_STATEMENT_POOL_PREFIX);</span>
+<span class="fc" id="L388">            } else {</span>
+<span class="fc" id="L389">                config.setJmxEnabled(false);</span>
+            }
+<span class="fc" id="L391">            final PoolingConnection poolingConn = (PoolingConnection) conn;</span>
+<span class="fc" id="L392">            final KeyedObjectPool&lt;PStmtKey, DelegatingPreparedStatement&gt; stmtPool = new GenericKeyedObjectPool&lt;&gt;(</span>
+                    poolingConn, config);
+<span class="fc" id="L394">            poolingConn.setStatementPool(stmtPool);</span>
+<span class="fc" id="L395">            poolingConn.setCacheState(cacheState);</span>
+        }
+
+        // Register this connection with JMX
+        ObjectName connJmxName;
+<span class="fc bfc" id="L400" title="All 2 branches covered.">        if (dataSourceJmxObjectName == null) {</span>
+<span class="fc" id="L401">            connJmxName = null;</span>
+        } else {
+<span class="fc" id="L403">            connJmxName = new ObjectName(</span>
+<span class="fc" id="L404">                    dataSourceJmxObjectName.toString() + Constants.JMX_CONNECTION_BASE_EXT + connIndex);</span>
+        }
+
+<span class="fc" id="L407">        final PoolableConnection pc = new PoolableConnection(conn, pool, connJmxName, disconnectionSqlCodes,</span>
+                fastFailValidation);
+<span class="fc" id="L409">        pc.setCacheState(cacheState);</span>
+
+<span class="fc" id="L411">        return new DefaultPooledObject&lt;&gt;(pc);</span>
+    }
+    
+    @Override
+    public void passivateObject(final PooledObject&lt;PoolableConnection&gt; p) throws Exception {
+
+<span class="fc" id="L417">        validateLifetime(p);</span>
+
+<span class="fc" id="L419">        final PoolableConnection conn = p.getObject();</span>
+<span class="fc" id="L420">        Boolean connAutoCommit = null;</span>
+<span class="pc bpc" id="L421" title="1 of 2 branches missed.">        if (rollbackOnReturn) {</span>
+<span class="fc" id="L422">            connAutoCommit = Boolean.valueOf(conn.getAutoCommit());</span>
+<span class="fc bfc" id="L423" title="All 4 branches covered.">            if (!connAutoCommit.booleanValue() &amp;&amp; !conn.isReadOnly()) {</span>
+<span class="fc" id="L424">                conn.rollback();</span>
+            }
+        }
+
+<span class="fc" id="L428">        conn.clearWarnings();</span>
+
+        // DBCP-97 / DBCP-399 / DBCP-351 Idle connections in the pool should
+        // have autoCommit enabled
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">        if (autoCommitOnReturn) {</span>
+<span class="pc bpc" id="L433" title="1 of 2 branches missed.">            if (connAutoCommit == null) {</span>
+<span class="nc" id="L434">                connAutoCommit = Boolean.valueOf(conn.getAutoCommit());</span>
+            }
+<span class="fc bfc" id="L436" title="All 2 branches covered.">            if (!connAutoCommit.booleanValue()) {</span>
+<span class="fc" id="L437">                conn.setAutoCommit(true);</span>
+            }
+        }
+
+<span class="fc" id="L441">        conn.passivate();</span>
+<span class="fc" id="L442">    }</span>
+    
+    public void setAutoCommitOnReturn(final boolean autoCommitOnReturn) {
+<span class="fc" id="L445">        this.autoCommitOnReturn = autoCommitOnReturn;</span>
+<span class="fc" id="L446">    }</span>
+    
+    public void setCacheState(final boolean cacheState) {
+<span class="fc" id="L449">        this.cacheState = cacheState;</span>
+<span class="fc" id="L450">    }</span>
+    
+    /**
+     * Sets the SQL statements I use to initialize newly created {@link Connection}s. Using {@code null} turns off
+     * connection initialization.
+     *
+     * @param connectionInitSqls
+     *            SQL statement to initialize {@link Connection}s.
+     */
+    public void setConnectionInitSql(final Collection&lt;String&gt; connectionInitSqls) {
+<span class="fc" id="L460">        this.connectionInitSqls = connectionInitSqls;</span>
+<span class="fc" id="L461">    }</span>
+    
+    /**
+     * Sets the default &quot;auto commit&quot; setting for borrowed {@link Connection}s
+     *
+     * @param defaultAutoCommit
+     *            the default &quot;auto commit&quot; setting for borrowed {@link Connection}s
+     */
+    public void setDefaultAutoCommit(final Boolean defaultAutoCommit) {
+<span class="fc" id="L470">        this.defaultAutoCommit = defaultAutoCommit;</span>
+<span class="fc" id="L471">    }</span>
+    
+    /**
+     * Sets the default &quot;catalog&quot; setting for borrowed {@link Connection}s
+     *
+     * @param defaultCatalog
+     *            the default &quot;catalog&quot; setting for borrowed {@link Connection}s
+     */
+    public void setDefaultCatalog(final String defaultCatalog) {
+<span class="fc" id="L480">        this.defaultCatalog = defaultCatalog;</span>
+<span class="fc" id="L481">    }</span>
+    
+    public void setDefaultQueryTimeout(final Integer defaultQueryTimeoutSeconds) {
+<span class="fc" id="L484">        this.defaultQueryTimeoutSeconds = defaultQueryTimeoutSeconds;</span>
+<span class="fc" id="L485">    }</span>
+    /**
+     * Sets the default &quot;read only&quot; setting for borrowed {@link Connection}s
+     *
+     * @param defaultReadOnly
+     *            the default &quot;read only&quot; setting for borrowed {@link Connection}s
+     */
+    public void setDefaultReadOnly(final Boolean defaultReadOnly) {
+<span class="fc" id="L493">        this.defaultReadOnly = defaultReadOnly;</span>
+<span class="fc" id="L494">    }</span>
+    
+    /**
+     * Sets the default &quot;schema&quot; setting for borrowed {@link Connection}s
+     *
+     * @param defaultSchema
+     *            the default &quot;schema&quot; setting for borrowed {@link Connection}s
+     * @since 2.5.0
+     */
+    public void setDefaultSchema(final String defaultSchema) {
+<span class="fc" id="L504">        this.defaultSchema = defaultSchema;</span>
+<span class="fc" id="L505">    }</span>
+    
+    /**
+     * Sets the default &quot;Transaction Isolation&quot; setting for borrowed {@link Connection}s
+     *
+     * @param defaultTransactionIsolation
+     *            the default &quot;Transaction Isolation&quot; setting for returned {@link Connection}s
+     */
+    public void setDefaultTransactionIsolation(final int defaultTransactionIsolation) {
+<span class="fc" id="L514">        this.defaultTransactionIsolation = defaultTransactionIsolation;</span>
+<span class="fc" id="L515">    }</span>
+    
+    /**
+     * @param disconnectionSqlCodes
+     *            The disconnection SQL codes.
+     * @see #getDisconnectionSqlCodes()
+     * @since 2.1
+     */
+    public void setDisconnectionSqlCodes(final Collection&lt;String&gt; disconnectionSqlCodes) {
+<span class="fc" id="L524">        this.disconnectionSqlCodes = disconnectionSqlCodes;</span>
+<span class="fc" id="L525">    }</span>
+    
+    /**
+     * @param autoCommitOnReturn Whether to auto-commit on return.
+     * @deprecated Use {@link #setAutoCommitOnReturn(boolean)}.
+     */
+    @Deprecated
+    public void setEnableAutoCommitOnReturn(final boolean autoCommitOnReturn) {
+<span class="nc" id="L533">        this.autoCommitOnReturn = autoCommitOnReturn;</span>
+<span class="nc" id="L534">    }</span>
+
+    /**
+     * @see #isFastFailValidation()
+     * @param fastFailValidation
+     *            true means connections created by this factory will fast fail validation
+     * @since 2.1
+     */
+    public void setFastFailValidation(final boolean fastFailValidation) {
+<span class="fc" id="L543">        this.fastFailValidation = fastFailValidation;</span>
+<span class="fc" id="L544">    }</span>
+
+    /**
+     * Sets the maximum lifetime in milliseconds of a connection after which the connection will always fail activation,
+     * passivation and validation. A value of zero or less indicates an infinite lifetime. The default value is -1.
+     *
+     * @param maxConnLifetimeMillis
+     *            The maximum lifetime in milliseconds.
+     */
+    public void setMaxConnLifetimeMillis(final long maxConnLifetimeMillis) {
+<span class="fc" id="L554">        this.maxConnLifetimeMillis = maxConnLifetimeMillis;</span>
+<span class="fc" id="L555">    }</span>
+
+    /**
+     * Sets the maximum number of open prepared statements.
+     *
+     * @param maxOpenPreparedStatements
+     *            The maximum number of open prepared statements.
+     */
+    public void setMaxOpenPreparedStatements(final int maxOpenPreparedStatements) {
+<span class="fc" id="L564">        this.maxOpenPreparedStatements = maxOpenPreparedStatements;</span>
+<span class="fc" id="L565">    }</span>
+
+    /**
+     * Deprecated due to typo in method name.
+     *
+     * @param maxOpenPreparedStatements
+     *            The maximum number of open prepared statements.
+     * @deprecated Use {@link #setMaxOpenPreparedStatements(int)}.
+     */
+    @Deprecated // Due to typo in method name.
+    public void setMaxOpenPrepatedStatements(final int maxOpenPreparedStatements) {
+<span class="nc" id="L576">        setMaxOpenPreparedStatements(maxOpenPreparedStatements);</span>
+<span class="nc" id="L577">    }</span>
+
+    /**
+     * Sets the {@link ObjectPool} in which to pool {@link Connection}s.
+     *
+     * @param pool
+     *            the {@link ObjectPool} in which to pool those {@link Connection}s
+     */
+    public synchronized void setPool(final ObjectPool&lt;PoolableConnection&gt; pool) {
+<span class="pc bpc" id="L586" title="3 of 4 branches missed.">        if (null != this.pool &amp;&amp; pool != this.pool) {</span>
+            try {
+<span class="nc" id="L588">                this.pool.close();</span>
+<span class="nc" id="L589">            } catch (final Exception e) {</span>
+                // ignored !?!
+<span class="nc" id="L591">            }</span>
+        }
+<span class="fc" id="L593">        this.pool = pool;</span>
+<span class="fc" id="L594">    }</span>
+
+    public void setPoolStatements(final boolean poolStatements) {
+<span class="fc" id="L597">        this.poolStatements = poolStatements;</span>
+<span class="fc" id="L598">    }</span>
+
+    public void setRollbackOnReturn(final boolean rollbackOnReturn) {
+<span class="fc" id="L601">        this.rollbackOnReturn = rollbackOnReturn;</span>
+<span class="fc" id="L602">    }</span>
+
+    /**
+     * Sets the query I use to {@link #validateObject validate} {@link Connection}s. Should return at least one row. If
+     * not specified, {@link Connection#isValid(int)} will be used to validate connections.
+     *
+     * @param validationQuery
+     *            a query to use to {@link #validateObject validate} {@link Connection}s.
+     */
+    public void setValidationQuery(final String validationQuery) {
+<span class="fc" id="L612">        this.validationQuery = validationQuery;</span>
+<span class="fc" id="L613">    }</span>
+
+    /**
+     * Sets the validation query timeout, the amount of time, in seconds, that connection validation will wait for a
+     * response from the database when executing a validation query. Use a value less than or equal to 0 for no timeout.
+     *
+     * @param validationQueryTimeoutSeconds
+     *            new validation query timeout value in seconds
+     */
+    public void setValidationQueryTimeout(final int validationQueryTimeoutSeconds) {
+<span class="fc" id="L623">        this.validationQueryTimeoutSeconds = validationQueryTimeoutSeconds;</span>
+<span class="fc" id="L624">    }</span>
+
+    public void validateConnection(final PoolableConnection conn) throws SQLException {
+<span class="pc bpc" id="L627" title="1 of 2 branches missed.">        if (conn.isClosed()) {</span>
+<span class="nc" id="L628">            throw new SQLException(&quot;validateConnection: connection closed&quot;);</span>
+        }
+<span class="fc" id="L630">        conn.validate(validationQuery, validationQueryTimeoutSeconds);</span>
+<span class="fc" id="L631">    }</span>
+
+    private void validateLifetime(final PooledObject&lt;PoolableConnection&gt; p) throws Exception {
+<span class="fc bfc" id="L634" title="All 2 branches covered.">        if (maxConnLifetimeMillis &gt; 0) {</span>
+<span class="fc" id="L635">            final long lifetime = System.currentTimeMillis() - p.getCreateTime();</span>
+<span class="fc bfc" id="L636" title="All 2 branches covered.">            if (lifetime &gt; maxConnLifetimeMillis) {</span>
+<span class="fc" id="L637">                throw new LifetimeExceededException(Utils.getMessage(&quot;connectionFactory.lifetimeExceeded&quot;,</span>
+<span class="fc" id="L638">                        Long.valueOf(lifetime), Long.valueOf(maxConnLifetimeMillis)));</span>
+            }
+        }
+<span class="fc" id="L641">    }</span>
+
+    @Override
+    public boolean validateObject(final PooledObject&lt;PoolableConnection&gt; p) {
+        try {
+<span class="fc" id="L646">            validateLifetime(p);</span>
+
+<span class="fc" id="L648">            validateConnection(p.getObject());</span>
+<span class="fc" id="L649">            return true;</span>
+<span class="fc" id="L650">        } catch (final Exception e) {</span>
+<span class="pc bpc" id="L651" title="1 of 2 branches missed.">            if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L652">                log.debug(Utils.getMessage(&quot;poolableConnectionFactory.validateObject.fail&quot;), e);</span>
+            }
+<span class="fc" id="L654">            return false;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

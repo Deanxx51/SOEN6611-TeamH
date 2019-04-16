@@ -1,0 +1,2531 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BasicDataSource.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2</a> &gt; <span class="el_source">BasicDataSource.java</span></div><h1>BasicDataSource.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.commons.dbcp2;
+
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
+import java.util.logging.Logger;
+
+import javax.management.MBeanRegistration;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.ObjectName;
+import javax.sql.DataSource;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.impl.AbandonedConfig;
+import org.apache.commons.pool2.impl.BaseObjectPoolConfig;
+import org.apache.commons.pool2.impl.GenericKeyedObjectPoolConfig;
+import org.apache.commons.pool2.impl.GenericObjectPool;
+import org.apache.commons.pool2.impl.GenericObjectPoolConfig;
+
+/**
+ * &lt;p&gt;
+ * Basic implementation of &lt;code&gt;javax.sql.DataSource&lt;/code&gt; that is configured via JavaBeans properties. This is not
+ * the only way to combine the &lt;em&gt;commons-dbcp2&lt;/em&gt; and &lt;em&gt;commons-pool2&lt;/em&gt; packages, but provides a &quot;one stop
+ * shopping&quot; solution for basic requirements.
+ * &lt;/p&gt;
+ *
+ * @since 2.0
+ */
+<span class="fc" id="L64">public class BasicDataSource implements DataSource, BasicDataSourceMXBean, MBeanRegistration, AutoCloseable {</span>
+
+    /**
+     * @since 2.0
+     */
+<span class="nc" id="L69">    private class PaGetConnection implements PrivilegedExceptionAction&lt;Connection&gt; {</span>
+
+        @Override
+        public Connection run() throws SQLException {
+<span class="nc" id="L73">            return createDataSource().getConnection();</span>
+        }
+    }
+
+<span class="fc" id="L77">    private static final Log log = LogFactory.getLog(BasicDataSource.class);</span>
+
+    // ------------------------------------------------------------- Properties
+
+    static {
+        // Attempt to prevent deadlocks - see DBCP - 272
+<span class="fc" id="L83">        DriverManager.getDrivers();</span>
+        try {
+            // Load classes now to prevent AccessControlExceptions later
+            // A number of classes are loaded when getConnection() is called
+            // but the following classes are not loaded and therefore require
+            // explicit loading.
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">            if (Utils.IS_SECURITY_ENABLED) {</span>
+<span class="nc" id="L90">                final ClassLoader loader = BasicDataSource.class.getClassLoader();</span>
+<span class="nc" id="L91">                final String dbcpPackageName = BasicDataSource.class.getPackage().getName();</span>
+<span class="nc" id="L92">                loader.loadClass(dbcpPackageName + &quot;.BasicDataSource$PaGetConnection&quot;);</span>
+<span class="nc" id="L93">                loader.loadClass(dbcpPackageName + &quot;.DelegatingCallableStatement&quot;);</span>
+<span class="nc" id="L94">                loader.loadClass(dbcpPackageName + &quot;.DelegatingDatabaseMetaData&quot;);</span>
+<span class="nc" id="L95">                loader.loadClass(dbcpPackageName + &quot;.DelegatingPreparedStatement&quot;);</span>
+<span class="nc" id="L96">                loader.loadClass(dbcpPackageName + &quot;.DelegatingResultSet&quot;);</span>
+<span class="nc" id="L97">                loader.loadClass(dbcpPackageName + &quot;.PoolableCallableStatement&quot;);</span>
+<span class="nc" id="L98">                loader.loadClass(dbcpPackageName + &quot;.PoolablePreparedStatement&quot;);</span>
+<span class="nc" id="L99">                loader.loadClass(dbcpPackageName + &quot;.PoolingConnection$StatementType&quot;);</span>
+<span class="nc" id="L100">                loader.loadClass(dbcpPackageName + &quot;.PStmtKey&quot;);</span>
+
+<span class="nc" id="L102">                final String poolPackageName = PooledObject.class.getPackage().getName();</span>
+<span class="nc" id="L103">                loader.loadClass(poolPackageName + &quot;.impl.LinkedBlockingDeque$Node&quot;);</span>
+<span class="nc" id="L104">                loader.loadClass(poolPackageName + &quot;.impl.GenericKeyedObjectPool$ObjectDeque&quot;);</span>
+            }
+<span class="nc" id="L106">        } catch (final ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L107">            throw new IllegalStateException(&quot;Unable to pre-load classes&quot;, cnfe);</span>
+<span class="fc" id="L108">        }</span>
+<span class="fc" id="L109">    }</span>
+
+    protected static void validateConnectionFactory(final PoolableConnectionFactory connectionFactory)
+            throws Exception {
+<span class="fc" id="L113">        PoolableConnection conn = null;</span>
+<span class="fc" id="L114">        PooledObject&lt;PoolableConnection&gt; p = null;</span>
+        try {
+<span class="fc" id="L116">            p = connectionFactory.makeObject();</span>
+<span class="fc" id="L117">            conn = p.getObject();</span>
+<span class="fc" id="L118">            connectionFactory.activateObject(p);</span>
+<span class="fc" id="L119">            connectionFactory.validateConnection(conn);</span>
+<span class="fc" id="L120">            connectionFactory.passivateObject(p);</span>
+        } finally {
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            if (p != null) {</span>
+<span class="fc" id="L123">                connectionFactory.destroyObject(p);</span>
+            }
+        }
+<span class="fc" id="L126">    }</span>
+
+    /**
+     * The default auto-commit state of connections created by this pool.
+     */
+    private volatile Boolean defaultAutoCommit;
+
+    /**
+     * The default read-only state of connections created by this pool.
+     */
+    private transient Boolean defaultReadOnly;
+
+    /**
+     * The default TransactionIsolation state of connections created by this pool.
+     */
+<span class="fc" id="L141">    private volatile int defaultTransactionIsolation = PoolableConnectionFactory.UNKNOWN_TRANSACTION_ISOLATION;</span>
+
+    private Integer defaultQueryTimeoutSeconds;
+
+    /**
+     * The default &quot;catalog&quot; of connections created by this pool.
+     */
+    private volatile String defaultCatalog;
+
+    /**
+     * The default &quot;schema&quot; of connections created by this pool.
+     */
+    private volatile String defaultSchema;
+
+    /**
+     * The property that controls if the pooled connections cache some state rather than query the database for current
+     * state to improve performance.
+     */
+<span class="fc" id="L159">    private boolean cacheState = true;</span>
+
+    /**
+     * The instance of the JDBC Driver to use.
+     */
+    private Driver driver;
+
+    /**
+     * The fully qualified Java class name of the JDBC driver to be used.
+     */
+    private String driverClassName;
+
+    /**
+     * The class loader instance to use to load the JDBC driver. If not specified, {@link Class#forName(String)} is used
+     * to load the JDBC driver. If specified, {@link Class#forName(String, boolean, ClassLoader)} is used.
+     */
+    private ClassLoader driverClassLoader;
+
+    /**
+     * True means that borrowObject returns the most recently used (&quot;last in&quot;) connection in the pool (if there are idle
+     * connections available). False means that the pool behaves as a FIFO queue - connections are taken from the idle
+     * instance pool in the order that they are returned to the pool.
+     */
+<span class="fc" id="L182">    private boolean lifo = BaseObjectPoolConfig.DEFAULT_LIFO;</span>
+
+    /**
+     * The maximum number of active connections that can be allocated from this pool at the same time, or negative for
+     * no limit.
+     */
+<span class="fc" id="L188">    private int maxTotal = GenericObjectPoolConfig.DEFAULT_MAX_TOTAL;</span>
+
+    /**
+     * The maximum number of connections that can remain idle in the pool, without extra ones being destroyed, or
+     * negative for no limit. If maxIdle is set too low on heavily loaded systems it is possible you will see
+     * connections being closed and almost immediately new connections being opened. This is a result of the active
+     * threads momentarily closing connections faster than they are opening them, causing the number of idle connections
+     * to rise above maxIdle. The best value for maxIdle for heavily loaded system will vary but the default is a good
+     * starting point.
+     */
+<span class="fc" id="L198">    private int maxIdle = GenericObjectPoolConfig.DEFAULT_MAX_IDLE;</span>
+
+    /**
+     * The minimum number of active connections that can remain idle in the pool, without extra ones being created when
+     * the evictor runs, or 0 to create none. The pool attempts to ensure that minIdle connections are available when
+     * the idle object evictor runs. The value of this property has no effect unless
+     * {@link #timeBetweenEvictionRunsMillis} has a positive value.
+     */
+<span class="fc" id="L206">    private int minIdle = GenericObjectPoolConfig.DEFAULT_MIN_IDLE;</span>
+
+    /**
+     * The initial number of connections that are created when the pool is started.
+     */
+<span class="fc" id="L211">    private int initialSize = 0;</span>
+
+    /**
+     * The maximum number of milliseconds that the pool will wait (when there are no available connections) for a
+     * connection to be returned before throwing an exception, or &lt;= 0 to wait indefinitely.
+     */
+<span class="fc" id="L217">    private long maxWaitMillis = BaseObjectPoolConfig.DEFAULT_MAX_WAIT_MILLIS;</span>
+
+    /**
+     * Prepared statement pooling for this pool. When this property is set to &lt;code&gt;true&lt;/code&gt; both PreparedStatements
+     * and CallableStatements are pooled.
+     */
+<span class="fc" id="L223">    private boolean poolPreparedStatements = false;</span>
+
+    /**
+     * &lt;p&gt;
+     * The maximum number of open statements that can be allocated from the statement pool at the same time, or negative
+     * for no limit. Since a connection usually only uses one or two statements at a time, this is mostly used to help
+     * detect resource leaks.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: As of version 1.3, CallableStatements (those produced by {@link Connection#prepareCall}) are pooled along
+     * with PreparedStatements (produced by {@link Connection#prepareStatement}) and
+     * &lt;code&gt;maxOpenPreparedStatements&lt;/code&gt; limits the total number of prepared or callable statements that may be in
+     * use at a given time.
+     * &lt;/p&gt;
+     */
+<span class="fc" id="L238">    private int maxOpenPreparedStatements = GenericKeyedObjectPoolConfig.DEFAULT_MAX_TOTAL;</span>
+
+    /**
+     * The indication of whether objects will be validated as soon as they have been created by the pool. If the object
+     * fails to validate, the borrow operation that triggered the creation will fail.
+     */
+<span class="fc" id="L244">    private boolean testOnCreate = false;</span>
+
+    /**
+     * The indication of whether objects will be validated before being borrowed from the pool. If the object fails to
+     * validate, it will be dropped from the pool, and we will attempt to borrow another.
+     */
+<span class="fc" id="L250">    private boolean testOnBorrow = true;</span>
+
+    /**
+     * The indication of whether objects will be validated before being returned to the pool.
+     */
+<span class="fc" id="L255">    private boolean testOnReturn = false;</span>
+
+    /**
+     * The number of milliseconds to sleep between runs of the idle object evictor thread. When non-positive, no idle
+     * object evictor thread will be run.
+     */
+<span class="fc" id="L261">    private long timeBetweenEvictionRunsMillis = BaseObjectPoolConfig.DEFAULT_TIME_BETWEEN_EVICTION_RUNS_MILLIS;</span>
+
+    /**
+     * The number of objects to examine during each run of the idle object evictor thread (if any).
+     */
+<span class="fc" id="L266">    private int numTestsPerEvictionRun = BaseObjectPoolConfig.DEFAULT_NUM_TESTS_PER_EVICTION_RUN;</span>
+
+    /**
+     * The minimum amount of time an object may sit idle in the pool before it is eligible for eviction by the idle
+     * object evictor (if any).
+     */
+<span class="fc" id="L272">    private long minEvictableIdleTimeMillis = BaseObjectPoolConfig.DEFAULT_MIN_EVICTABLE_IDLE_TIME_MILLIS;</span>
+
+    /**
+     * The minimum amount of time a connection may sit idle in the pool before it is eligible for eviction by the idle
+     * object evictor, with the extra condition that at least &quot;minIdle&quot; connections remain in the pool. Note that
+     * {@code minEvictableIdleTimeMillis} takes precedence over this parameter. See
+     * {@link #getSoftMinEvictableIdleTimeMillis()}.
+     */
+<span class="fc" id="L280">    private long softMinEvictableIdleTimeMillis = BaseObjectPoolConfig.DEFAULT_SOFT_MIN_EVICTABLE_IDLE_TIME_MILLIS;</span>
+
+<span class="fc" id="L282">    private String evictionPolicyClassName = BaseObjectPoolConfig.DEFAULT_EVICTION_POLICY_CLASS_NAME;</span>
+
+    /**
+     * The indication of whether objects will be validated by the idle object evictor (if any). If an object fails to
+     * validate, it will be dropped from the pool.
+     */
+<span class="fc" id="L288">    private boolean testWhileIdle = false;</span>
+
+    /**
+     * The connection password to be passed to our JDBC driver to establish a connection.
+     */
+    private volatile String password;
+
+    /**
+     * The connection URL to be passed to our JDBC driver to establish a connection.
+     */
+    private String url;
+
+    /**
+     * The connection user name to be passed to our JDBC driver to establish a connection.
+     */
+    private String userName;
+
+    /**
+     * The SQL query that will be used to validate connections from this pool before returning them to the caller. If
+     * specified, this query &lt;strong&gt;MUST&lt;/strong&gt; be an SQL SELECT statement that returns at least one row. If not
+     * specified, {@link Connection#isValid(int)} will be used to validate connections.
+     */
+    private volatile String validationQuery;
+
+    /**
+     * Timeout in seconds before connection validation queries fail.
+     */
+<span class="fc" id="L315">    private volatile int validationQueryTimeoutSeconds = -1;</span>
+
+    /**
+     * These SQL statements run once after a Connection is created.
+     * &lt;p&gt;
+     * This property can be used for example to run ALTER SESSION SET NLS_SORT=XCYECH in an Oracle Database only once
+     * after connection creation.
+     * &lt;/p&gt;
+     */
+    private volatile List&lt;String&gt; connectionInitSqls;
+
+    /**
+     * Controls access to the underlying connection.
+     */
+<span class="fc" id="L329">    private boolean accessToUnderlyingConnectionAllowed = false;</span>
+
+<span class="fc" id="L331">    private long maxConnLifetimeMillis = -1;</span>
+
+<span class="fc" id="L333">    private boolean logExpiredConnections = true;</span>
+
+    private String jmxName;
+
+<span class="fc" id="L337">    private boolean autoCommitOnReturn = true;</span>
+
+<span class="fc" id="L339">    private boolean rollbackOnReturn = true;</span>
+
+    private volatile Set&lt;String&gt; disconnectionSqlCodes;
+
+    private boolean fastFailValidation;
+
+    /**
+     * The object pool that internally manages our connections.
+     */
+    private volatile GenericObjectPool&lt;PoolableConnection&gt; connectionPool;
+
+    /**
+     * The connection properties that will be sent to our JDBC driver when establishing new connections.
+     * &lt;strong&gt;NOTE&lt;/strong&gt; - The &quot;user&quot; and &quot;password&quot; properties will be passed explicitly, so they do not need to be
+     * included here.
+     */
+<span class="fc" id="L355">    private Properties connectionProperties = new Properties();</span>
+
+    /**
+     * The data source we will use to manage connections. This object should be acquired &lt;strong&gt;ONLY&lt;/strong&gt; by calls
+     * to the &lt;code&gt;createDataSource()&lt;/code&gt; method.
+     */
+    private volatile DataSource dataSource;
+
+    /**
+     * The PrintWriter to which log messages should be directed.
+     */
+<span class="fc" id="L366">    private volatile PrintWriter logWriter = new PrintWriter(</span>
+            new OutputStreamWriter(System.out, StandardCharsets.UTF_8));
+
+    private AbandonedConfig abandonedConfig;
+
+    private boolean closed;
+
+    /**
+     * Actual name under which this component has been registered.
+     */
+    private ObjectNameWrapper registeredJmxObjectName;
+
+    /**
+     * Adds a custom connection property to the set that will be passed to our JDBC driver. This &lt;strong&gt;MUST&lt;/strong&gt;
+     * be called before the first connection is retrieved (along with all the other configuration property setters).
+     * Calls to this method after the connection pool has been initialized have no effect.
+     *
+     * @param name
+     *            Name of the custom connection property
+     * @param value
+     *            Value of the custom connection property
+     */
+    public void addConnectionProperty(final String name, final String value) {
+<span class="nc" id="L389">        connectionProperties.put(name, value);</span>
+<span class="nc" id="L390">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Closes and releases all idle connections that are currently stored in the connection pool associated with this
+     * data source.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Connections that are checked out to clients when this method is invoked are not affected. When client
+     * applications subsequently invoke {@link Connection#close()} to return these connections to the pool, the
+     * underlying JDBC connections are closed.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Attempts to acquire connections using {@link #getConnection()} after this method has been invoked result in
+     * SQLExceptions.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method is idempotent - i.e., closing an already closed BasicDataSource has no effect and does not generate
+     * exceptions.
+     * &lt;/p&gt;
+     *
+     * @throws SQLException
+     *             if an error occurs closing idle connections
+     */
+    @Override
+    public synchronized void close() throws SQLException {
+<span class="fc bfc" id="L416" title="All 2 branches covered.">        if (registeredJmxObjectName != null) {</span>
+<span class="fc" id="L417">            registeredJmxObjectName.unregisterMBean();</span>
+<span class="fc" id="L418">            registeredJmxObjectName = null;</span>
+        }
+<span class="fc" id="L420">        closed = true;</span>
+<span class="fc" id="L421">        final GenericObjectPool&lt;?&gt; oldPool = connectionPool;</span>
+<span class="fc" id="L422">        connectionPool = null;</span>
+<span class="fc" id="L423">        dataSource = null;</span>
+        try {
+<span class="fc bfc" id="L425" title="All 2 branches covered.">            if (oldPool != null) {</span>
+<span class="fc" id="L426">                oldPool.close();</span>
+            }
+<span class="nc" id="L428">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L429">            throw e;</span>
+<span class="nc" id="L430">        } catch (final Exception e) {</span>
+<span class="nc" id="L431">            throw new SQLException(Utils.getMessage(&quot;pool.close.fail&quot;), e);</span>
+<span class="fc" id="L432">        }</span>
+<span class="fc" id="L433">    }</span>
+
+    /**
+     * Closes the connection pool, silently swallowing any exception that occurs.
+     */
+    private void closeConnectionPool() {
+<span class="nc" id="L439">        final GenericObjectPool&lt;?&gt; oldPool = connectionPool;</span>
+<span class="nc" id="L440">        connectionPool = null;</span>
+        try {
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            if (oldPool != null) {</span>
+<span class="nc" id="L443">                oldPool.close();</span>
+            }
+<span class="nc" id="L445">        } catch (final Exception e) {</span>
+            /* Ignore */
+<span class="nc" id="L447">        }</span>
+<span class="nc" id="L448">    }</span>
+
+    /**
+     * Creates a JDBC connection factory for this datasource. The JDBC driver is loaded using the following algorithm:
+     * &lt;ol&gt;
+     * &lt;li&gt;If a Driver instance has been specified via {@link #setDriver(Driver)} use it&lt;/li&gt;
+     * &lt;li&gt;If no Driver instance was specified and {@link #driverClassName} is specified that class is loaded using the
+     * {@link ClassLoader} of this class or, if {@link #driverClassLoader} is set, {@link #driverClassName} is loaded
+     * with the specified {@link ClassLoader}.&lt;/li&gt;
+     * &lt;li&gt;If {@link #driverClassName} is specified and the previous attempt fails, the class is loaded using the
+     * context class loader of the current thread.&lt;/li&gt;
+     * &lt;li&gt;If a driver still isn't loaded one is loaded via the {@link DriverManager} using the specified {@link #url}.
+     * &lt;/ol&gt;
+     * This method exists so subclasses can replace the implementation class.
+     *
+     * @return A new connection factory.
+     *
+     * @throws SQLException
+     *            If the connection factort cannot be created
+     */
+    protected ConnectionFactory createConnectionFactory() throws SQLException {
+        // Load the JDBC driver class
+<span class="fc" id="L470">        Driver driverToUse = this.driver;</span>
+
+<span class="pc bpc" id="L472" title="1 of 2 branches missed.">        if (driverToUse == null) {</span>
+<span class="fc" id="L473">            Class&lt;?&gt; driverFromCCL = null;</span>
+<span class="pc bpc" id="L474" title="1 of 2 branches missed.">            if (driverClassName != null) {</span>
+                try {
+                    try {
+<span class="fc bfc" id="L477" title="All 2 branches covered.">                        if (driverClassLoader == null) {</span>
+<span class="fc" id="L478">                            driverFromCCL = Class.forName(driverClassName);</span>
+                        } else {
+<span class="fc" id="L480">                            driverFromCCL = Class.forName(driverClassName, true, driverClassLoader);</span>
+                        }
+<span class="nc" id="L482">                    } catch (final ClassNotFoundException cnfe) {</span>
+<span class="nc" id="L483">                        driverFromCCL = Thread.currentThread().getContextClassLoader().loadClass(driverClassName);</span>
+<span class="fc" id="L484">                    }</span>
+<span class="nc" id="L485">                } catch (final Exception t) {</span>
+<span class="nc" id="L486">                    final String message = &quot;Cannot load JDBC driver class '&quot; + driverClassName + &quot;'&quot;;</span>
+<span class="nc" id="L487">                    logWriter.println(message);</span>
+<span class="nc" id="L488">                    t.printStackTrace(logWriter);</span>
+<span class="nc" id="L489">                    throw new SQLException(message, t);</span>
+<span class="fc" id="L490">                }</span>
+            }
+
+            try {
+<span class="pc bpc" id="L494" title="1 of 2 branches missed.">                if (driverFromCCL == null) {</span>
+<span class="nc" id="L495">                    driverToUse = DriverManager.getDriver(url);</span>
+                } else {
+                    // Usage of DriverManager is not possible, as it does not
+                    // respect the ContextClassLoader
+                    // N.B. This cast may cause ClassCastException which is handled below
+<span class="fc" id="L500">                    driverToUse = (Driver) driverFromCCL.getConstructor().newInstance();</span>
+<span class="pc bpc" id="L501" title="1 of 2 branches missed.">                    if (!driverToUse.acceptsURL(url)) {</span>
+<span class="nc" id="L502">                        throw new SQLException(&quot;No suitable driver&quot;, &quot;08001&quot;);</span>
+                    }
+                }
+<span class="nc" id="L505">            } catch (final Exception t) {</span>
+<span class="nc bnc" id="L506" title="All 2 branches missed.">                final String message = &quot;Cannot create JDBC driver of class '&quot;</span>
+                        + (driverClassName != null ? driverClassName : &quot;&quot;) + &quot;' for connect URL '&quot; + url + &quot;'&quot;;
+<span class="nc" id="L508">                logWriter.println(message);</span>
+<span class="nc" id="L509">                t.printStackTrace(logWriter);</span>
+<span class="nc" id="L510">                throw new SQLException(message, t);</span>
+<span class="fc" id="L511">            }</span>
+        }
+
+        // Set up the driver connection factory we will use
+<span class="fc" id="L515">        final String user = userName;</span>
+<span class="fc bfc" id="L516" title="All 2 branches covered.">        if (user != null) {</span>
+<span class="fc" id="L517">            connectionProperties.put(&quot;user&quot;, user);</span>
+        } else {
+<span class="fc" id="L519">            log(&quot;DBCP DataSource configured without a 'username'&quot;);</span>
+        }
+
+<span class="fc" id="L522">        final String pwd = password;</span>
+<span class="fc bfc" id="L523" title="All 2 branches covered.">        if (pwd != null) {</span>
+<span class="fc" id="L524">            connectionProperties.put(&quot;password&quot;, pwd);</span>
+        } else {
+<span class="fc" id="L526">            log(&quot;DBCP DataSource configured without a 'password'&quot;);</span>
+        }
+
+<span class="fc" id="L529">        final ConnectionFactory driverConnectionFactory = new DriverConnectionFactory(driverToUse, url,</span>
+                connectionProperties);
+<span class="fc" id="L531">        return driverConnectionFactory;</span>
+    }
+
+    /**
+     * Creates a connection pool for this datasource. This method only exists so subclasses can replace the
+     * implementation class.
+     * &lt;p&gt;
+     * This implementation configures all pool properties other than timeBetweenEvictionRunsMillis. Setting that
+     * property is deferred to {@link #startPoolMaintenance()}, since setting timeBetweenEvictionRunsMillis to a
+     * positive value causes {@link GenericObjectPool}'s eviction timer to be started.
+     * &lt;/p&gt;
+     *
+     * @param factory
+     *            The factory to use to create new connections for this pool.
+     */
+    protected void createConnectionPool(final PoolableConnectionFactory factory) {
+        // Create an object pool to contain our active connections
+<span class="fc" id="L548">        final GenericObjectPoolConfig&lt;PoolableConnection&gt; config = new GenericObjectPoolConfig&lt;&gt;();</span>
+<span class="fc" id="L549">        updateJmxName(config);</span>
+        // Disable JMX on the underlying pool if the DS is not registered:
+<span class="fc bfc" id="L551" title="All 2 branches covered.">        config.setJmxEnabled(registeredJmxObjectName != null);</span>
+<span class="fc" id="L552">        final GenericObjectPool&lt;PoolableConnection&gt; gop = createObjectPool(factory, config, abandonedConfig);</span>
+<span class="fc" id="L553">        gop.setMaxTotal(maxTotal);</span>
+<span class="fc" id="L554">        gop.setMaxIdle(maxIdle);</span>
+<span class="fc" id="L555">        gop.setMinIdle(minIdle);</span>
+<span class="fc" id="L556">        gop.setMaxWaitMillis(maxWaitMillis);</span>
+<span class="fc" id="L557">        gop.setTestOnCreate(testOnCreate);</span>
+<span class="fc" id="L558">        gop.setTestOnBorrow(testOnBorrow);</span>
+<span class="fc" id="L559">        gop.setTestOnReturn(testOnReturn);</span>
+<span class="fc" id="L560">        gop.setNumTestsPerEvictionRun(numTestsPerEvictionRun);</span>
+<span class="fc" id="L561">        gop.setMinEvictableIdleTimeMillis(minEvictableIdleTimeMillis);</span>
+<span class="fc" id="L562">        gop.setSoftMinEvictableIdleTimeMillis(softMinEvictableIdleTimeMillis);</span>
+<span class="fc" id="L563">        gop.setTestWhileIdle(testWhileIdle);</span>
+<span class="fc" id="L564">        gop.setLifo(lifo);</span>
+<span class="fc" id="L565">        gop.setSwallowedExceptionListener(new SwallowedExceptionLogger(log, logExpiredConnections));</span>
+<span class="fc" id="L566">        gop.setEvictionPolicyClassName(evictionPolicyClassName);</span>
+<span class="fc" id="L567">        factory.setPool(gop);</span>
+<span class="fc" id="L568">        connectionPool = gop;</span>
+<span class="fc" id="L569">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Creates (if necessary) and return the internal data source we are using to manage our connections.
+     * &lt;/p&gt;
+     *
+     * @return The current internal DataSource or a newly created instance if it has not yet been created.
+     * @throws SQLException
+     *             if the object pool cannot be created.
+     */
+    protected DataSource createDataSource() throws SQLException {
+<span class="fc bfc" id="L581" title="All 2 branches covered.">        if (closed) {</span>
+<span class="fc" id="L582">            throw new SQLException(&quot;Data source is closed&quot;);</span>
+        }
+
+        // Return the pool if we have already created it
+        // This is double-checked locking. This is safe since dataSource is
+        // volatile and the code is targeted at Java 5 onwards.
+<span class="fc bfc" id="L588" title="All 2 branches covered.">        if (dataSource != null) {</span>
+<span class="fc" id="L589">            return dataSource;</span>
+        }
+<span class="fc" id="L591">        synchronized (this) {</span>
+<span class="fc bfc" id="L592" title="All 2 branches covered.">            if (dataSource != null) {</span>
+<span class="fc" id="L593">                return dataSource;</span>
+            }
+
+<span class="fc" id="L596">            jmxRegister();</span>
+
+            // create factory which returns raw physical connections
+<span class="fc" id="L599">            final ConnectionFactory driverConnectionFactory = createConnectionFactory();</span>
+
+            // Set up the poolable connection factory
+<span class="fc" id="L602">            boolean success = false;</span>
+            PoolableConnectionFactory poolableConnectionFactory;
+            try {
+<span class="fc" id="L605">                poolableConnectionFactory = createPoolableConnectionFactory(driverConnectionFactory);</span>
+<span class="fc" id="L606">                poolableConnectionFactory.setPoolStatements(poolPreparedStatements);</span>
+<span class="fc" id="L607">                poolableConnectionFactory.setMaxOpenPreparedStatements(maxOpenPreparedStatements);</span>
+<span class="fc" id="L608">                success = true;</span>
+<span class="fc" id="L609">            } catch (final SQLException se) {</span>
+<span class="fc" id="L610">                throw se;</span>
+<span class="nc" id="L611">            } catch (final RuntimeException rte) {</span>
+<span class="nc" id="L612">                throw rte;</span>
+<span class="nc" id="L613">            } catch (final Exception ex) {</span>
+<span class="nc" id="L614">                throw new SQLException(&quot;Error creating connection factory&quot;, ex);</span>
+<span class="fc" id="L615">            }</span>
+
+<span class="pc bpc" id="L617" title="1 of 2 branches missed.">            if (success) {</span>
+                // create a pool for our connections
+<span class="fc" id="L619">                createConnectionPool(poolableConnectionFactory);</span>
+            }
+
+            // Create the pooling data source to manage connections
+            DataSource newDataSource;
+<span class="fc" id="L624">            success = false;</span>
+            try {
+<span class="fc" id="L626">                newDataSource = createDataSourceInstance();</span>
+<span class="fc" id="L627">                newDataSource.setLogWriter(logWriter);</span>
+<span class="fc" id="L628">                success = true;</span>
+<span class="nc" id="L629">            } catch (final SQLException se) {</span>
+<span class="nc" id="L630">                throw se;</span>
+<span class="nc" id="L631">            } catch (final RuntimeException rte) {</span>
+<span class="nc" id="L632">                throw rte;</span>
+<span class="nc" id="L633">            } catch (final Exception ex) {</span>
+<span class="nc" id="L634">                throw new SQLException(&quot;Error creating datasource&quot;, ex);</span>
+            } finally {
+<span class="pc bpc" id="L636" title="1 of 2 branches missed.">                if (!success) {</span>
+<span class="nc" id="L637">                    closeConnectionPool();</span>
+                }
+            }
+
+            // If initialSize &gt; 0, preload the pool
+            try {
+<span class="fc bfc" id="L643" title="All 2 branches covered.">                for (int i = 0; i &lt; initialSize; i++) {</span>
+<span class="fc" id="L644">                    connectionPool.addObject();</span>
+                }
+<span class="nc" id="L646">            } catch (final Exception e) {</span>
+<span class="nc" id="L647">                closeConnectionPool();</span>
+<span class="nc" id="L648">                throw new SQLException(&quot;Error preloading the connection pool&quot;, e);</span>
+<span class="fc" id="L649">            }</span>
+
+            // If timeBetweenEvictionRunsMillis &gt; 0, start the pool's evictor task
+<span class="fc" id="L652">            startPoolMaintenance();</span>
+
+<span class="fc" id="L654">            dataSource = newDataSource;</span>
+<span class="fc" id="L655">            return dataSource;</span>
+        }
+    }
+
+    /**
+     * Creates the actual data source instance. This method only exists so that subclasses can replace the
+     * implementation class.
+     *
+     * @throws SQLException
+     *             if unable to create a datasource instance
+     *
+     * @return A new DataSource instance
+     */
+    protected DataSource createDataSourceInstance() throws SQLException {
+<span class="fc" id="L669">        final PoolingDataSource&lt;PoolableConnection&gt; pds = new PoolingDataSource&lt;&gt;(connectionPool);</span>
+<span class="fc" id="L670">        pds.setAccessToUnderlyingConnectionAllowed(isAccessToUnderlyingConnectionAllowed());</span>
+<span class="fc" id="L671">        return pds;</span>
+    }
+
+    /**
+     * Creates an object pool used to provide pooling support for {@link Connection JDBC connections}.
+     *
+     * @param factory
+     *            the object factory
+     * @param poolConfig
+     *            the object pool configuration
+     * @param abandonedConfig
+     *            the abandoned objects configuration
+     * @return a non-null instance
+     */
+    protected GenericObjectPool&lt;PoolableConnection&gt; createObjectPool(final PoolableConnectionFactory factory,
+            final GenericObjectPoolConfig&lt;PoolableConnection&gt; poolConfig, final AbandonedConfig abandonedConfig) {
+        GenericObjectPool&lt;PoolableConnection&gt; gop;
+<span class="pc bpc" id="L688" title="1 of 4 branches missed.">        if (abandonedConfig != null &amp;&amp; (abandonedConfig.getRemoveAbandonedOnBorrow()</span>
+<span class="nc bnc" id="L689" title="All 2 branches missed.">                || abandonedConfig.getRemoveAbandonedOnMaintenance())) {</span>
+<span class="fc" id="L690">            gop = new GenericObjectPool&lt;&gt;(factory, poolConfig, abandonedConfig);</span>
+        } else {
+<span class="fc" id="L692">            gop = new GenericObjectPool&lt;&gt;(factory, poolConfig);</span>
+        }
+<span class="fc" id="L694">        return gop;</span>
+    }
+
+    /**
+     * Creates the PoolableConnectionFactory and attaches it to the connection pool. This method only exists so
+     * subclasses can replace the default implementation.
+     *
+     * @param driverConnectionFactory
+     *            JDBC connection factory
+     * @throws SQLException
+     *             if an error occurs creating the PoolableConnectionFactory
+     *
+     * @return A new PoolableConnectionFactory configured with the current configuration of this BasicDataSource
+     */
+    protected PoolableConnectionFactory createPoolableConnectionFactory(final ConnectionFactory driverConnectionFactory)
+            throws SQLException {
+<span class="fc" id="L710">        PoolableConnectionFactory connectionFactory = null;</span>
+        try {
+<span class="fc" id="L712">            connectionFactory = new PoolableConnectionFactory(driverConnectionFactory,</span>
+<span class="fc" id="L713">                    ObjectNameWrapper.unwrap(registeredJmxObjectName));</span>
+<span class="fc" id="L714">            connectionFactory.setValidationQuery(validationQuery);</span>
+<span class="fc" id="L715">            connectionFactory.setValidationQueryTimeout(validationQueryTimeoutSeconds);</span>
+<span class="fc" id="L716">            connectionFactory.setConnectionInitSql(connectionInitSqls);</span>
+<span class="fc" id="L717">            connectionFactory.setDefaultReadOnly(defaultReadOnly);</span>
+<span class="fc" id="L718">            connectionFactory.setDefaultAutoCommit(defaultAutoCommit);</span>
+<span class="fc" id="L719">            connectionFactory.setDefaultTransactionIsolation(defaultTransactionIsolation);</span>
+<span class="fc" id="L720">            connectionFactory.setDefaultCatalog(defaultCatalog);</span>
+<span class="fc" id="L721">            connectionFactory.setDefaultSchema(defaultSchema);</span>
+<span class="fc" id="L722">            connectionFactory.setCacheState(cacheState);</span>
+<span class="fc" id="L723">            connectionFactory.setPoolStatements(poolPreparedStatements);</span>
+<span class="fc" id="L724">            connectionFactory.setMaxOpenPreparedStatements(maxOpenPreparedStatements);</span>
+<span class="fc" id="L725">            connectionFactory.setMaxConnLifetimeMillis(maxConnLifetimeMillis);</span>
+<span class="fc" id="L726">            connectionFactory.setRollbackOnReturn(getRollbackOnReturn());</span>
+<span class="fc" id="L727">            connectionFactory.setAutoCommitOnReturn(getAutoCommitOnReturn());</span>
+<span class="fc" id="L728">            connectionFactory.setDefaultQueryTimeout(getDefaultQueryTimeout());</span>
+<span class="fc" id="L729">            connectionFactory.setFastFailValidation(fastFailValidation);</span>
+<span class="fc" id="L730">            connectionFactory.setDisconnectionSqlCodes(disconnectionSqlCodes);</span>
+<span class="fc" id="L731">            validateConnectionFactory(connectionFactory);</span>
+<span class="nc" id="L732">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L733">            throw e;</span>
+<span class="fc" id="L734">        } catch (final Exception e) {</span>
+<span class="fc" id="L735">            throw new SQLException(&quot;Cannot create PoolableConnectionFactory (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="fc" id="L736">        }</span>
+<span class="fc" id="L737">        return connectionFactory;</span>
+    }
+
+    /**
+     * Gets the print writer used by this configuration to log information on abandoned objects.
+     *
+     * @return The print writer used by this configuration to log information on abandoned objects.
+     */
+    public PrintWriter getAbandonedLogWriter() {
+<span class="nc bnc" id="L746" title="All 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="nc" id="L747">            return abandonedConfig.getLogWriter();</span>
+        }
+<span class="nc" id="L749">        return null;</span>
+    }
+
+    /**
+     * If the connection pool implements {@link org.apache.commons.pool2.UsageTracking UsageTracking}, should the
+     * connection pool record a stack trace every time a method is called on a pooled connection and retain the most
+     * recent stack trace to aid debugging of abandoned connections?
+     *
+     * @return &lt;code&gt;true&lt;/code&gt; if usage tracking is enabled
+     */
+    @Override
+    public boolean getAbandonedUsageTracking() {
+<span class="pc bpc" id="L761" title="1 of 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="fc" id="L762">            return abandonedConfig.getUseUsageTracking();</span>
+        }
+<span class="nc" id="L764">        return false;</span>
+    }
+
+    /**
+     * Returns the value of the flag that controls whether or not connections being returned to the pool will be checked
+     * and configured with {@link Connection#setAutoCommit(boolean) Connection.setAutoCommit(true)} if the auto commit
+     * setting is {@code false} when the connection is returned. It is &lt;code&gt;true&lt;/code&gt; by default.
+     *
+     * @return Whether or not connections being returned to the pool will be checked and configured with auto-commit.
+     */
+    public boolean getAutoCommitOnReturn() {
+<span class="fc" id="L775">        return autoCommitOnReturn;</span>
+    }
+
+    /**
+     * Returns the state caching flag.
+     *
+     * @return the state caching flag
+     */
+    @Override
+    public boolean getCacheState() {
+<span class="fc" id="L785">        return cacheState;</span>
+    }
+
+    /**
+     * Creates (if necessary) and return a connection to the database.
+     *
+     * @throws SQLException
+     *             if a database access error occurs
+     * @return a database connection
+     */
+    @Override
+    public Connection getConnection() throws SQLException {
+<span class="pc bpc" id="L797" title="1 of 2 branches missed.">        if (Utils.IS_SECURITY_ENABLED) {</span>
+<span class="nc" id="L798">            final PrivilegedExceptionAction&lt;Connection&gt; action = new PaGetConnection();</span>
+            try {
+<span class="nc" id="L800">                return AccessController.doPrivileged(action);</span>
+<span class="nc" id="L801">            } catch (final PrivilegedActionException e) {</span>
+<span class="nc" id="L802">                final Throwable cause = e.getCause();</span>
+<span class="nc bnc" id="L803" title="All 2 branches missed.">                if (cause instanceof SQLException) {</span>
+<span class="nc" id="L804">                    throw (SQLException) cause;</span>
+                }
+<span class="nc" id="L806">                throw new SQLException(e);</span>
+            }
+        }
+<span class="fc" id="L809">        return createDataSource().getConnection();</span>
+    }
+
+    /**
+     * &lt;strong&gt;BasicDataSource does NOT support this method.&lt;/strong&gt;
+     *
+     * @param user
+     *            Database user on whose behalf the Connection is being made
+     * @param pass
+     *            The database user's password
+     *
+     * @throws UnsupportedOperationException
+     *             always thrown.
+     * @throws SQLException
+     *             if a database access error occurs
+     * @return nothing - always throws UnsupportedOperationException
+     */
+    @Override
+    public Connection getConnection(final String user, final String pass) throws SQLException {
+        // This method isn't supported by the PoolingDataSource returned by the createDataSource
+<span class="nc" id="L829">        throw new UnsupportedOperationException(&quot;Not supported by BasicDataSource&quot;);</span>
+    }
+
+    /**
+     * Returns the list of SQL statements executed when a physical connection is first created. Returns an empty list if
+     * there are no initialization statements configured.
+     *
+     * @return initialization SQL statements
+     */
+    public List&lt;String&gt; getConnectionInitSqls() {
+<span class="fc" id="L839">        final List&lt;String&gt; result = connectionInitSqls;</span>
+<span class="fc bfc" id="L840" title="All 2 branches covered.">        if (result == null) {</span>
+<span class="fc" id="L841">            return Collections.emptyList();</span>
+        }
+<span class="fc" id="L843">        return result;</span>
+    }
+
+    /**
+     * Provides the same data as {@link #getConnectionInitSqls()} but in an array so it is accessible via JMX.
+     */
+    @Override
+    public String[] getConnectionInitSqlsAsArray() {
+<span class="nc" id="L851">        final Collection&lt;String&gt; result = getConnectionInitSqls();</span>
+<span class="nc" id="L852">        return result.toArray(new String[result.size()]);</span>
+    }
+
+    protected GenericObjectPool&lt;PoolableConnection&gt; getConnectionPool() {
+<span class="fc" id="L856">        return connectionPool;</span>
+    }
+
+    // For unit testing
+    Properties getConnectionProperties() {
+<span class="fc" id="L861">        return connectionProperties;</span>
+    }
+
+    /**
+     * Returns the default auto-commit property.
+     *
+     * @return true if default auto-commit is enabled
+     */
+    @Override
+    public Boolean getDefaultAutoCommit() {
+<span class="fc" id="L871">        return defaultAutoCommit;</span>
+    }
+
+    /**
+     * Returns the default catalog.
+     *
+     * @return the default catalog
+     */
+    @Override
+    public String getDefaultCatalog() {
+<span class="fc" id="L881">        return this.defaultCatalog;</span>
+    }
+
+    /**
+     * Gets the default query timeout that will be used for {@link java.sql.Statement Statement}s created from this
+     * connection. &lt;code&gt;null&lt;/code&gt; means that the driver default will be used.
+     *
+     * @return The default query timeout in seconds.
+     */
+    public Integer getDefaultQueryTimeout() {
+<span class="fc" id="L891">        return defaultQueryTimeoutSeconds;</span>
+    }
+
+    /**
+     * Returns the default readOnly property.
+     *
+     * @return true if connections are readOnly by default
+     */
+    @Override
+    public Boolean getDefaultReadOnly() {
+<span class="fc" id="L901">        return defaultReadOnly;</span>
+    }
+
+    /**
+     * Returns the default schema.
+     *
+     * @return the default schema.
+     * @since 2.5.0
+     */
+    @Override
+    public String getDefaultSchema() {
+<span class="fc" id="L912">        return this.defaultSchema;</span>
+    }
+
+    /**
+     * Returns the default transaction isolation state of returned connections.
+     *
+     * @return the default value for transaction isolation state
+     * @see Connection#getTransactionIsolation
+     */
+    @Override
+    public int getDefaultTransactionIsolation() {
+<span class="fc" id="L923">        return this.defaultTransactionIsolation;</span>
+    }
+
+    /**
+     * Returns the set of SQL_STATE codes considered to signal fatal conditions.
+     *
+     * @return fatal disconnection state codes
+     * @see #setDisconnectionSqlCodes(Collection)
+     * @since 2.1
+     */
+    public Set&lt;String&gt; getDisconnectionSqlCodes() {
+<span class="fc" id="L934">        final Set&lt;String&gt; result = disconnectionSqlCodes;</span>
+<span class="fc bfc" id="L935" title="All 2 branches covered.">        if (result == null) {</span>
+<span class="fc" id="L936">            return Collections.emptySet();</span>
+        }
+<span class="fc" id="L938">        return result;</span>
+    }
+
+    /**
+     * Provides the same data as {@link #getDisconnectionSqlCodes} but in an array so it is accessible via JMX.
+     *
+     * @since 2.1
+     */
+    @Override
+    public String[] getDisconnectionSqlCodesAsArray() {
+<span class="nc" id="L948">        final Collection&lt;String&gt; result = getDisconnectionSqlCodes();</span>
+<span class="nc" id="L949">        return result.toArray(new String[result.size()]);</span>
+    }
+
+    /**
+     * Returns the JDBC Driver that has been configured for use by this pool.
+     * &lt;p&gt;
+     * Note: This getter only returns the last value set by a call to {@link #setDriver(Driver)}. It does not return any
+     * driver instance that may have been created from the value set via {@link #setDriverClassName(String)}.
+     * &lt;/p&gt;
+     *
+     * @return the JDBC Driver that has been configured for use by this pool
+     */
+    public synchronized Driver getDriver() {
+<span class="nc" id="L962">        return driver;</span>
+    }
+
+    /**
+     * Returns the class loader specified for loading the JDBC driver. Returns &lt;code&gt;null&lt;/code&gt; if no class loader has
+     * been explicitly specified.
+     * &lt;p&gt;
+     * Note: This getter only returns the last value set by a call to {@link #setDriverClassLoader(ClassLoader)}. It
+     * does not return the class loader of any driver that may have been set via {@link #setDriver(Driver)}.
+     * &lt;/p&gt;
+     *
+     * @return The class loader specified for loading the JDBC driver.
+     */
+    public synchronized ClassLoader getDriverClassLoader() {
+<span class="fc" id="L976">        return this.driverClassLoader;</span>
+    }
+
+    /**
+     * Returns the JDBC driver class name.
+     * &lt;p&gt;
+     * Note: This getter only returns the last value set by a call to {@link #setDriverClassName(String)}. It does not
+     * return the class name of any driver that may have been set via {@link #setDriver(Driver)}.
+     * &lt;/p&gt;
+     *
+     * @return the JDBC driver class name
+     */
+    @Override
+    public synchronized String getDriverClassName() {
+<span class="fc" id="L990">        return this.driverClassName;</span>
+    }
+
+    /**
+     * Returns the value of the flag that controls whether or not connections being returned to the pool will be checked
+     * and configured with {@link Connection#setAutoCommit(boolean) Connection.setAutoCommit(true)} if the auto commit
+     * setting is {@code false} when the connection is returned. It is &lt;code&gt;true&lt;/code&gt; by default.
+     *
+     * @return Whether or not connections being returned to the pool will be checked and configured with auto-commit.
+     * @deprecated Use {@link #getAutoCommitOnReturn()}.
+     */
+    @Deprecated
+    public boolean getEnableAutoCommitOnReturn() {
+<span class="nc" id="L1003">        return autoCommitOnReturn;</span>
+    }
+
+    /**
+     * Gets the EvictionPolicy implementation in use with this connection pool.
+     *
+     * @return The EvictionPolicy implementation in use with this connection pool.
+     */
+    public synchronized String getEvictionPolicyClassName() {
+<span class="nc" id="L1012">        return evictionPolicyClassName;</span>
+    }
+
+    /**
+     * True means that validation will fail immediately for connections that have previously thrown SQLExceptions with
+     * SQL_STATE indicating fatal disconnection errors.
+     *
+     * @return true if connections created by this datasource will fast fail validation.
+     * @see #setDisconnectionSqlCodes(Collection)
+     * @since 2.1
+     */
+    @Override
+    public boolean getFastFailValidation() {
+<span class="fc" id="L1025">        return fastFailValidation;</span>
+    }
+
+    /**
+     * Returns the initial size of the connection pool.
+     *
+     * @return the number of connections created when the pool is initialized
+     */
+    @Override
+    public synchronized int getInitialSize() {
+<span class="fc" id="L1035">        return this.initialSize;</span>
+    }
+
+    /**
+     * Returns the JMX name that has been requested for this DataSource. If the requested name is not valid, an
+     * alternative may be chosen.
+     *
+     * @return The JMX name that has been requested for this DataSource.
+     */
+    public String getJmxName() {
+<span class="fc" id="L1045">        return jmxName;</span>
+    }
+
+    /**
+     * Returns the LIFO property.
+     *
+     * @return true if connection pool behaves as a LIFO queue.
+     */
+    @Override
+    public synchronized boolean getLifo() {
+<span class="fc" id="L1055">        return this.lifo;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Flag to log stack traces for application code which abandoned a Statement or Connection.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Defaults to false.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Logging of abandoned Statements and Connections adds overhead for every Connection open or new Statement because
+     * a stack trace has to be generated.
+     * &lt;/p&gt;
+     */
+    @Override
+    public boolean getLogAbandoned() {
+<span class="pc bpc" id="L1072" title="1 of 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="fc" id="L1073">            return abandonedConfig.getLogAbandoned();</span>
+        }
+<span class="nc" id="L1075">        return false;</span>
+    }
+
+    /**
+     * When {@link #getMaxConnLifetimeMillis()} is set to limit connection lifetime, this property determines whether or
+     * not log messages are generated when the pool closes connections due to maximum lifetime exceeded.
+     *
+     * @since 2.1
+     */
+    @Override
+    public boolean getLogExpiredConnections() {
+<span class="nc" id="L1086">        return logExpiredConnections;</span>
+    }
+
+    /**
+     * &lt;strong&gt;BasicDataSource does NOT support this method.&lt;/strong&gt;
+     *
+     * &lt;p&gt;
+     * Returns the login timeout (in seconds) for connecting to the database.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Calls {@link #createDataSource()}, so has the side effect of initializing the connection pool.
+     * &lt;/p&gt;
+     *
+     * @throws SQLException
+     *             if a database access error occurs
+     * @throws UnsupportedOperationException
+     *             If the DataSource implementation does not support the login timeout feature.
+     * @return login timeout in seconds
+     */
+    @Override
+    public int getLoginTimeout() throws SQLException {
+        // This method isn't supported by the PoolingDataSource returned by the createDataSource
+<span class="nc" id="L1108">        throw new UnsupportedOperationException(&quot;Not supported by BasicDataSource&quot;);</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the log writer being used by this data source.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Calls {@link #createDataSource()}, so has the side effect of initializing the connection pool.
+     * &lt;/p&gt;
+     *
+     * @throws SQLException
+     *             if a database access error occurs
+     * @return log writer in use
+     */
+    @Override
+    public PrintWriter getLogWriter() throws SQLException {
+<span class="fc" id="L1125">        return createDataSource().getLogWriter();</span>
+    }
+
+    /**
+     * Returns the maximum permitted lifetime of a connection in milliseconds. A value of zero or less indicates an
+     * infinite lifetime.
+     */
+    @Override
+    public long getMaxConnLifetimeMillis() {
+<span class="fc" id="L1134">        return maxConnLifetimeMillis;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the maximum number of connections that can remain idle in the pool. Excess idle connections are destroyed
+     * on return to the pool.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * A negative value indicates that there is no limit
+     * &lt;/p&gt;
+     *
+     * @return the maximum number of idle connections
+     */
+    @Override
+    public synchronized int getMaxIdle() {
+<span class="fc" id="L1150">        return this.maxIdle;</span>
+    }
+
+    /**
+     * Gets the value of the &lt;code&gt;maxOpenPreparedStatements&lt;/code&gt; property.
+     *
+     * @return the maximum number of open statements
+     */
+    @Override
+    public synchronized int getMaxOpenPreparedStatements() {
+<span class="fc" id="L1160">        return this.maxOpenPreparedStatements;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the maximum number of active connections that can be allocated at the same time.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * A negative number means that there is no limit.
+     * &lt;/p&gt;
+     *
+     * @return the maximum number of active connections
+     */
+    @Override
+    public synchronized int getMaxTotal() {
+<span class="fc" id="L1175">        return this.maxTotal;</span>
+    }
+
+    /**
+     * Returns the maximum number of milliseconds that the pool will wait for a connection to be returned before
+     * throwing an exception. A value less than or equal to zero means the pool is set to wait indefinitely.
+     *
+     * @return the maxWaitMillis property value
+     */
+    @Override
+    public synchronized long getMaxWaitMillis() {
+<span class="fc" id="L1186">        return this.maxWaitMillis;</span>
+    }
+
+    /**
+     * Returns the {@link #minEvictableIdleTimeMillis} property.
+     *
+     * @return the value of the {@link #minEvictableIdleTimeMillis} property
+     * @see #minEvictableIdleTimeMillis
+     */
+    @Override
+    public synchronized long getMinEvictableIdleTimeMillis() {
+<span class="fc" id="L1197">        return this.minEvictableIdleTimeMillis;</span>
+    }
+
+    /**
+     * Returns the minimum number of idle connections in the pool. The pool attempts to ensure that minIdle connections
+     * are available when the idle object evictor runs. The value of this property has no effect unless
+     * {@link #timeBetweenEvictionRunsMillis} has a positive value.
+     *
+     * @return the minimum number of idle connections
+     * @see GenericObjectPool#getMinIdle()
+     */
+    @Override
+    public synchronized int getMinIdle() {
+<span class="fc" id="L1210">        return this.minIdle;</span>
+    }
+
+    /**
+     * [Read Only] The current number of active connections that have been allocated from this data source.
+     *
+     * @return the current number of active connections
+     */
+    @Override
+    public int getNumActive() {
+        // Copy reference to avoid NPE if close happens after null check
+<span class="fc" id="L1221">        final GenericObjectPool&lt;PoolableConnection&gt; pool = connectionPool;</span>
+<span class="pc bpc" id="L1222" title="1 of 2 branches missed.">        if (pool != null) {</span>
+<span class="fc" id="L1223">            return pool.getNumActive();</span>
+        }
+<span class="nc" id="L1225">        return 0;</span>
+    }
+
+    /**
+     * [Read Only] The current number of idle connections that are waiting to be allocated from this data source.
+     *
+     * @return the current number of idle connections
+     */
+    @Override
+    public int getNumIdle() {
+        // Copy reference to avoid NPE if close happens after null check
+<span class="fc" id="L1236">        final GenericObjectPool&lt;PoolableConnection&gt; pool = connectionPool;</span>
+<span class="pc bpc" id="L1237" title="1 of 2 branches missed.">        if (pool != null) {</span>
+<span class="fc" id="L1238">            return pool.getNumIdle();</span>
+        }
+<span class="nc" id="L1240">        return 0;</span>
+    }
+
+    /**
+     * Returns the value of the {@link #numTestsPerEvictionRun} property.
+     *
+     * @return the number of objects to examine during idle object evictor runs
+     * @see #numTestsPerEvictionRun
+     */
+    @Override
+    public synchronized int getNumTestsPerEvictionRun() {
+<span class="fc" id="L1251">        return this.numTestsPerEvictionRun;</span>
+    }
+
+    @Override
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException {
+<span class="nc" id="L1256">        throw new SQLFeatureNotSupportedException();</span>
+    }
+
+    /**
+     * Returns the password passed to the JDBC driver to establish connections.
+     *
+     * @return the connection password
+     */
+    @Override
+    public String getPassword() {
+<span class="fc" id="L1266">        return this.password;</span>
+    }
+
+    protected ObjectName getRegisteredJmxName() {
+<span class="fc" id="L1270">        return ObjectNameWrapper.unwrap(registeredJmxObjectName);</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Flag to remove abandoned connections if they exceed the removeAbandonedTimeout when borrowObject is invoked.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * The default value is false.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * If set to true a connection is considered abandoned and eligible for removal if it has not been used for more
+     * than {@link #getRemoveAbandonedTimeout() removeAbandonedTimeout} seconds.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Abandoned connections are identified and removed when {@link #getConnection()} is invoked and all of the
+     * following conditions hold:
+     * &lt;/p&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;{@link #getRemoveAbandonedOnBorrow()}&lt;/li&gt;
+     * &lt;li&gt;{@link #getNumActive()} &amp;gt; {@link #getMaxTotal()} - 3&lt;/li&gt;
+     * &lt;li&gt;{@link #getNumIdle()} &amp;lt; 2&lt;/li&gt;
+     * &lt;/ul&gt;
+     *
+     * @see #getRemoveAbandonedTimeout()
+     */
+    @Override
+    public boolean getRemoveAbandonedOnBorrow() {
+<span class="pc bpc" id="L1298" title="1 of 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="fc" id="L1299">            return abandonedConfig.getRemoveAbandonedOnBorrow();</span>
+        }
+<span class="nc" id="L1301">        return false;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Flag to remove abandoned connections if they exceed the removeAbandonedTimeout during pool maintenance.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * The default value is false.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * If set to true a connection is considered abandoned and eligible for removal if it has not been used for more
+     * than {@link #getRemoveAbandonedTimeout() removeAbandonedTimeout} seconds.
+     * &lt;/p&gt;
+     *
+     * @see #getRemoveAbandonedTimeout()
+     */
+    @Override
+    public boolean getRemoveAbandonedOnMaintenance() {
+<span class="pc bpc" id="L1322" title="1 of 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="fc" id="L1323">            return abandonedConfig.getRemoveAbandonedOnMaintenance();</span>
+        }
+<span class="nc" id="L1325">        return false;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Timeout in seconds before an abandoned connection can be removed.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Creating a Statement, PreparedStatement or CallableStatement or using one of these to execute a query (using one
+     * of the execute methods) resets the lastUsed property of the parent connection.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Abandoned connection cleanup happens when:
+     * &lt;/p&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;{@link #getRemoveAbandonedOnBorrow()} or {@link #getRemoveAbandonedOnMaintenance()} = true&lt;/li&gt;
+     * &lt;li&gt;{@link #getNumIdle() numIdle} &amp;lt; 2&lt;/li&gt;
+     * &lt;li&gt;{@link #getNumActive() numActive} &amp;gt; {@link #getMaxTotal() maxTotal} - 3&lt;/li&gt;
+     * &lt;/ul&gt;
+     * &lt;p&gt;
+     * The default value is 300 seconds.
+     * &lt;/p&gt;
+     */
+    @Override
+    public int getRemoveAbandonedTimeout() {
+<span class="pc bpc" id="L1350" title="1 of 2 branches missed.">        if (abandonedConfig != null) {</span>
+<span class="fc" id="L1351">            return abandonedConfig.getRemoveAbandonedTimeout();</span>
+        }
+<span class="nc" id="L1353">        return 300;</span>
+    }
+
+    /**
+     * Gets the current value of the flag that controls whether a connection will be rolled back when it is returned to
+     * the pool if auto commit is not enabled and the connection is not read only.
+     *
+     * @return whether a connection will be rolled back when it is returned to the pool.
+     */
+    public boolean getRollbackOnReturn() {
+<span class="fc" id="L1363">        return rollbackOnReturn;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the minimum amount of time a connection may sit idle in the pool before it is eligible for eviction by
+     * the idle object evictor, with the extra condition that at least &quot;minIdle&quot; connections remain in the pool.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * When {@link #getMinEvictableIdleTimeMillis() minEvictableIdleTimeMillis} is set to a positive value,
+     * minEvictableIdleTimeMillis is examined first by the idle connection evictor - i.e. when idle connections are
+     * visited by the evictor, idle time is first compared against {@code minEvictableIdleTimeMillis} (without
+     * considering the number of idle connections in the pool) and then against {@code softMinEvictableIdleTimeMillis},
+     * including the {@code minIdle}, constraint.
+     * &lt;/p&gt;
+     *
+     * @return minimum amount of time a connection may sit idle in the pool before it is eligible for eviction, assuming
+     *         there are minIdle idle connections in the pool
+     */
+    @Override
+    public synchronized long getSoftMinEvictableIdleTimeMillis() {
+<span class="fc" id="L1385">        return softMinEvictableIdleTimeMillis;</span>
+    }
+
+    /**
+     * Returns the {@link #testOnBorrow} property.
+     *
+     * @return true if objects are validated before being borrowed from the pool
+     *
+     * @see #testOnBorrow
+     */
+    @Override
+    public synchronized boolean getTestOnBorrow() {
+<span class="fc" id="L1397">        return this.testOnBorrow;</span>
+    }
+
+    /**
+     * Returns the {@link #testOnCreate} property.
+     *
+     * @return true if objects are validated immediately after they are created by the pool
+     * @see #testOnCreate
+     */
+    @Override
+    public synchronized boolean getTestOnCreate() {
+<span class="nc" id="L1408">        return this.testOnCreate;</span>
+    }
+
+    /**
+     * Returns the value of the {@link #testOnReturn} property.
+     *
+     * @return true if objects are validated before being returned to the pool
+     * @see #testOnReturn
+     */
+    public synchronized boolean getTestOnReturn() {
+<span class="fc" id="L1418">        return this.testOnReturn;</span>
+    }
+
+    /**
+     * Returns the value of the {@link #testWhileIdle} property.
+     *
+     * @return true if objects examined by the idle object evictor are validated
+     * @see #testWhileIdle
+     */
+    @Override
+    public synchronized boolean getTestWhileIdle() {
+<span class="fc" id="L1429">        return this.testWhileIdle;</span>
+    }
+
+    /**
+     * Returns the value of the {@link #timeBetweenEvictionRunsMillis} property.
+     *
+     * @return the time (in milliseconds) between evictor runs
+     * @see #timeBetweenEvictionRunsMillis
+     */
+    @Override
+    public synchronized long getTimeBetweenEvictionRunsMillis() {
+<span class="fc" id="L1440">        return this.timeBetweenEvictionRunsMillis;</span>
+    }
+
+    /**
+     * Returns the JDBC connection {@link #url} property.
+     *
+     * @return the {@link #url} passed to the JDBC driver to establish connections
+     */
+    @Override
+    public synchronized String getUrl() {
+<span class="fc" id="L1450">        return this.url;</span>
+    }
+
+    /**
+     * Returns the JDBC connection {@link #userName} property.
+     *
+     * @return the {@link #userName} passed to the JDBC driver to establish connections
+     */
+    @Override
+    public String getUsername() {
+<span class="fc" id="L1460">        return this.userName;</span>
+    }
+
+    /**
+     * Returns the validation query used to validate connections before returning them.
+     *
+     * @return the SQL validation query
+     * @see #validationQuery
+     */
+    @Override
+    public String getValidationQuery() {
+<span class="fc" id="L1471">        return this.validationQuery;</span>
+    }
+
+    /**
+     * Returns the validation query timeout.
+     *
+     * @return the timeout in seconds before connection validation queries fail.
+     */
+    @Override
+    public int getValidationQueryTimeout() {
+<span class="fc" id="L1481">        return validationQueryTimeoutSeconds;</span>
+    }
+
+    /**
+     * Manually invalidates a connection, effectively requesting the pool to try to close it, remove it from the pool
+     * and reclaim pool capacity.
+     *
+     * @param connection
+     *            The Connection to invalidate.
+     *
+     * @throws IllegalStateException
+     *             if invalidating the connection failed.
+     * @since 2.1
+     */
+    public void invalidateConnection(final Connection connection) throws IllegalStateException {
+<span class="pc bpc" id="L1496" title="1 of 2 branches missed.">        if (connection == null) {</span>
+<span class="nc" id="L1497">            return;</span>
+        }
+<span class="pc bpc" id="L1499" title="1 of 2 branches missed.">        if (connectionPool == null) {</span>
+<span class="nc" id="L1500">            throw new IllegalStateException(&quot;Cannot invalidate connection: ConnectionPool is null.&quot;);</span>
+        }
+
+        final PoolableConnection poolableConnection;
+        try {
+<span class="fc" id="L1505">            poolableConnection = connection.unwrap(PoolableConnection.class);</span>
+<span class="pc bpc" id="L1506" title="1 of 2 branches missed.">            if (poolableConnection == null) {</span>
+<span class="nc" id="L1507">                throw new IllegalStateException(</span>
+                        &quot;Cannot invalidate connection: Connection is not a poolable connection.&quot;);
+            }
+<span class="nc" id="L1510">        } catch (final SQLException e) {</span>
+<span class="nc" id="L1511">            throw new IllegalStateException(&quot;Cannot invalidate connection: Unwrapping poolable connection failed.&quot;, e);</span>
+<span class="fc" id="L1512">        }</span>
+
+        try {
+<span class="fc" id="L1515">            connectionPool.invalidateObject(poolableConnection);</span>
+<span class="nc" id="L1516">        } catch (final Exception e) {</span>
+<span class="nc" id="L1517">            throw new IllegalStateException(&quot;Invalidating connection threw unexpected exception&quot;, e);</span>
+<span class="fc" id="L1518">        }</span>
+<span class="fc" id="L1519">    }</span>
+
+    /**
+     * Manually evicts idle connections.
+     * 
+     * @throws Exception Thrown by {@link GenericObjectPool#evict()}.
+     * @see GenericObjectPool#evict()
+     */
+    public void evict() throws Exception {
+<span class="pc bpc" id="L1528" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="fc" id="L1529">            connectionPool.evict();</span>
+        }
+<span class="fc" id="L1531">    }</span>
+
+    /**
+     * Returns the value of the accessToUnderlyingConnectionAllowed property.
+     *
+     * @return true if access to the underlying connection is allowed, false otherwise.
+     */
+    @Override
+    public synchronized boolean isAccessToUnderlyingConnectionAllowed() {
+<span class="fc" id="L1540">        return this.accessToUnderlyingConnectionAllowed;</span>
+    }
+
+    /**
+     * If true, this data source is closed and no more connections can be retrieved from this datasource.
+     *
+     * @return true, if the data source is closed; false otherwise
+     */
+    @Override
+    public synchronized boolean isClosed() {
+<span class="nc" id="L1550">        return closed;</span>
+    }
+
+    /**
+     * Returns true if we are pooling statements.
+     *
+     * @return true if prepared and callable statements are pooled
+     */
+    @Override
+    public synchronized boolean isPoolPreparedStatements() {
+<span class="fc" id="L1560">        return this.poolPreparedStatements;</span>
+    }
+
+    @Override
+    public boolean isWrapperFor(final Class&lt;?&gt; iface) throws SQLException {
+<span class="nc" id="L1565">        return false;</span>
+    }
+
+    private void jmxRegister() {
+        // Return immediately if this DataSource has already been registered
+<span class="pc bpc" id="L1570" title="1 of 2 branches missed.">        if (registeredJmxObjectName != null) {</span>
+<span class="nc" id="L1571">            return;</span>
+        }
+        // Return immediately if no JMX name has been specified
+<span class="fc" id="L1574">        final String requestedName = getJmxName();</span>
+<span class="fc bfc" id="L1575" title="All 2 branches covered.">        if (requestedName == null) {</span>
+<span class="fc" id="L1576">            return;</span>
+        }
+        try {
+<span class="fc" id="L1579">            ObjectNameWrapper.wrap(requestedName).registerMBean(this);</span>
+<span class="nc" id="L1580">        } catch (final MalformedObjectNameException e) {</span>
+<span class="nc" id="L1581">            log.warn(&quot;The requested JMX name [&quot; + requestedName + &quot;] was not valid and will be ignored.&quot;);</span>
+<span class="fc" id="L1582">        }</span>
+<span class="fc" id="L1583">    }</span>
+
+    protected void log(final String message) {
+<span class="pc bpc" id="L1586" title="1 of 2 branches missed.">        if (logWriter != null) {</span>
+<span class="fc" id="L1587">            logWriter.println(message);</span>
+        }
+<span class="fc" id="L1589">    }</span>
+
+    @Override
+    public void postDeregister() {
+        // NO-OP
+<span class="fc" id="L1594">    }</span>
+
+    @Override
+    public void postRegister(final Boolean registrationDone) {
+        // NO-OP
+<span class="fc" id="L1599">    }</span>
+
+    @Override
+    public void preDeregister() throws Exception {
+        // NO-OP
+<span class="fc" id="L1604">    }</span>
+
+    @Override
+    public ObjectName preRegister(final MBeanServer server, final ObjectName objectName) {
+<span class="fc" id="L1608">        final String requestedName = getJmxName();</span>
+<span class="pc bpc" id="L1609" title="1 of 2 branches missed.">        if (requestedName != null) {</span>
+            try {
+<span class="fc" id="L1611">                registeredJmxObjectName = ObjectNameWrapper.wrap(requestedName);</span>
+<span class="nc" id="L1612">            } catch (final MalformedObjectNameException e) {</span>
+<span class="nc" id="L1613">                log.warn(&quot;The requested JMX name [&quot; + requestedName + &quot;] was not valid and will be ignored.&quot;);</span>
+<span class="fc" id="L1614">            }</span>
+        }
+<span class="pc bpc" id="L1616" title="1 of 2 branches missed.">        if (registeredJmxObjectName == null) {</span>
+<span class="nc" id="L1617">            registeredJmxObjectName = ObjectNameWrapper.wrap(objectName);</span>
+        }
+<span class="fc" id="L1619">        return ObjectNameWrapper.unwrap(registeredJmxObjectName);</span>
+    }
+
+    /**
+     * Removes a custom connection property.
+     *
+     * @param name
+     *            Name of the custom connection property to remove
+     * @see #addConnectionProperty(String, String)
+     */
+    public void removeConnectionProperty(final String name) {
+<span class="nc" id="L1630">        connectionProperties.remove(name);</span>
+<span class="nc" id="L1631">    }</span>
+
+    /**
+     * Sets the print writer to be used by this configuration to log information on abandoned objects.
+     *
+     * @param logWriter
+     *            The new log writer
+     */
+    public void setAbandonedLogWriter(final PrintWriter logWriter) {
+<span class="pc bpc" id="L1640" title="1 of 2 branches missed.">        if (abandonedConfig == null) {</span>
+<span class="nc" id="L1641">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L1643">        abandonedConfig.setLogWriter(logWriter);</span>
+<span class="fc" id="L1644">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="pc bpc" id="L1645" title="1 of 2 branches missed.">        if (gop != null) {</span>
+<span class="nc" id="L1646">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L1648">    }</span>
+
+    /**
+     * If the connection pool implements {@link org.apache.commons.pool2.UsageTracking UsageTracking}, configure whether
+     * the connection pool should record a stack trace every time a method is called on a pooled connection and retain
+     * the most recent stack trace to aid debugging of abandoned connections.
+     *
+     * @param usageTracking
+     *            A value of &lt;code&gt;true&lt;/code&gt; will enable the recording of a stack trace on every use of a pooled
+     *            connection
+     */
+    public void setAbandonedUsageTracking(final boolean usageTracking) {
+<span class="pc bpc" id="L1660" title="1 of 2 branches missed.">        if (abandonedConfig == null) {</span>
+<span class="nc" id="L1661">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L1663">        abandonedConfig.setUseUsageTracking(usageTracking);</span>
+<span class="fc" id="L1664">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="pc bpc" id="L1665" title="1 of 2 branches missed.">        if (gop != null) {</span>
+<span class="nc" id="L1666">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L1668">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the value of the accessToUnderlyingConnectionAllowed property. It controls if the PoolGuard allows access to
+     * the underlying connection. (Default: false)
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param allow
+     *            Access to the underlying connection is granted when true.
+     */
+    public synchronized void setAccessToUnderlyingConnectionAllowed(final boolean allow) {
+<span class="fc" id="L1685">        this.accessToUnderlyingConnectionAllowed = allow;</span>
+<span class="fc" id="L1686">    }</span>
+
+    /**
+     * Sets the value of the flag that controls whether or not connections being returned to the pool will be checked
+     * and configured with {@link Connection#setAutoCommit(boolean) Connection.setAutoCommit(true)} if the auto commit
+     * setting is {@code false} when the connection is returned. It is &lt;code&gt;true&lt;/code&gt; by default.
+     *
+     * @param autoCommitOnReturn
+     *            Whether or not connections being returned to the pool will be checked and configured with auto-commit.
+     * @since 2.6.0
+     */
+    public void setAutoCommitOnReturn(final boolean autoCommitOnReturn) {
+<span class="nc" id="L1698">        this.autoCommitOnReturn = autoCommitOnReturn;</span>
+<span class="nc" id="L1699">    }</span>
+
+    /**
+     * Sets the state caching flag.
+     *
+     * @param cacheState
+     *            The new value for the state caching flag
+     */
+    public void setCacheState(final boolean cacheState) {
+<span class="nc" id="L1708">        this.cacheState = cacheState;</span>
+<span class="nc" id="L1709">    }</span>
+
+    /**
+     * Sets the list of SQL statements to be executed when a physical connection is first created.
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param connectionInitSqls
+     *            Collection of SQL statements to execute on connection creation
+     */
+    public void setConnectionInitSqls(final Collection&lt;String&gt; connectionInitSqls) {
+<span class="pc bpc" id="L1723" title="1 of 4 branches missed.">        if (connectionInitSqls != null &amp;&amp; connectionInitSqls.size() &gt; 0) {</span>
+<span class="fc" id="L1724">            ArrayList&lt;String&gt; newVal = null;</span>
+<span class="fc bfc" id="L1725" title="All 2 branches covered.">            for (final String s : connectionInitSqls) {</span>
+<span class="pc bpc" id="L1726" title="1 of 4 branches missed.">                if (s != null &amp;&amp; s.trim().length() &gt; 0) {</span>
+<span class="fc bfc" id="L1727" title="All 2 branches covered.">                    if (newVal == null) {</span>
+<span class="fc" id="L1728">                        newVal = new ArrayList&lt;&gt;();</span>
+                    }
+<span class="fc" id="L1730">                    newVal.add(s);</span>
+                }
+<span class="fc" id="L1732">            }</span>
+<span class="fc" id="L1733">            this.connectionInitSqls = newVal;</span>
+<span class="fc" id="L1734">        } else {</span>
+<span class="fc" id="L1735">            this.connectionInitSqls = null;</span>
+        }
+<span class="fc" id="L1737">    }</span>
+
+    // ----------------------------------------------------- DataSource Methods
+
+    /**
+     * Sets the connection properties passed to driver.connect(...).
+     * &lt;p&gt;
+     * Format of the string must be [propertyName=property;]*
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * NOTE - The &quot;user&quot; and &quot;password&quot; properties will be added explicitly, so they do not need to be included here.
+     * &lt;/p&gt;
+     *
+     * @param connectionProperties
+     *            the connection properties used to create new connections
+     */
+    public void setConnectionProperties(final String connectionProperties) {
+<span class="fc" id="L1754">        Objects.requireNonNull(connectionProperties, &quot;connectionProperties is null&quot;);</span>
+<span class="fc" id="L1755">        final String[] entries = connectionProperties.split(&quot;;&quot;);</span>
+<span class="fc" id="L1756">        final Properties properties = new Properties();</span>
+<span class="fc bfc" id="L1757" title="All 2 branches covered.">        for (final String entry : entries) {</span>
+<span class="pc bpc" id="L1758" title="1 of 2 branches missed.">            if (entry.length() &gt; 0) {</span>
+<span class="fc" id="L1759">                final int index = entry.indexOf('=');</span>
+<span class="fc bfc" id="L1760" title="All 2 branches covered.">                if (index &gt; 0) {</span>
+<span class="fc" id="L1761">                    final String name = entry.substring(0, index);</span>
+<span class="fc" id="L1762">                    final String value = entry.substring(index + 1);</span>
+<span class="fc" id="L1763">                    properties.setProperty(name, value);</span>
+<span class="fc" id="L1764">                } else {</span>
+                    // no value is empty string which is how java.util.Properties works
+<span class="fc" id="L1766">                    properties.setProperty(entry, &quot;&quot;);</span>
+                }
+            }
+        }
+<span class="fc" id="L1770">        this.connectionProperties = properties;</span>
+<span class="fc" id="L1771">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets default auto-commit state of connections returned by this datasource.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param defaultAutoCommit
+     *            default auto-commit value
+     */
+    public void setDefaultAutoCommit(final Boolean defaultAutoCommit) {
+<span class="fc" id="L1787">        this.defaultAutoCommit = defaultAutoCommit;</span>
+<span class="fc" id="L1788">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the default catalog.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param defaultCatalog
+     *            the default catalog
+     */
+    public void setDefaultCatalog(final String defaultCatalog) {
+<span class="pc bpc" id="L1804" title="2 of 4 branches missed.">        if (defaultCatalog != null &amp;&amp; defaultCatalog.trim().length() &gt; 0) {</span>
+<span class="fc" id="L1805">            this.defaultCatalog = defaultCatalog;</span>
+        } else {
+<span class="nc" id="L1807">            this.defaultCatalog = null;</span>
+        }
+<span class="fc" id="L1809">    }</span>
+
+    /**
+     * Sets the default query timeout that will be used for {@link java.sql.Statement Statement}s created from this
+     * connection. &lt;code&gt;null&lt;/code&gt; means that the driver default will be used.
+     *
+     * @param defaultQueryTimeoutSeconds
+     *            The default query timeout in seconds.
+     */
+    public void setDefaultQueryTimeout(final Integer defaultQueryTimeoutSeconds) {
+<span class="nc" id="L1819">        this.defaultQueryTimeoutSeconds = defaultQueryTimeoutSeconds;</span>
+<span class="nc" id="L1820">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets defaultReadonly property.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param defaultReadOnly
+     *            default read-only value
+     */
+    public void setDefaultReadOnly(final Boolean defaultReadOnly) {
+<span class="fc" id="L1836">        this.defaultReadOnly = defaultReadOnly;</span>
+<span class="fc" id="L1837">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the default schema.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param defaultSchema
+     *            the default catalog
+     * @since 2.5.0
+     */
+    public void setDefaultSchema(final String defaultSchema) {
+<span class="pc bpc" id="L1854" title="2 of 4 branches missed.">        if (defaultSchema != null &amp;&amp; defaultSchema.trim().length() &gt; 0) {</span>
+<span class="fc" id="L1855">            this.defaultSchema = defaultSchema;</span>
+        } else {
+<span class="nc" id="L1857">            this.defaultSchema = null;</span>
+        }
+<span class="fc" id="L1859">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the default transaction isolation state for returned connections.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param defaultTransactionIsolation
+     *            the default transaction isolation state
+     * @see Connection#getTransactionIsolation
+     */
+    public void setDefaultTransactionIsolation(final int defaultTransactionIsolation) {
+<span class="fc" id="L1876">        this.defaultTransactionIsolation = defaultTransactionIsolation;</span>
+<span class="fc" id="L1877">    }</span>
+
+    /**
+     * Sets the SQL_STATE codes considered to signal fatal conditions.
+     * &lt;p&gt;
+     * Overrides the defaults in {@link Utils#DISCONNECTION_SQL_CODES} (plus anything starting with
+     * {@link Utils#DISCONNECTION_SQL_CODE_PREFIX}). If this property is non-null and {@link #getFastFailValidation()}
+     * is {@code true}, whenever connections created by this datasource generate exceptions with SQL_STATE codes in this
+     * list, they will be marked as &quot;fatally disconnected&quot; and subsequent validations will fail fast (no attempt at
+     * isValid or validation query).
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * If {@link #getFastFailValidation()} is {@code false} setting this property has no effect.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: {@code getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter}.
+     * &lt;/p&gt;
+     *
+     * @param disconnectionSqlCodes
+     *            SQL_STATE codes considered to signal fatal conditions
+     * @since 2.1
+     */
+    public void setDisconnectionSqlCodes(final Collection&lt;String&gt; disconnectionSqlCodes) {
+<span class="pc bpc" id="L1902" title="2 of 4 branches missed.">        if (disconnectionSqlCodes != null &amp;&amp; disconnectionSqlCodes.size() &gt; 0) {</span>
+<span class="fc" id="L1903">            HashSet&lt;String&gt; newVal = null;</span>
+<span class="fc bfc" id="L1904" title="All 2 branches covered.">            for (final String s : disconnectionSqlCodes) {</span>
+<span class="pc bpc" id="L1905" title="2 of 4 branches missed.">                if (s != null &amp;&amp; s.trim().length() &gt; 0) {</span>
+<span class="fc bfc" id="L1906" title="All 2 branches covered.">                    if (newVal == null) {</span>
+<span class="fc" id="L1907">                        newVal = new HashSet&lt;&gt;();</span>
+                    }
+<span class="fc" id="L1909">                    newVal.add(s);</span>
+                }
+<span class="fc" id="L1911">            }</span>
+<span class="fc" id="L1912">            this.disconnectionSqlCodes = newVal;</span>
+<span class="fc" id="L1913">        } else {</span>
+<span class="nc" id="L1914">            this.disconnectionSqlCodes = null;</span>
+        }
+<span class="fc" id="L1916">    }</span>
+
+    /**
+     * Sets the JDBC Driver instance to use for this pool.
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param driver
+     *            The JDBC Driver instance to use for this pool.
+     */
+    public synchronized void setDriver(final Driver driver) {
+<span class="nc" id="L1930">        this.driver = driver;</span>
+<span class="nc" id="L1931">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the class loader to be used to load the JDBC driver.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param driverClassLoader
+     *            the class loader with which to load the JDBC driver
+     */
+    public synchronized void setDriverClassLoader(final ClassLoader driverClassLoader) {
+<span class="fc" id="L1947">        this.driverClassLoader = driverClassLoader;</span>
+<span class="fc" id="L1948">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the JDBC driver class name.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param driverClassName
+     *            the class name of the JDBC driver
+     */
+    public synchronized void setDriverClassName(final String driverClassName) {
+<span class="pc bpc" id="L1964" title="1 of 4 branches missed.">        if (driverClassName != null &amp;&amp; driverClassName.trim().length() &gt; 0) {</span>
+<span class="fc" id="L1965">            this.driverClassName = driverClassName;</span>
+        } else {
+<span class="fc" id="L1967">            this.driverClassName = null;</span>
+        }
+<span class="fc" id="L1969">    }</span>
+
+    /**
+     * Sets the value of the flag that controls whether or not connections being returned to the pool will be checked
+     * and configured with {@link Connection#setAutoCommit(boolean) Connection.setAutoCommit(true)} if the auto commit
+     * setting is {@code false} when the connection is returned. It is &lt;code&gt;true&lt;/code&gt; by default.
+     *
+     * @param autoCommitOnReturn
+     *            Whether or not connections being returned to the pool will be checked and configured with auto-commit.
+     * @deprecated Use {@link #setAutoCommitOnReturn(boolean)}.
+     */
+    @Deprecated
+    public void setEnableAutoCommitOnReturn(final boolean autoCommitOnReturn) {
+<span class="nc" id="L1982">        this.autoCommitOnReturn = autoCommitOnReturn;</span>
+<span class="nc" id="L1983">    }</span>
+
+    /**
+     * Sets the EvictionPolicy implementation to use with this connection pool.
+     *
+     * @param evictionPolicyClassName
+     *            The fully qualified class name of the EvictionPolicy implementation
+     */
+    public synchronized void setEvictionPolicyClassName(final String evictionPolicyClassName) {
+<span class="nc bnc" id="L1992" title="All 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L1993">            connectionPool.setEvictionPolicyClassName(evictionPolicyClassName);</span>
+        }
+<span class="nc" id="L1995">        this.evictionPolicyClassName = evictionPolicyClassName;</span>
+<span class="nc" id="L1996">    }</span>
+
+    /**
+     * @see #getFastFailValidation()
+     * @param fastFailValidation
+     *            true means connections created by this factory will fast fail validation
+     * @since 2.1
+     */
+    public void setFastFailValidation(final boolean fastFailValidation) {
+<span class="fc" id="L2005">        this.fastFailValidation = fastFailValidation;</span>
+<span class="fc" id="L2006">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the initial size of the connection pool.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param initialSize
+     *            the number of connections created when the pool is initialized
+     */
+    public synchronized void setInitialSize(final int initialSize) {
+<span class="fc" id="L2022">        this.initialSize = initialSize;</span>
+<span class="fc" id="L2023">    }</span>
+
+    /**
+     * Sets the JMX name that has been requested for this DataSource. If the requested name is not valid, an alternative
+     * may be chosen. This DataSource will attempt to register itself using this name. If another component registers
+     * this DataSource with JMX and this name is valid this name will be used in preference to any specified by the
+     * other component.
+     *
+     * @param jmxName
+     *            The JMX name that has been requested for this DataSource
+     */
+    public void setJmxName(final String jmxName) {
+<span class="fc" id="L2035">        this.jmxName = jmxName;</span>
+<span class="fc" id="L2036">    }</span>
+
+    /**
+     * Sets the LIFO property. True means the pool behaves as a LIFO queue; false means FIFO.
+     *
+     * @param lifo
+     *            the new value for the LIFO property
+     */
+    public synchronized void setLifo(final boolean lifo) {
+<span class="fc" id="L2045">        this.lifo = lifo;</span>
+<span class="pc bpc" id="L2046" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2047">            connectionPool.setLifo(lifo);</span>
+        }
+<span class="fc" id="L2049">    }</span>
+
+    /**
+     * @param logAbandoned
+     *            new logAbandoned property value
+     */
+    public void setLogAbandoned(final boolean logAbandoned) {
+<span class="fc bfc" id="L2056" title="All 2 branches covered.">        if (abandonedConfig == null) {</span>
+<span class="fc" id="L2057">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L2059">        abandonedConfig.setLogAbandoned(logAbandoned);</span>
+<span class="fc" id="L2060">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="fc bfc" id="L2061" title="All 2 branches covered.">        if (gop != null) {</span>
+<span class="fc" id="L2062">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L2064">    }</span>
+
+    /**
+     * When {@link #getMaxConnLifetimeMillis()} is set to limit connection lifetime, this property determines whether or
+     * not log messages are generated when the pool closes connections due to maximum lifetime exceeded. Set this
+     * property to false to suppress log messages when connections expire.
+     *
+     * @param logExpiredConnections
+     *            Whether or not log messages are generated when the pool closes connections due to maximum lifetime
+     *            exceeded.
+     */
+    public void setLogExpiredConnections(final boolean logExpiredConnections) {
+<span class="fc" id="L2076">        this.logExpiredConnections = logExpiredConnections;</span>
+<span class="fc" id="L2077">    }</span>
+
+    /**
+     * &lt;strong&gt;BasicDataSource does NOT support this method. &lt;/strong&gt;
+     *
+     * &lt;p&gt;
+     * Set the login timeout (in seconds) for connecting to the database.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Calls {@link #createDataSource()}, so has the side effect of initializing the connection pool.
+     * &lt;/p&gt;
+     *
+     * @param loginTimeout
+     *            The new login timeout, or zero for no timeout
+     * @throws UnsupportedOperationException
+     *             If the DataSource implementation does not support the login timeout feature.
+     * @throws SQLException
+     *             if a database access error occurs
+     */
+    @Override
+    public void setLoginTimeout(final int loginTimeout) throws SQLException {
+        // This method isn't supported by the PoolingDataSource returned by the createDataSource
+<span class="nc" id="L2099">        throw new UnsupportedOperationException(&quot;Not supported by BasicDataSource&quot;);</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Sets the log writer being used by this data source.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Calls {@link #createDataSource()}, so has the side effect of initializing the connection pool.
+     * &lt;/p&gt;
+     *
+     * @param logWriter
+     *            The new log writer
+     * @throws SQLException
+     *             if a database access error occurs
+     */
+    @Override
+    public void setLogWriter(final PrintWriter logWriter) throws SQLException {
+<span class="nc" id="L2117">        createDataSource().setLogWriter(logWriter);</span>
+<span class="nc" id="L2118">        this.logWriter = logWriter;</span>
+<span class="nc" id="L2119">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the maximum permitted lifetime of a connection in milliseconds. A value of zero or less indicates an
+     * infinite lifetime.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param maxConnLifetimeMillis
+     *            The maximum permitted lifetime of a connection in milliseconds.
+     */
+    public void setMaxConnLifetimeMillis(final long maxConnLifetimeMillis) {
+<span class="fc" id="L2136">        this.maxConnLifetimeMillis = maxConnLifetimeMillis;</span>
+<span class="fc" id="L2137">    }</span>
+
+    /**
+     * Sets the maximum number of connections that can remain idle in the pool. Excess idle connections are destroyed on
+     * return to the pool.
+     *
+     * @see #getMaxIdle()
+     * @param maxIdle
+     *            the new value for maxIdle
+     */
+    public synchronized void setMaxIdle(final int maxIdle) {
+<span class="fc" id="L2148">        this.maxIdle = maxIdle;</span>
+<span class="pc bpc" id="L2149" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2150">            connectionPool.setMaxIdle(maxIdle);</span>
+        }
+<span class="fc" id="L2152">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the value of the &lt;code&gt;maxOpenPreparedStatements&lt;/code&gt; property.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param maxOpenStatements
+     *            the new maximum number of prepared statements
+     */
+    public synchronized void setMaxOpenPreparedStatements(final int maxOpenStatements) {
+<span class="fc" id="L2168">        this.maxOpenPreparedStatements = maxOpenStatements;</span>
+<span class="fc" id="L2169">    }</span>
+
+    /**
+     * Sets the maximum total number of idle and borrows connections that can be active at the same time. Use a negative
+     * value for no limit.
+     *
+     * @param maxTotal
+     *            the new value for maxTotal
+     * @see #getMaxTotal()
+     */
+    public synchronized void setMaxTotal(final int maxTotal) {
+<span class="fc" id="L2180">        this.maxTotal = maxTotal;</span>
+<span class="pc bpc" id="L2181" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2182">            connectionPool.setMaxTotal(maxTotal);</span>
+        }
+<span class="fc" id="L2184">    }</span>
+
+    /**
+     * Sets the MaxWaitMillis property. Use -1 to make the pool wait indefinitely.
+     *
+     * @param maxWaitMillis
+     *            the new value for MaxWaitMillis
+     * @see #getMaxWaitMillis()
+     */
+    public synchronized void setMaxWaitMillis(final long maxWaitMillis) {
+<span class="fc" id="L2194">        this.maxWaitMillis = maxWaitMillis;</span>
+<span class="pc bpc" id="L2195" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2196">            connectionPool.setMaxWaitMillis(maxWaitMillis);</span>
+        }
+<span class="fc" id="L2198">    }</span>
+
+    /**
+     * Sets the {@link #minEvictableIdleTimeMillis} property.
+     *
+     * @param minEvictableIdleTimeMillis
+     *            the minimum amount of time an object may sit idle in the pool
+     * @see #minEvictableIdleTimeMillis
+     */
+    public synchronized void setMinEvictableIdleTimeMillis(final long minEvictableIdleTimeMillis) {
+<span class="fc" id="L2208">        this.minEvictableIdleTimeMillis = minEvictableIdleTimeMillis;</span>
+<span class="pc bpc" id="L2209" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2210">            connectionPool.setMinEvictableIdleTimeMillis(minEvictableIdleTimeMillis);</span>
+        }
+<span class="fc" id="L2212">    }</span>
+
+    /**
+     * Sets the minimum number of idle connections in the pool. The pool attempts to ensure that minIdle connections are
+     * available when the idle object evictor runs. The value of this property has no effect unless
+     * {@link #timeBetweenEvictionRunsMillis} has a positive value.
+     *
+     * @param minIdle
+     *            the new value for minIdle
+     * @see GenericObjectPool#setMinIdle(int)
+     */
+    public synchronized void setMinIdle(final int minIdle) {
+<span class="fc" id="L2224">        this.minIdle = minIdle;</span>
+<span class="pc bpc" id="L2225" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2226">            connectionPool.setMinIdle(minIdle);</span>
+        }
+<span class="fc" id="L2228">    }</span>
+
+    /**
+     * Sets the value of the {@link #numTestsPerEvictionRun} property.
+     *
+     * @param numTestsPerEvictionRun
+     *            the new {@link #numTestsPerEvictionRun} value
+     * @see #numTestsPerEvictionRun
+     */
+    public synchronized void setNumTestsPerEvictionRun(final int numTestsPerEvictionRun) {
+<span class="fc" id="L2238">        this.numTestsPerEvictionRun = numTestsPerEvictionRun;</span>
+<span class="pc bpc" id="L2239" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2240">            connectionPool.setNumTestsPerEvictionRun(numTestsPerEvictionRun);</span>
+        }
+<span class="fc" id="L2242">    }</span>
+
+    // ------------------------------------------------------ Protected Methods
+
+    /**
+     * &lt;p&gt;
+     * Sets the {@link #password}.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param password
+     *            new value for the password
+     */
+    public void setPassword(final String password) {
+<span class="fc" id="L2260">        this.password = password;</span>
+<span class="fc" id="L2261">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets whether to pool statements or not.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param poolingStatements
+     *            pooling on or off
+     */
+    public synchronized void setPoolPreparedStatements(final boolean poolingStatements) {
+<span class="fc" id="L2277">        this.poolPreparedStatements = poolingStatements;</span>
+<span class="fc" id="L2278">    }</span>
+
+    /**
+     * @param removeAbandonedOnBorrow
+     *            true means abandoned connections may be removed when connections are borrowed from the pool.
+     * @see #getRemoveAbandonedOnBorrow()
+     */
+    public void setRemoveAbandonedOnBorrow(final boolean removeAbandonedOnBorrow) {
+<span class="fc bfc" id="L2286" title="All 2 branches covered.">        if (abandonedConfig == null) {</span>
+<span class="fc" id="L2287">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L2289">        abandonedConfig.setRemoveAbandonedOnBorrow(removeAbandonedOnBorrow);</span>
+<span class="fc" id="L2290">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="pc bpc" id="L2291" title="1 of 2 branches missed.">        if (gop != null) {</span>
+<span class="nc" id="L2292">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L2294">    }</span>
+
+    /**
+     * @param removeAbandonedOnMaintenance
+     *            true means abandoned connections may be removed on pool maintenance.
+     * @see #getRemoveAbandonedOnMaintenance()
+     */
+    public void setRemoveAbandonedOnMaintenance(final boolean removeAbandonedOnMaintenance) {
+<span class="pc bpc" id="L2302" title="1 of 2 branches missed.">        if (abandonedConfig == null) {</span>
+<span class="nc" id="L2303">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L2305">        abandonedConfig.setRemoveAbandonedOnMaintenance(removeAbandonedOnMaintenance);</span>
+<span class="fc" id="L2306">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="pc bpc" id="L2307" title="1 of 2 branches missed.">        if (gop != null) {</span>
+<span class="nc" id="L2308">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L2310">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the timeout in seconds before an abandoned connection can be removed.
+     * &lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * Setting this property has no effect if {@link #getRemoveAbandonedOnBorrow()} and
+     * {@link #getRemoveAbandonedOnMaintenance()} are false.
+     * &lt;/p&gt;
+     *
+     * @param removeAbandonedTimeout
+     *            new abandoned timeout in seconds
+     * @see #getRemoveAbandonedTimeout()
+     * @see #getRemoveAbandonedOnBorrow()
+     * @see #getRemoveAbandonedOnMaintenance()
+     */
+    public void setRemoveAbandonedTimeout(final int removeAbandonedTimeout) {
+<span class="pc bpc" id="L2329" title="1 of 2 branches missed.">        if (abandonedConfig == null) {</span>
+<span class="nc" id="L2330">            abandonedConfig = new AbandonedConfig();</span>
+        }
+<span class="fc" id="L2332">        abandonedConfig.setRemoveAbandonedTimeout(removeAbandonedTimeout);</span>
+<span class="fc" id="L2333">        final GenericObjectPool&lt;?&gt; gop = this.connectionPool;</span>
+<span class="pc bpc" id="L2334" title="1 of 2 branches missed.">        if (gop != null) {</span>
+<span class="nc" id="L2335">            gop.setAbandonedConfig(abandonedConfig);</span>
+        }
+<span class="fc" id="L2337">    }</span>
+
+    /**
+     * Sets the flag that controls if a connection will be rolled back when it is returned to the pool if auto commit is
+     * not enabled and the connection is not read only.
+     *
+     * @param rollbackOnReturn
+     *            whether a connection will be rolled back when it is returned to the pool.
+     */
+    public void setRollbackOnReturn(final boolean rollbackOnReturn) {
+<span class="nc" id="L2347">        this.rollbackOnReturn = rollbackOnReturn;</span>
+<span class="nc" id="L2348">    }</span>
+
+    /**
+     * Sets the minimum amount of time a connection may sit idle in the pool before it is eligible for eviction by the
+     * idle object evictor, with the extra condition that at least &quot;minIdle&quot; connections remain in the pool.
+     *
+     * @param softMinEvictableIdleTimeMillis
+     *            minimum amount of time a connection may sit idle in the pool before it is eligible for eviction,
+     *            assuming there are minIdle idle connections in the pool.
+     * @see #getSoftMinEvictableIdleTimeMillis
+     */
+    public synchronized void setSoftMinEvictableIdleTimeMillis(final long softMinEvictableIdleTimeMillis) {
+<span class="fc" id="L2360">        this.softMinEvictableIdleTimeMillis = softMinEvictableIdleTimeMillis;</span>
+<span class="pc bpc" id="L2361" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2362">            connectionPool.setSoftMinEvictableIdleTimeMillis(softMinEvictableIdleTimeMillis);</span>
+        }
+<span class="fc" id="L2364">    }</span>
+
+    /**
+     * Sets the {@link #testOnBorrow} property. This property determines whether or not the pool will validate objects
+     * before they are borrowed from the pool.
+     *
+     * @param testOnBorrow
+     *            new value for testOnBorrow property
+     */
+    public synchronized void setTestOnBorrow(final boolean testOnBorrow) {
+<span class="fc" id="L2374">        this.testOnBorrow = testOnBorrow;</span>
+<span class="pc bpc" id="L2375" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2376">            connectionPool.setTestOnBorrow(testOnBorrow);</span>
+        }
+<span class="fc" id="L2378">    }</span>
+
+    /**
+     * Sets the {@link #testOnCreate} property. This property determines whether or not the pool will validate objects
+     * immediately after they are created by the pool
+     *
+     * @param testOnCreate
+     *            new value for testOnCreate property
+     */
+    public synchronized void setTestOnCreate(final boolean testOnCreate) {
+<span class="nc" id="L2388">        this.testOnCreate = testOnCreate;</span>
+<span class="nc bnc" id="L2389" title="All 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2390">            connectionPool.setTestOnCreate(testOnCreate);</span>
+        }
+<span class="nc" id="L2392">    }</span>
+
+    /**
+     * Sets the &lt;code&gt;testOnReturn&lt;/code&gt; property. This property determines whether or not the pool will validate
+     * objects before they are returned to the pool.
+     *
+     * @param testOnReturn
+     *            new value for testOnReturn property
+     */
+    public synchronized void setTestOnReturn(final boolean testOnReturn) {
+<span class="fc" id="L2402">        this.testOnReturn = testOnReturn;</span>
+<span class="pc bpc" id="L2403" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2404">            connectionPool.setTestOnReturn(testOnReturn);</span>
+        }
+<span class="fc" id="L2406">    }</span>
+
+    /**
+     * Sets the &lt;code&gt;testWhileIdle&lt;/code&gt; property. This property determines whether or not the idle object evictor
+     * will validate connections.
+     *
+     * @param testWhileIdle
+     *            new value for testWhileIdle property
+     */
+    public synchronized void setTestWhileIdle(final boolean testWhileIdle) {
+<span class="fc" id="L2416">        this.testWhileIdle = testWhileIdle;</span>
+<span class="pc bpc" id="L2417" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2418">            connectionPool.setTestWhileIdle(testWhileIdle);</span>
+        }
+<span class="fc" id="L2420">    }</span>
+
+    /**
+     * Sets the {@link #timeBetweenEvictionRunsMillis} property.
+     *
+     * @param timeBetweenEvictionRunsMillis
+     *            the new time between evictor runs
+     * @see #timeBetweenEvictionRunsMillis
+     */
+    public synchronized void setTimeBetweenEvictionRunsMillis(final long timeBetweenEvictionRunsMillis) {
+<span class="fc" id="L2430">        this.timeBetweenEvictionRunsMillis = timeBetweenEvictionRunsMillis;</span>
+<span class="pc bpc" id="L2431" title="1 of 2 branches missed.">        if (connectionPool != null) {</span>
+<span class="nc" id="L2432">            connectionPool.setTimeBetweenEvictionRunsMillis(timeBetweenEvictionRunsMillis);</span>
+        }
+<span class="fc" id="L2434">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the {@link #url}.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param url
+     *            the new value for the JDBC connection url
+     */
+    public synchronized void setUrl(final String url) {
+<span class="fc" id="L2450">        this.url = url;</span>
+<span class="fc" id="L2451">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the {@link #userName}.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param userName
+     *            the new value for the JDBC connection user name
+     */
+    public void setUsername(final String userName) {
+<span class="fc" id="L2467">        this.userName = userName;</span>
+<span class="fc" id="L2468">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets the {@link #validationQuery}.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param validationQuery
+     *            the new value for the validation query
+     */
+    public void setValidationQuery(final String validationQuery) {
+<span class="pc bpc" id="L2484" title="1 of 4 branches missed.">        if (validationQuery != null &amp;&amp; validationQuery.trim().length() &gt; 0) {</span>
+<span class="fc" id="L2485">            this.validationQuery = validationQuery;</span>
+        } else {
+<span class="fc" id="L2487">            this.validationQuery = null;</span>
+        }
+<span class="fc" id="L2489">    }</span>
+
+    /**
+     * Sets the validation query timeout, the amount of time, in seconds, that connection validation will wait for a
+     * response from the database when executing a validation query. Use a value less than or equal to 0 for no timeout.
+     * &lt;p&gt;
+     * Note: this method currently has no effect once the pool has been initialized. The pool is initialized the first
+     * time one of the following methods is invoked: &lt;code&gt;getConnection, setLogwriter,
+     * setLoginTimeout, getLoginTimeout, getLogWriter.&lt;/code&gt;
+     * &lt;/p&gt;
+     *
+     * @param validationQueryTimeoutSeconds
+     *            new validation query timeout value in seconds
+     */
+    public void setValidationQueryTimeout(final int validationQueryTimeoutSeconds) {
+<span class="fc" id="L2504">        this.validationQueryTimeoutSeconds = validationQueryTimeoutSeconds;</span>
+<span class="fc" id="L2505">    }</span>
+
+    /**
+     * Starts the connection pool maintenance task, if configured.
+     */
+    protected void startPoolMaintenance() {
+<span class="pc bpc" id="L2511" title="1 of 4 branches missed.">        if (connectionPool != null &amp;&amp; timeBetweenEvictionRunsMillis &gt; 0) {</span>
+<span class="fc" id="L2512">            connectionPool.setTimeBetweenEvictionRunsMillis(timeBetweenEvictionRunsMillis);</span>
+        }
+<span class="fc" id="L2514">    }</span>
+
+    @Override
+    public &lt;T&gt; T unwrap(final Class&lt;T&gt; iface) throws SQLException {
+<span class="nc" id="L2518">        throw new SQLException(&quot;BasicDataSource is not a wrapper.&quot;);</span>
+    }
+
+    private void updateJmxName(final GenericObjectPoolConfig&lt;?&gt; config) {
+<span class="fc bfc" id="L2522" title="All 2 branches covered.">        if (registeredJmxObjectName == null) {</span>
+<span class="fc" id="L2523">            return;</span>
+        }
+<span class="fc" id="L2525">        final StringBuilder base = new StringBuilder(registeredJmxObjectName.toString());</span>
+<span class="fc" id="L2526">        base.append(Constants.JMX_CONNECTION_POOL_BASE_EXT);</span>
+<span class="fc" id="L2527">        config.setJmxNameBase(base.toString());</span>
+<span class="fc" id="L2528">        config.setJmxNamePrefix(Constants.JMX_CONNECTION_POOL_PREFIX);</span>
+<span class="fc" id="L2529">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

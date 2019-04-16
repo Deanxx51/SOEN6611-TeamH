@@ -1,0 +1,4118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="../style.css">
+</head>
+<body>
+
+
+<h1>PoolingDataSource.java</h1>
+
+<table class="src">
+
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_1'/>
+1
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_1'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/*</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_2'/>
+2
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_2'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * Licensed to the Apache Software Foundation (ASF) under one or more</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_3'/>
+3
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_3'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * contributor license agreements.  See the NOTICE file distributed with</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_4'/>
+4
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_4'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * this work for additional information regarding copyright ownership.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_5'/>
+5
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_5'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * The ASF licenses this file to You under the Apache License, Version 2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_6'/>
+6
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_6'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * (the &#34;License&#34;); you may not use this file except in compliance with</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_7'/>
+7
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_7'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * the License.  You may obtain a copy of the License at</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_8'/>
+8
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_8'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_9'/>
+9
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_9'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *      http://www.apache.org/licenses/LICENSE-2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_10'/>
+10
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_10'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_11'/>
+11
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_11'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * Unless required by applicable law or agreed to in writing, software</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_12'/>
+12
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_12'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * distributed under the License is distributed on an &#34;AS IS&#34; BASIS,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_13'/>
+13
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_13'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_14'/>
+14
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_14'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * See the License for the specific language governing permissions and</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_15'/>
+15
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_15'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * limitations under the License.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_16'/>
+16
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_16'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_17'/>
+17
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_17'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>package org.apache.commons.dbcp2;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_18'/>
+18
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_18'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_19'/>
+19
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_19'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.io.PrintWriter;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_20'/>
+20
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_20'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.sql.Connection;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_21'/>
+21
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_21'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.sql.SQLException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_22'/>
+22
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_22'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.sql.SQLFeatureNotSupportedException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_23'/>
+23
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_23'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.NoSuchElementException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_24'/>
+24
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_24'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Objects;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_25'/>
+25
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_25'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.logging.Logger;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_26'/>
+26
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_26'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_27'/>
+27
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_27'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.sql.DataSource;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_28'/>
+28
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_28'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_29'/>
+29
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_29'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.commons.logging.Log;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_30'/>
+30
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_30'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.commons.logging.LogFactory;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_31'/>
+31
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_31'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.commons.pool2.ObjectPool;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_32'/>
+32
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_32'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.commons.pool2.impl.GenericObjectPool;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_33'/>
+33
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_33'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_34'/>
+34
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_34'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_35'/>
+35
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_35'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * A simple {@link DataSource} implementation that obtains {@link Connection}s from the specified {@link ObjectPool}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_36'/>
+36
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_36'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_37'/>
+37
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_37'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * @param &#60;C&#62;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_38'/>
+38
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_38'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *            The connection type</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_39'/>
+39
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_39'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_40'/>
+40
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_40'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * @since 2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_41'/>
+41
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_41'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_42'/>
+42
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_42'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>public class PoolingDataSource&#60;C extends Connection&#62; implements DataSource, AutoCloseable {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_43'/>
+43
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_43'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_44'/>
+44
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_44'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private static final Log log = LogFactory.getLog(PoolingDataSource.class);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_45'/>
+45
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_45'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_46'/>
+46
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_46'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /** Controls access to the underlying connection */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_47'/>
+47
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_47'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private boolean accessToUnderlyingConnectionAllowed;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_48'/>
+48
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_48'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_49'/>
+49
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_49'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_50'/>
+50
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_50'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Constructs a new instance backed by the given connection pool.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_51'/>
+51
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_51'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_52'/>
+52
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_52'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param pool</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_53'/>
+53
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_53'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            the given connection pool.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_54'/>
+54
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_54'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_55'/>
+55
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_55'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    public PoolingDataSource(final ObjectPool&#60;C&#62; pool) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_56'/>
+56
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_56'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        Objects.requireNonNull(pool, &#34;Pool must not be null.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_57'/>
+57
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_57'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        this.pool = pool;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_58'/>
+58
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_58'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        // Verify that pool&#39;s factory refers back to it. If not, log a warning and try to fix.</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_59'/>
+59
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_59'>1</a>
+<span>
+1. <init> : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if (this.pool instanceof GenericObjectPool&#60;?&#62;) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_60'/>
+60
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_60'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            final PoolableConnectionFactory pcf = (PoolableConnectionFactory) ((GenericObjectPool&#60;?&#62;) this.pool)</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_61'/>
+61
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_61'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                    .getFactory();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_62'/>
+62
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_62'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            Objects.requireNonNull(pcf, &#34;PoolableConnectionFactory must not be null.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_63'/>
+63
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_63'>1</a>
+<span>
+1. <init> : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            if (pcf.getPool() != this.pool) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_64'/>
+64
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_64'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                log.warn(Utils.getMessage(&#34;poolingDataSource.factoryConfig&#34;));</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_65'/>
+65
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_65'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                @SuppressWarnings(&#34;unchecked&#34;) // PCF must have a pool of PCs</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_66'/>
+66
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_66'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                final ObjectPool&#60;PoolableConnection&#62; p = (ObjectPool&#60;PoolableConnection&#62;) this.pool;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_67'/>
+67
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_67'>1</a>
+<span>
+1. <init> : removed call to org/apache/commons/dbcp2/PoolableConnectionFactory::setPool &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                pcf.setPool(p);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_68'/>
+68
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_68'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_69'/>
+69
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_69'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_70'/>
+70
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_70'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_71'/>
+71
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_71'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_72'/>
+72
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_72'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_73'/>
+73
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_73'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Closes and free all {@link Connection}s from the pool.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_74'/>
+74
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_74'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_75'/>
+75
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_75'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @since 2.1</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_76'/>
+76
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_76'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_77'/>
+77
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_77'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_78'/>
+78
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_78'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void close() throws RuntimeException, SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_79'/>
+79
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_79'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        try {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_80'/>
+80
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_80'>1</a>
+<span>
+1. close : removed call to org/apache/commons/pool2/ObjectPool::close &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            pool.close();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_81'/>
+81
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_81'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final RuntimeException rte) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_82'/>
+82
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_82'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw new RuntimeException(Utils.getMessage(&#34;pool.close.fail&#34;), rte);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_83'/>
+83
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_83'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final Exception e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_84'/>
+84
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_84'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw new SQLException(Utils.getMessage(&#34;pool.close.fail&#34;), e);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_85'/>
+85
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_85'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_86'/>
+86
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_86'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_87'/>
+87
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_87'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_88'/>
+88
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_88'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_89'/>
+89
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_89'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns the value of the accessToUnderlyingConnectionAllowed property.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_90'/>
+90
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_90'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_91'/>
+91
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_91'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return true if access to the underlying {@link Connection} is allowed, false otherwise.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_92'/>
+92
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_92'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_93'/>
+93
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_93'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public boolean isAccessToUnderlyingConnectionAllowed() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_94'/>
+94
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_94'>1</a>
+<span>
+1. isAccessToUnderlyingConnectionAllowed : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return this.accessToUnderlyingConnectionAllowed;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_95'/>
+95
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_95'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_96'/>
+96
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_96'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_97'/>
+97
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_97'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_98'/>
+98
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_98'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Sets the value of the accessToUnderlyingConnectionAllowed property. It controls if the PoolGuard allows access to</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_99'/>
+99
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_99'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * the underlying connection. (Default: false)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_100'/>
+100
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_100'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_101'/>
+101
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_101'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param allow</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_102'/>
+102
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_102'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            Access to the underlying connection is granted when true.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_103'/>
+103
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_103'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_104'/>
+104
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_104'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void setAccessToUnderlyingConnectionAllowed(final boolean allow) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_105'/>
+105
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_105'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        this.accessToUnderlyingConnectionAllowed = allow;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_106'/>
+106
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_106'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_107'/>
+107
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_107'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_108'/>
+108
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_108'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /* JDBC_4_ANT_KEY_BEGIN */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_109'/>
+109
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_109'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_110'/>
+110
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_110'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public boolean isWrapperFor(final Class&#60;?&#62; iface) throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_111'/>
+111
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_111'>1</a>
+<span>
+1. isWrapperFor : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        return false;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_112'/>
+112
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_112'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_113'/>
+113
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_113'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_114'/>
+114
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_114'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_115'/>
+115
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_115'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public &#60;T&#62; T unwrap(final Class&#60;T&#62; iface) throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_116'/>
+116
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_116'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        throw new SQLException(&#34;PoolingDataSource is not a wrapper.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_117'/>
+117
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_117'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_118'/>
+118
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_118'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /* JDBC_4_ANT_KEY_END */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_119'/>
+119
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_119'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_120'/>
+120
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_120'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_121'/>
+121
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_121'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Logger getParentLogger() throws SQLFeatureNotSupportedException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_122'/>
+122
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_122'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        throw new SQLFeatureNotSupportedException();</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_123'/>
+123
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_123'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_124'/>
+124
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_124'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_125'/>
+125
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_125'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    // --- DataSource methods -----------------------------------------</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_126'/>
+126
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_126'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_127'/>
+127
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_127'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_128'/>
+128
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_128'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns a {@link java.sql.Connection} from my pool, according to the contract specified by</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_129'/>
+129
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_129'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link ObjectPool#borrowObject}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_130'/>
+130
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_130'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_131'/>
+131
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_131'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_132'/>
+132
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_132'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Connection getConnection() throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_133'/>
+133
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_133'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        try {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_134'/>
+134
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_134'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            final C conn = pool.borrowObject();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_135'/>
+135
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_135'>1</a>
+<span>
+1. getConnection : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            if (conn == null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_136'/>
+136
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_136'>1</a>
+<span>
+1. getConnection : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getConnection to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                return null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_137'/>
+137
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_137'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_138'/>
+138
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_138'>1</a>
+<span>
+1. getConnection : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getConnection to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            return new PoolGuardConnectionWrapper&#60;&#62;(conn);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_139'/>
+139
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_139'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final SQLException e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_140'/>
+140
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_140'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw e;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_141'/>
+141
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_141'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        } catch (final NoSuchElementException e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_142'/>
+142
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_142'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            throw new SQLException(&#34;Cannot get a connection, pool error &#34; + e.getMessage(), e);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_143'/>
+143
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_143'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final RuntimeException e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_144'/>
+144
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_144'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw e;</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_145'/>
+145
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_145'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final InterruptedException e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_146'/>
+146
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_146'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            // Reset the interrupt status so it is visible to callers</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_147'/>
+147
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_147'>1</a>
+<span>
+1. getConnection : removed call to java/lang/Thread::interrupt &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>            Thread.currentThread().interrupt();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_148'/>
+148
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_148'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw new SQLException(&#34;Cannot get a connection, general error&#34;, e);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_149'/>
+149
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_149'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        } catch (final Exception e) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_150'/>
+150
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_150'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw new SQLException(&#34;Cannot get a connection, general error&#34;, e);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_151'/>
+151
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_151'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_152'/>
+152
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_152'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_153'/>
+153
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_153'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_154'/>
+154
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_154'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_155'/>
+155
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_155'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Throws {@link UnsupportedOperationException}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_156'/>
+156
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_156'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_157'/>
+157
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_157'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws UnsupportedOperationException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_158'/>
+158
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_158'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *             always thrown</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_159'/>
+159
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_159'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_160'/>
+160
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_160'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_161'/>
+161
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_161'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Connection getConnection(final String uname, final String passwd) throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_162'/>
+162
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_162'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        throw new UnsupportedOperationException();</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_163'/>
+163
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_163'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_164'/>
+164
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_164'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_165'/>
+165
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_165'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_166'/>
+166
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_166'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns my log writer.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_167'/>
+167
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_167'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_168'/>
+168
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_168'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return my log writer</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_169'/>
+169
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_169'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @see DataSource#getLogWriter</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_170'/>
+170
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_170'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_171'/>
+171
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_171'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_172'/>
+172
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_172'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public PrintWriter getLogWriter() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_173'/>
+173
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_173'>1</a>
+<span>
+1. getLogWriter : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getLogWriter to ( if (x != null) null else throw new RuntimeException ) &rarr; SURVIVED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='survived'>        return logWriter;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_174'/>
+174
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_174'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_175'/>
+175
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_175'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_176'/>
+176
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_176'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_177'/>
+177
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_177'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Throws {@link UnsupportedOperationException}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_178'/>
+178
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_178'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_179'/>
+179
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_179'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws UnsupportedOperationException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_180'/>
+180
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_180'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *             As this implementation does not support this feature.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_181'/>
+181
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_181'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_182'/>
+182
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_182'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_183'/>
+183
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_183'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public int getLoginTimeout() {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_184'/>
+184
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_184'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        throw new UnsupportedOperationException(&#34;Login timeout is not supported.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_185'/>
+185
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_185'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_186'/>
+186
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_186'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_187'/>
+187
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_187'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_188'/>
+188
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_188'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Throws {@link UnsupportedOperationException}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_189'/>
+189
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_189'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_190'/>
+190
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_190'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws UnsupportedOperationException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_191'/>
+191
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_191'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *             As this implementation does not support this feature.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_192'/>
+192
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_192'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_193'/>
+193
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_193'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_194'/>
+194
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_194'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void setLoginTimeout(final int seconds) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_195'/>
+195
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_195'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        throw new UnsupportedOperationException(&#34;Login timeout is not supported.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_196'/>
+196
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_196'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_197'/>
+197
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_197'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_198'/>
+198
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_198'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_199'/>
+199
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_199'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Sets my log writer.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_200'/>
+200
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_200'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_201'/>
+201
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_201'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @see DataSource#setLogWriter</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_202'/>
+202
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_202'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_203'/>
+203
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_203'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_204'/>
+204
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_204'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void setLogWriter(final PrintWriter out) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_205'/>
+205
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_205'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        logWriter = out;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_206'/>
+206
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_206'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_207'/>
+207
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_207'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_208'/>
+208
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_208'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /** My log writer. */</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_209'/>
+209
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_209'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private PrintWriter logWriter = null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_210'/>
+210
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_210'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_211'/>
+211
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_211'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private final ObjectPool&#60;C&#62; pool;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_212'/>
+212
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_212'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_213'/>
+213
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_213'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    protected ObjectPool&#60;C&#62; getPool() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_214'/>
+214
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_214'>1</a>
+<span>
+1. getPool : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getPool to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return pool;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_215'/>
+215
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_215'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_216'/>
+216
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_216'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_217'/>
+217
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_217'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_218'/>
+218
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_218'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * PoolGuardConnectionWrapper is a Connection wrapper that makes sure a closed connection cannot be used anymore.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_219'/>
+219
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_219'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_220'/>
+220
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_220'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @since 2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_221'/>
+221
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_221'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_222'/>
+222
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_222'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private class PoolGuardConnectionWrapper&#60;D extends Connection&#62; extends DelegatingConnection&#60;D&#62; {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_223'/>
+223
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_223'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_224'/>
+224
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_224'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        PoolGuardConnectionWrapper(final D delegate) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_225'/>
+225
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_225'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            super(delegate);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_226'/>
+226
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_226'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_227'/>
+227
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_227'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_228'/>
+228
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_228'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_229'/>
+229
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_229'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>         * @see org.apache.commons.dbcp2.DelegatingConnection#getDelegate()</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_230'/>
+230
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_230'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>         */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_231'/>
+231
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_231'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_232'/>
+232
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_232'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        public D getDelegate() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_233'/>
+233
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_233'>2</a>
+<span>
+1. getDelegate : negated conditional &rarr; KILLED<br/>
+2. getDelegate : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource$PoolGuardConnectionWrapper::getDelegate to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            return isAccessToUnderlyingConnectionAllowed() ? super.getDelegate() : null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_234'/>
+234
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_234'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_235'/>
+235
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_235'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_236'/>
+236
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_236'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_237'/>
+237
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_237'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>         * @see org.apache.commons.dbcp2.DelegatingConnection#getInnermostDelegate()</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_238'/>
+238
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_238'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>         */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_239'/>
+239
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_239'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_240'/>
+240
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_240'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        public Connection getInnermostDelegate() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_241'/>
+241
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_241'>2</a>
+<span>
+1. getInnermostDelegate : negated conditional &rarr; KILLED<br/>
+2. getInnermostDelegate : mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource$PoolGuardConnectionWrapper::getInnermostDelegate to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            return isAccessToUnderlyingConnectionAllowed() ? super.getInnermostDelegate() : null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_242'/>
+242
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_242'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_243'/>
+243
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_243'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_244'/>
+244
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_244'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_245'/>
+245
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_245'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        public void close() throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_246'/>
+246
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_246'>1</a>
+<span>
+1. close : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            if (getDelegateInternal() != null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_247'/>
+247
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_247'>1</a>
+<span>
+1. close : removed call to org/apache/commons/dbcp2/DelegatingConnection::close &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                super.close();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_248'/>
+248
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_248'>1</a>
+<span>
+1. close : removed call to org/apache/commons/dbcp2/DelegatingConnection::setDelegate &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                super.setDelegate(null);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_249'/>
+249
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_249'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_250'/>
+250
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_250'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_251'/>
+251
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_251'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_252'/>
+252
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_252'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_253'/>
+253
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_253'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        public boolean isClosed() throws SQLException {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_254'/>
+254
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_254'>2</a>
+<span>
+1. isClosed : negated conditional &rarr; KILLED<br/>
+2. isClosed : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            return getDelegateInternal() == null ? true : super.isClosed();</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_255'/>
+255
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_255'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_256'/>
+256
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_256'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@34d42298_257'/>
+257
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_257'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>}</span></pre></td></tr>
+
+
+
+<tr><td></td><td></td><td><h2>Mutations</h2></td></tr>
+
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_59'>59</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_59'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b><init><br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testFixFactoryConfig()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_63'>63</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_63'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b><init><br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testFixFactoryConfig()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_67'>67</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_67'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b><init><br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testFixFactoryConfig()</span></span> removed call to org/apache/commons/dbcp2/PoolableConnectionFactory::setPool &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_80'>80</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_80'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>close<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testClose()</span></span> removed call to org/apache/commons/pool2/ObjectPool::close &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_94'>94</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_94'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>isAccessToUnderlyingConnectionAllowed<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost()</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_111'>111</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_111'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>isWrapperFor<br/><b>Killed by : </b>none</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_135'>135</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_135'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getConnection<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_136'>136</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_136'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getConnection<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getConnection to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_138'>138</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_138'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getConnection<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost()</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getConnection to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_147'>147</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_147'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getConnection<br/><b>Killed by : </b>none</span></span> removed call to java/lang/Thread::interrupt &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_173'>173</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_173'/> 
+
+<p class='SURVIVED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getLogWriter<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getLogWriter to ( if (x != null) null else throw new RuntimeException ) &rarr; SURVIVED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_214'>214</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_214'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getPool<br/><b>Killed by : </b>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualInnermost()</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource::getPool to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_233'>233</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_233'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getDelegate<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsSameDelegate()</span></span> negated conditional &rarr; KILLED</p> <p class='KILLED'><span class='pop'>2.<span><b>2</b><br/><b>Location : </b>getDelegate<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsSameDelegate()</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource$PoolGuardConnectionWrapper::getDelegate to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_241'>241</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_241'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getInnermostDelegate<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost()</span></span> negated conditional &rarr; KILLED</p> <p class='KILLED'><span class='pop'>2.<span><b>2</b><br/><b>Location : </b>getInnermostDelegate<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost()</span></span> mutated return of Object value for org/apache/commons/dbcp2/PoolingDataSource$PoolGuardConnectionWrapper::getInnermostDelegate to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_246'>246</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_246'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>close<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testClose()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_247'>247</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_247'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>close<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testClose()</span></span> removed call to org/apache/commons/dbcp2/DelegatingConnection::close &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_248'>248</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_248'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>close<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestBasicDataSource.testPoolCloseCheckedException()</span></span> removed call to org/apache/commons/dbcp2/DelegatingConnection::setDelegate &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@34d42298_254'>254</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@34d42298_254'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>isClosed<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseConnectionTwice()</span></span> negated conditional &rarr; KILLED</p> <p class='KILLED'><span class='pop'>2.<span><b>2</b><br/><b>Location : </b>isClosed<br/><b>Killed by : </b>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseConnectionTwice()</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED</p> 
+</td>
+</tr>
+
+</table>
+
+
+<h2>Active mutators</h2>
+<ul>
+<li class='mutator'>INCREMENTS_MUTATOR</li>
+<li class='mutator'>VOID_METHOD_CALL_MUTATOR</li>
+<li class='mutator'>RETURN_VALS_MUTATOR</li>
+<li class='mutator'>MATH_MUTATOR</li>
+<li class='mutator'>NEGATE_CONDITIONALS_MUTATOR</li>
+<li class='mutator'>INVERT_NEGS_MUTATOR</li>
+<li class='mutator'>CONDITIONALS_BOUNDARY_MUTATOR</li>
+
+</ul>
+
+<h2>Tests examined</h2>
+<ul>
+<li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testRepeatedBorrowAndReturn() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testClosing() (21 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testIsClosedFailure() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsNull() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testRepeatedBorrowAndReturn() (6 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testCanCloseConnectionTwice() (23 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testNestedConnections() (2 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testIsClosed() (8 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCloseInTransaction() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCanCloseResultSetTwice() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testSimple2() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testValidationQueryTimeoutSucceed() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testConcurrentInvalidateBorrow() (63 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testMaxTotalZero() (109 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testAccessToUnderlyingConnectionAllowed() (10 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testHashing() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testThreaded() (2892 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testInstanceNotFoundExceptionLogSuppressed() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testClosing() (3 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testValidationQueryTimeoutSucceed() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testConcurrentInvalidateBorrow() (115 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testPrepareStatementOptions() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testPrepareStatementOptions() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testJmxDisabled() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsFail() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testLastUsedUpdate() (5 ms)</li><li>org.apache.commons.dbcp2.TestDriverManagerConnectionFactory.testDriverManagerInitWithProperties() (110 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testCanCloseStatementTwice() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testHashing() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testInvalidateConnection() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testOpening() (7 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testHashCode() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testValidationQueryTimeoutSucceed() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSharedConnection() (3 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testRollbackReadOnly() (7 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testMaxConnLifetimeExceeded() (512 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMaxConnLifetimeExceeded() (509 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSourceFactory.testAllProperties() (11 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testThreaded() (3084 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testDriverClassLoader() (7 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testLastUsedLargePreparedStatementUse() (2620 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testBackPointers() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSimple() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testValidationQueryTimeoutNegative() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testMaxTotal() (110 ms)</li><li>org.apache.commons.dbcp2.managed.TestSynchronizationOrder.testSessionSynchronization() (2 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testMaxConnLifetimeExceededMutedLog() (510 ms)</li><li>org.apache.commons.dbcp2.managed.TestTransactionContext.testSetSharedConnectionEnlistFailure() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testSimple() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPooling.testClosePool() (3 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseCallableStatementTwice() (2 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testNoAccessToUnderlyingConnectionAllowed() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testCanCloseStatementTwice() (16 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSimple2() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testManualConnectionEvict() (111 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testRepeatedBorrowAndReturn() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testDriverClassLoader() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testCanCloseResultSetTwice() (7 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testTransactionIsolationBehavior() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testClose() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testIsClosedFailure() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestSynchronizationOrder.testInterposedSynchronization() (9 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testSimple2() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testIsClosed() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testConnectionsAreDistinct() (17 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testConnectionReturnOnCommit() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSetTransactionRegistry() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testRollbackReadOnly() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testValidationQueryTimeoutNegative() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCanCloseCallableStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testHashing() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testClose() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testTransactionRegistryNotInitialized() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPrepareStatementOptions() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testConcurrentInvalidateBorrow() (85 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testRepeatedBorrowAndReturn() (17 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testMaxTotalZero() (106 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testMutateAbandonedConfig() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testCanClosePreparedStatementTwice() (22 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testAccessToUnderlyingConnectionAllowed() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testPropertyTestOnReturn() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testClosing() (10 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testHashCode() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testMaxConnLifetimeExceeded() (508 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testCanCloseStatementTwice() (7 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testFixFactoryConfig() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testAbandonedCloseWithExceptions() (23 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsNull() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testPropertyTestOnReturn() (10 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testCanClosePreparedStatementTwice() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testThreaded() (2890 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testClose() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testHashCode() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsType() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPooling() (2 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testConcurrentInitBorrow() (490 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testCanCloseResultSetTwice() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testNoRsetClose() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testClose() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestConnectionWithNarayana.testConnectionInTimeout() (8335 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testThreaded() (3086 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testConnectionsAreDistinct() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testClearWarnings() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSetTransactionRegistry() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsReflexive() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testCanCloseCallableStatementTwice() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testDisconnectSqlCodes() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testMutateAbandonedConfig() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testClosing() (8 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPooling.testCallableStatementPooling() (7 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testValidationQueryTimeoutSucceed() (8 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testMutateAbandonedConfig() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPropertyTestOnReturn() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testOpening() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testPooling() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testClosing() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testLRUBehavior() (216 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testSetAutoCommitTrueOnClose() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testClose() (27 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testClosing() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testAccessToUnderlyingConnectionAllowed() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testPooling() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCanClosePreparedStatementTwice() (3 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDriver.test1() (6 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testIsClosed() (2 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testClearWarnings() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testMaxTotalZero() (107 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testMaxTotal() (111 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPooling.testStmtPool() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSetNullTransactionRegistry() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testCanCloseResultSetTwice() (17 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSimple() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testConcurrentInitBorrow() (504 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testBackPointers() (24 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testHashing() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsSameDelegate() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testConcurrentInvalidateBorrow() (333 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testPrepareStatementOptions() (8 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPrepareStatementOptions() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testGetConnectionInAfterCompletion() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testHashCode() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testMaxTotal() (108 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testCanCloseConnectionTwice() (8 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSourceFactory.testProperties() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testMaxConnLifetimeExceeded() (514 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testDefaultCatalog() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testConnectionReturnOnCommit() (2 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testValidationQueryTimeoutZero() (4 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testValidationQueryTimeoutZero() (3 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testHashCode() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testRollbackReadOnly() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testConcurrentInitBorrow() (493 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testRepeatedBorrowAndReturn() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testHashCode() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testDefaultCatalog() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseStatementTwice() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testRepeatedBorrowAndReturn() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMultipleThreads1() (10151 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMaxTotalZero() (105 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testJmxDisabled() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testPoolCloseRTE() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testConnectionsAreDistinct() (6 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testInstanceNotFoundExceptionLogSuppressed() (12 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testGarbageCollectorCleanUp02() (181 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testManualConnectionEvict() (110 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPreparedStatementPooling() (4 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testCanClosePreparedStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testThreaded() (2995 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testInvalidateConnection() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testSetAutoCommitTrueOnClose() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testAutoCommitBehavior() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testTransactionSynchronizationRegistry() (500 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testClearWarnings() (8 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testPooling() (6 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsReflexive() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testCanCloseConnectionTwice() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testClearWarnings() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testOpening() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testTransactionIsolationBehavior() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testValidationQueryTimeoutNegative() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualInnermost() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testDisconnectSqlCodes() (10 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testInvalidateConnection() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testValidationQueryTimeoutZero() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testCanClosePreparedStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testAccessToUnderlyingConnectionAllowed() (20 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testLastUsedPrepareCall() (2623 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testMaxTotal() (113 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testConcurrentInitBorrow() (488 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testValidationQueryTimeoutNegative() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestConnectionWithNarayana.testRepeatedGetConnectionInTimeout() (3013 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testDriverClassLoader() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testRollbackReadOnly() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testInitialSize() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testMaxTotal() (112 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testDisconnectSqlCodes() (7 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testGarbageCollectorCleanUp01() (60 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testOpening() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testPoolCloseRTE() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testAutoCommitBehavior() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testDoubleReturn() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testJmxDisabled() (7 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPStmtCatalog() (8 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testTransactionRegistryNotInitialized() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testMutateAbandonedConfig() (7 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testSimple() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testPropertyTestOnReturn() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testCanCloseCallableStatementTwice() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testManualConnectionEvict() (110 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testNoRsetClose() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testInvalidateConnection() (14 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testInitialSize() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testIsClosedFailure() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testPooling() (11 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testInitialSize() (8 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testCanCloseStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testAccessToUnderlyingConnectionAllowed() (3 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testConnectionsAreDistinct() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testHashCode() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testInstanceNotFoundExceptionLogSuppressed() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testAutoCommitBehavior() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testRepeatedBorrowAndReturn() (15 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testConnectionsAreDistinct() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testManualConnectionEvict() (109 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testAbandoned() (288 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testCanCloseResultSetTwice() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testThreaded() (3114 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testConnectionsAreDistinct() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSetNullTransactionRegistry() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testHashing() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testValidationQueryTimeoutSucceed() (3 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testSimple2() (3 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testNoRsetClose() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testClearWarnings() (10 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPStmtPoolingWithNoClose() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMaxTotal() (110 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testNoAccessToUnderlyingConnectionAllowed() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPoolCloseCheckedException() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPoolCloseCheckedException() (6 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testClosing() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testSimple() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testNoRsetClose() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsType() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testCanCloseConnectionTwice() (6 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testRollbackReadOnly() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testNoRsetClose() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testNoAccessToUnderlyingConnectionAllowed() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testCanCloseConnectionTwice() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualInnermost() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testAutoCommitBehavior() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSetTransactionRegistryAlreadySet() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testAbandonedClose() (23 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPooling() (8 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsFail() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testOpening() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testJmxDisabled() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testPoolCloseCheckedException() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPooling() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testSetAutoCommitTrueOnClose() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPropertyTestOnReturn() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testNoAccessToUnderlyingConnectionAllowed() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testLastUsedPreparedStatementUse() (2623 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testOpening() (7 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testConnectionsAreDistinct() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCanCloseStatementTwice() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testRepeatedBorrowAndReturn() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testSimple() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testMaxConnLifetimeExceededMutedLog() (510 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testHashCode() (6 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testBackPointers() (40 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testValidationQueryTimeoutNegative() (11 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCommit() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPoolCloseRTE() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testCanCloseConnectionTwice() (3 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testCanCloseCallableStatementTwice() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testTransactionIsolationBehavior() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testJmxDisabled() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testCanCloseConnectionTwice() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testNoRsetClose() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMutateAbandonedConfig() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPoolCloseRTE() (7 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testCanCloseCallableStatementTwice() (20 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testAutoCommitBehavior() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testDriverClassLoader() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testLastUsed() (2631 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testBackPointers() (12 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testClearWarnings() (23 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testInstanceNotFoundExceptionLogSuppressed() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testIsClosed() (7 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testMaxConnLifetimeExceededMutedLog() (510 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testSetAutoCommitTrueOnClose() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testSimple2() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testClearWarnings() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testCanClosePreparedStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseResultSetTwice() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testPoolCloseRTE() (8 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsType() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testDriverClassLoader() (8 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPooling.testMultipleClose() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testIsClosed() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testIsClosedFailure() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testClose() (6 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testIsClosed() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testSimple() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsSameDelegateNoUnderlyingAccess() (3 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testInvalidateConnection() (11 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testConcurrentInitBorrow() (485 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testBackPointers() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testPrepareStatementOptions() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testHashing() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testAutoCommitBehavior() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testMaxTotal() (110 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testTransactionIsolationBehavior() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testPStmtPoolingAcrossClose() (6 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testCanCloseStatementTwice() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testHashing() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSharedConnection() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testDisconnectSqlCodes() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPrepareStatementOptions() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testAccessToUnderlyingConnectionAllowed() (30 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testNoAccessToUnderlyingConnectionAllowed() (4 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testSimple2() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testReallyClose() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testInitialSize() (9 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testNoRsetClose() (3 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testSimple() (2 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testDefaultCatalog() (7 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testIsClosed() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testOpening() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testManualConnectionEvict() (114 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testValidationQueryTimeoutZero() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testBackPointers() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testMaxTotal() (109 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testCanCloseCallableStatementTwice() (7 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testMaxConnLifetimeExceededMutedLog() (510 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedConnection.testConnectionReturnOnErrorWhenEnlistingXAResource() (6 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testCanCloseCallableStatementTwice() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testSetAutoCommitTrueOnClose() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testOpening() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testMaxConnLifetimeExceeded() (508 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testNoRsetClose() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testValidationQueryTimeoutZero() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSetTransactionRegistryAlreadySet() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestConnectionWithNarayana.testConnectionCommitAfterTimeout() (3032 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testPhysicalClose() (17 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testPoolCloseCheckedException() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testSimple2() (5 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testInstanceNotFoundExceptionLogSuppressed() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testReadOnly() (9 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testCanClosePreparedStatementTwice() (3 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testDefaultCatalog() (10 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testCanCloseConnectionTwice() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsSameDelegateNoUnderlyingAccess() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testBackPointers() (6 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPooling.testBatchUpdate() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testCanCloseStatementTwice() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testAccessToUnderlyingConnectionAllowed() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testManagedConnectionEqualsNull() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testDefaultCatalog() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testIsClosed() (5 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testConcurrentInvalidateBorrow() (321 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testThreaded() (2991 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testTransactionIsolationBehavior() (4 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testDisconnectSqlCodes() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testMaxConnLifetimeExceededMutedLog() (510 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testClosing() (13 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testPrepareStatementOptions() (4 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsSameDelegate() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestBasicManagedDataSource.testIsClosedFailure() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testSharedTransactionConversion() (4 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testMaxTotalZero() (112 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testInitialSize() (8 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testBackPointers() (7 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualsFail() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testPooling() (4 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testCanCloseResultSetTwice() (5 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testSimple2() (8 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testAutoCommitBehavior() (24 ms)</li><li>org.apache.commons.dbcp2.TestBasicDataSource.testAutoCommitBehavior() (6 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testCanCloseResultSetTwice() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSourceInTx.testNestedConnections() (4 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsReflexive() (5 ms)</li><li>org.apache.commons.dbcp2.TestPStmtPoolingBasicDataSource.testClearWarnings() (13 ms)</li><li>org.apache.commons.dbcp2.TestAbandonedBasicDataSource.testPoolCloseCheckedException() (6 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testPoolGuardConnectionWrapperEqualInnermost() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testHashing() (3 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testConnectionsAreDistinct() (3 ms)</li><li>org.apache.commons.dbcp2.TestDriverManagerConnectionFactory.testDriverManagerInitWithCredentials() (106 ms)</li><li>org.apache.commons.dbcp2.TestPoolingDataSource.testCanClosePreparedStatementTwice() (2 ms)</li><li>org.apache.commons.dbcp2.managed.TestManagedDataSource.testManagedConnectionEqualsSameDelegate() (5 ms)</li><li>org.apache.commons.dbcp2.TestParallelCreationWithNoIdle.testMassiveConcurrentInitBorrow() (2340 ms)</li><li>org.apache.commons.dbcp2.managed.TestDataSourceXAConnectionFactory.testThreaded() (2889 ms)</li>
+</ul>
+
+<br/>
+
+Report generated by <a href='http://pitest.org'>PIT</a> 1.4.3
+
+</body>
+</html>

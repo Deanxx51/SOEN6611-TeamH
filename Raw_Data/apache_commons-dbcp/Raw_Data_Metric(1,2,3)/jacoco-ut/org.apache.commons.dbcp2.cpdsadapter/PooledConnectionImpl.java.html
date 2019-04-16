@@ -1,0 +1,677 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PooledConnectionImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache Commons DBCP</a> &gt; <a href="index.source.html" class="el_package">org.apache.commons.dbcp2.cpdsadapter</a> &gt; <span class="el_source">PooledConnectionImpl.java</span></div><h1>PooledConnectionImpl.java</h1><pre class="source lang-java linenums">/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the &quot;License&quot;); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package org.apache.commons.dbcp2.cpdsadapter;
+
+import java.sql.CallableStatement;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.util.Vector;
+
+import javax.sql.ConnectionEvent;
+import javax.sql.ConnectionEventListener;
+import javax.sql.PooledConnection;
+import javax.sql.StatementEventListener;
+
+import org.apache.commons.dbcp2.DelegatingConnection;
+import org.apache.commons.dbcp2.DelegatingPreparedStatement;
+import org.apache.commons.dbcp2.Jdbc41Bridge;
+import org.apache.commons.dbcp2.PStmtKey;
+import org.apache.commons.dbcp2.PoolableCallableStatement;
+import org.apache.commons.dbcp2.PoolablePreparedStatement;
+import org.apache.commons.dbcp2.PoolingConnection.StatementType;
+import org.apache.commons.pool2.KeyedObjectPool;
+import org.apache.commons.pool2.KeyedPooledObjectFactory;
+import org.apache.commons.pool2.PooledObject;
+import org.apache.commons.pool2.impl.DefaultPooledObject;
+
+/**
+ * Implementation of PooledConnection that is returned by PooledConnectionDataSource.
+ *
+ * @since 2.0
+ */
+class PooledConnectionImpl
+        implements PooledConnection, KeyedPooledObjectFactory&lt;PStmtKey, DelegatingPreparedStatement&gt; {
+
+    private static final String CLOSED = &quot;Attempted to use PooledConnection after closed() was called.&quot;;
+
+    /**
+     * The JDBC database connection that represents the physical db connection.
+     */
+    private Connection connection;
+
+    /**
+     * A DelegatingConnection used to create a PoolablePreparedStatementStub.
+     */
+    private final DelegatingConnection&lt;?&gt; delegatingConnection;
+
+    /**
+     * The JDBC database logical connection.
+     */
+    private Connection logicalConnection;
+
+    /**
+     * ConnectionEventListeners.
+     */
+    private final Vector&lt;ConnectionEventListener&gt; eventListeners;
+
+    /**
+     * StatementEventListeners.
+     */
+<span class="fc" id="L76">    private final Vector&lt;StatementEventListener&gt; statementEventListeners = new Vector&lt;&gt;();</span>
+
+    /**
+     * Flag set to true, once {@link #close()} is called.
+     */
+    private boolean closed;
+
+    /** My pool of {@link PreparedStatement}s. */
+    private KeyedObjectPool&lt;PStmtKey, DelegatingPreparedStatement&gt; pStmtPool;
+
+    /**
+     * Controls access to the underlying connection.
+     */
+    private boolean accessToUnderlyingConnectionAllowed;
+
+    /**
+     * Wraps the real connection.
+     *
+     * @param connection
+     *            the connection to be wrapped.
+     */
+<span class="fc" id="L97">    PooledConnectionImpl(final Connection connection) {</span>
+<span class="fc" id="L98">        this.connection = connection;</span>
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">        if (connection instanceof DelegatingConnection) {</span>
+<span class="nc" id="L100">            this.delegatingConnection = (DelegatingConnection&lt;?&gt;) connection;</span>
+        } else {
+<span class="fc" id="L102">            this.delegatingConnection = new DelegatingConnection&lt;&gt;(connection);</span>
+        }
+<span class="fc" id="L104">        eventListeners = new Vector&lt;&gt;();</span>
+<span class="fc" id="L105">        closed = false;</span>
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * My {@link KeyedPooledObjectFactory} method for activating {@link PreparedStatement}s.
+     *
+     * @param key
+     *            Ignored.
+     * @param pooledObject
+     *            Ignored.
+     */
+    @Override
+    public void activateObject(final PStmtKey key, final PooledObject&lt;DelegatingPreparedStatement&gt; pooledObject)
+            throws Exception {
+<span class="fc" id="L119">        pooledObject.getObject().activate();</span>
+<span class="fc" id="L120">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void addConnectionEventListener(final ConnectionEventListener listener) {
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">        if (!eventListeners.contains(listener)) {</span>
+<span class="fc" id="L128">            eventListeners.add(listener);</span>
+        }
+<span class="fc" id="L130">    }</span>
+
+    /* JDBC_4_ANT_KEY_BEGIN */
+    @Override
+    public void addStatementEventListener(final StatementEventListener listener) {
+<span class="nc bnc" id="L135" title="All 2 branches missed.">        if (!statementEventListeners.contains(listener)) {</span>
+<span class="nc" id="L136">            statementEventListeners.add(listener);</span>
+        }
+<span class="nc" id="L138">    }</span>
+    /* JDBC_4_ANT_KEY_END */
+
+    /**
+     * Throws an SQLException, if isClosed is true
+     */
+    private void assertOpen() throws SQLException {
+<span class="fc bfc" id="L145" title="All 2 branches covered.">        if (closed) {</span>
+<span class="fc" id="L146">            throw new SQLException(CLOSED);</span>
+        }
+<span class="fc" id="L148">    }</span>
+
+    /**
+     * Closes the physical connection and marks this &lt;code&gt;PooledConnection&lt;/code&gt; so that it may not be used to
+     * generate any more logical &lt;code&gt;Connection&lt;/code&gt;s.
+     *
+     * @throws SQLException
+     *             Thrown when an error occurs or the connection is already closed.
+     */
+    @Override
+    public void close() throws SQLException {
+<span class="fc" id="L159">        assertOpen();</span>
+<span class="fc" id="L160">        closed = true;</span>
+        try {
+<span class="fc bfc" id="L162" title="All 2 branches covered.">            if (pStmtPool != null) {</span>
+                try {
+<span class="fc" id="L164">                    pStmtPool.close();</span>
+                } finally {
+<span class="fc" id="L166">                    pStmtPool = null;</span>
+                }
+            }
+<span class="nc" id="L169">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L170">            throw e;</span>
+<span class="nc" id="L171">        } catch (final Exception e) {</span>
+<span class="nc" id="L172">            throw new SQLException(&quot;Cannot close connection (return to pool failed)&quot;, e);</span>
+        } finally {
+            try {
+<span class="fc" id="L175">                connection.close();</span>
+            } finally {
+<span class="fc" id="L177">                connection = null;</span>
+            }
+        }
+<span class="fc" id="L180">    }</span>
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql) {
+<span class="fc" id="L186">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull());</span>
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final int autoGeneratedKeys) {
+<span class="fc" id="L193">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), autoGeneratedKeys);</span>
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final int columnIndexes[]) {
+<span class="fc" id="L200">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), columnIndexes);</span>
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final int resultSetType, final int resultSetConcurrency) {
+<span class="fc" id="L207">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), resultSetType,</span>
+                resultSetConcurrency);
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final int resultSetType, final int resultSetConcurrency,
+            final int resultSetHoldability) {
+<span class="fc" id="L216">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), resultSetType,</span>
+                resultSetConcurrency, resultSetHoldability);
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     *
+     * @since 2.4.0
+     */
+    protected PStmtKey createKey(final String sql, final int resultSetType, final int resultSetConcurrency,
+            final int resultSetHoldability, final StatementType statementType) {
+<span class="fc" id="L227">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), resultSetType,</span>
+                resultSetConcurrency, resultSetHoldability, statementType);
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     *
+     * @since 2.4.0
+     */
+    protected PStmtKey createKey(final String sql, final int resultSetType, final int resultSetConcurrency,
+            final StatementType statementType) {
+<span class="fc" id="L238">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), resultSetType,</span>
+                resultSetConcurrency, statementType);
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final StatementType statementType) {
+<span class="fc" id="L246">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), statementType);</span>
+    }
+
+    /**
+     * Creates a {@link PStmtKey} for the given arguments.
+     */
+    protected PStmtKey createKey(final String sql, final String columnNames[]) {
+<span class="fc" id="L253">        return new PStmtKey(normalizeSQL(sql), getCatalogOrNull(), getSchemaOrNull(), columnNames);</span>
+    }
+
+    /**
+     * My {@link KeyedPooledObjectFactory} method for destroying {@link PreparedStatement}s.
+     *
+     * @param key
+     *            ignored
+     * @param pooledObject
+     *            the wrapped {@link PreparedStatement} to be destroyed.
+     */
+    @Override
+    public void destroyObject(final PStmtKey key, final PooledObject&lt;DelegatingPreparedStatement&gt; pooledObject)
+            throws Exception {
+<span class="fc" id="L267">        pooledObject.getObject().getInnermostDelegate().close();</span>
+<span class="fc" id="L268">    }</span>
+
+    /**
+     * Closes the physical connection and checks that the logical connection was closed as well.
+     */
+    @Override
+    protected void finalize() throws Throwable {
+        // Closing the Connection ensures that if anyone tries to use it,
+        // an error will occur.
+        try {
+<span class="fc" id="L278">            connection.close();</span>
+<span class="fc" id="L279">        } catch (final Exception ignored) {</span>
+            // ignore
+<span class="fc" id="L281">        }</span>
+
+        // make sure the last connection is marked as closed
+<span class="pc bpc" id="L284" title="1 of 4 branches missed.">        if (logicalConnection != null &amp;&amp; !logicalConnection.isClosed()) {</span>
+<span class="nc" id="L285">            throw new SQLException(&quot;PooledConnection was gc'ed, without its last Connection being closed.&quot;);</span>
+        }
+<span class="fc" id="L287">    }</span>
+
+    private String getCatalogOrNull() {
+        try {
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">            return connection == null ? null : connection.getCatalog();</span>
+<span class="nc" id="L292">        } catch (final SQLException e) {</span>
+<span class="nc" id="L293">            return null;</span>
+        }
+    }
+
+    private String getSchemaOrNull() {
+        try {
+<span class="pc bpc" id="L299" title="1 of 2 branches missed.">            return connection == null ? null : Jdbc41Bridge.getSchema(connection);</span>
+<span class="nc" id="L300">        } catch (final SQLException e) {</span>
+<span class="nc" id="L301">            return null;</span>
+        }
+    }
+
+    /**
+     * Returns a JDBC connection.
+     *
+     * @return The database connection.
+     * @throws SQLException
+     *             if the connection is not open or the previous logical connection is still open
+     */
+    @Override
+    public Connection getConnection() throws SQLException {
+<span class="fc" id="L314">        assertOpen();</span>
+        // make sure the last connection is marked as closed
+<span class="pc bpc" id="L316" title="1 of 4 branches missed.">        if (logicalConnection != null &amp;&amp; !logicalConnection.isClosed()) {</span>
+            // should notify pool of error so the pooled connection can
+            // be removed !FIXME!
+<span class="nc" id="L319">            throw new SQLException(&quot;PooledConnection was reused, without its previous Connection being closed.&quot;);</span>
+        }
+
+        // the spec requires that this return a new Connection instance.
+<span class="fc" id="L323">        logicalConnection = new ConnectionImpl(this, connection, isAccessToUnderlyingConnectionAllowed());</span>
+<span class="fc" id="L324">        return logicalConnection;</span>
+    }
+
+    /**
+     * Returns the value of the accessToUnderlyingConnectionAllowed property.
+     *
+     * @return true if access to the underlying is allowed, false otherwise.
+     */
+    public synchronized boolean isAccessToUnderlyingConnectionAllowed() {
+<span class="fc" id="L333">        return this.accessToUnderlyingConnectionAllowed;</span>
+    }
+
+    /**
+     * My {@link KeyedPooledObjectFactory} method for creating {@link PreparedStatement}s.
+     *
+     * @param key
+     *            The key for the {@link PreparedStatement} to be created.
+     */
+    @SuppressWarnings(&quot;resource&quot;)
+    @Override
+    public PooledObject&lt;DelegatingPreparedStatement&gt; makeObject(final PStmtKey key) throws Exception {
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">        if (null == key) {</span>
+<span class="nc" id="L346">            throw new IllegalArgumentException(&quot;Prepared statement key is null or invalid.&quot;);</span>
+        }
+<span class="fc bfc" id="L348" title="All 2 branches covered.">        if (key.getStmtType() == StatementType.PREPARED_STATEMENT) {</span>
+<span class="fc" id="L349">            final PreparedStatement statement = (PreparedStatement) key.createStatement(connection);</span>
+            @SuppressWarnings({&quot;rawtypes&quot;, &quot;unchecked&quot; }) // Unable to find way to avoid this
+<span class="fc" id="L351">            final PoolablePreparedStatement pps = new PoolablePreparedStatement(statement, key, pStmtPool,</span>
+                    delegatingConnection);
+<span class="fc" id="L353">            return new DefaultPooledObject&lt;&gt;(pps);</span>
+        }
+<span class="fc" id="L355">        final CallableStatement statement = (CallableStatement) key.createStatement(connection);</span>
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L357">        final PoolableCallableStatement pcs = new PoolableCallableStatement(statement, key, pStmtPool,</span>
+                (DelegatingConnection&lt;Connection&gt;) delegatingConnection);
+<span class="fc" id="L359">        return new DefaultPooledObject&lt;&gt;(pcs);</span>
+    }
+
+    /**
+     * Normalizes the given SQL statement, producing a canonical form that is semantically equivalent to the original.
+     */
+    protected String normalizeSQL(final String sql) {
+<span class="fc" id="L366">        return sql.trim();</span>
+    }
+
+    /**
+     * Sends a connectionClosed event.
+     */
+    void notifyListeners() {
+<span class="fc" id="L373">        final ConnectionEvent event = new ConnectionEvent(this);</span>
+<span class="fc" id="L374">        final Object[] listeners = eventListeners.toArray();</span>
+<span class="fc bfc" id="L375" title="All 2 branches covered.">        for (final Object listener : listeners) {</span>
+<span class="fc" id="L376">            ((ConnectionEventListener) listener).connectionClosed(event);</span>
+        }
+<span class="fc" id="L378">    }</span>
+
+    /**
+     * My {@link KeyedPooledObjectFactory} method for passivating {@link PreparedStatement}s. Currently invokes
+     * {@link PreparedStatement#clearParameters}.
+     *
+     * @param key
+     *            ignored
+     * @param pooledObject
+     *            a wrapped {@link PreparedStatement}
+     */
+    @Override
+    public void passivateObject(final PStmtKey key, final PooledObject&lt;DelegatingPreparedStatement&gt; pooledObject)
+            throws Exception {
+        @SuppressWarnings(&quot;resource&quot;)
+<span class="fc" id="L393">        final DelegatingPreparedStatement dps = pooledObject.getObject();</span>
+<span class="fc" id="L394">        dps.clearParameters();</span>
+<span class="fc" id="L395">        dps.passivate();</span>
+<span class="fc" id="L396">    }</span>
+
+    /**
+     * Creates or obtains a {@link CallableStatement} from my pool.
+     *
+     * @param sql
+     *            an SQL statement that may contain one or more '?' parameter placeholders. Typically this statement is
+     *            specified using JDBC call escape syntax.
+     * @return a default &lt;code&gt;CallableStatement&lt;/code&gt; object containing the pre-compiled SQL statement.
+     * @exception SQLException
+     *                Thrown if a database access error occurs or this method is called on a closed connection.
+     * @since 2.4.0
+     */
+    CallableStatement prepareCall(final String sql) throws SQLException {
+<span class="fc bfc" id="L410" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L411">            return connection.prepareCall(sql);</span>
+        }
+        try {
+<span class="fc" id="L414">            return (CallableStatement) pStmtPool.borrowObject(createKey(sql, StatementType.CALLABLE_STATEMENT));</span>
+<span class="nc" id="L415">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L416">            throw e;</span>
+<span class="nc" id="L417">        } catch (final Exception e) {</span>
+<span class="nc" id="L418">            throw new SQLException(&quot;Borrow prepareCall from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Creates or obtains a {@link CallableStatement} from my pool.
+     *
+     * @param sql
+     *            a &lt;code&gt;String&lt;/code&gt; object that is the SQL statement to be sent to the database; may contain on or
+     *            more '?' parameters.
+     * @param resultSetType
+     *            a result set type; one of &lt;code&gt;ResultSet.TYPE_FORWARD_ONLY&lt;/code&gt;,
+     *            &lt;code&gt;ResultSet.TYPE_SCROLL_INSENSITIVE&lt;/code&gt;, or &lt;code&gt;ResultSet.TYPE_SCROLL_SENSITIVE&lt;/code&gt;.
+     * @param resultSetConcurrency
+     *            a concurrency type; one of &lt;code&gt;ResultSet.CONCUR_READ_ONLY&lt;/code&gt; or
+     *            &lt;code&gt;ResultSet.CONCUR_UPDATABLE&lt;/code&gt;.
+     * @return a &lt;code&gt;CallableStatement&lt;/code&gt; object containing the pre-compiled SQL statement that will produce
+     *         &lt;code&gt;ResultSet&lt;/code&gt; objects with the given type and concurrency.
+     * @throws SQLException
+     *             Thrown if a database access error occurs, this method is called on a closed connection or the given
+     *             parameters are not &lt;code&gt;ResultSet&lt;/code&gt; constants indicating type and concurrency.
+     * @since 2.4.0
+     */
+    CallableStatement prepareCall(final String sql, final int resultSetType, final int resultSetConcurrency)
+            throws SQLException {
+<span class="fc bfc" id="L443" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L444">            return connection.prepareCall(sql, resultSetType, resultSetConcurrency);</span>
+        }
+        try {
+<span class="fc" id="L447">            return (CallableStatement) pStmtPool.borrowObject(</span>
+<span class="fc" id="L448">                    createKey(sql, resultSetType, resultSetConcurrency, StatementType.CALLABLE_STATEMENT));</span>
+<span class="nc" id="L449">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L450">            throw e;</span>
+<span class="nc" id="L451">        } catch (final Exception e) {</span>
+<span class="nc" id="L452">            throw new SQLException(&quot;Borrow prepareCall from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Creates or obtains a {@link CallableStatement} from my pool.
+     *
+     * @param sql
+     *            a &lt;code&gt;String&lt;/code&gt; object that is the SQL statement to be sent to the database; may contain on or
+     *            more '?' parameters.
+     * @param resultSetType
+     *            one of the following &lt;code&gt;ResultSet&lt;/code&gt; constants: &lt;code&gt;ResultSet.TYPE_FORWARD_ONLY&lt;/code&gt;,
+     *            &lt;code&gt;ResultSet.TYPE_SCROLL_INSENSITIVE&lt;/code&gt;, or &lt;code&gt;ResultSet.TYPE_SCROLL_SENSITIVE&lt;/code&gt;.
+     * @param resultSetConcurrency
+     *            one of the following &lt;code&gt;ResultSet&lt;/code&gt; constants: &lt;code&gt;ResultSet.CONCUR_READ_ONLY&lt;/code&gt; or
+     *            &lt;code&gt;ResultSet.CONCUR_UPDATABLE&lt;/code&gt;.
+     * @param resultSetHoldability
+     *            one of the following &lt;code&gt;ResultSet&lt;/code&gt; constants: &lt;code&gt;ResultSet.HOLD_CURSORS_OVER_COMMIT&lt;/code&gt;
+     *            or &lt;code&gt;ResultSet.CLOSE_CURSORS_AT_COMMIT&lt;/code&gt;.
+     * @return a new &lt;code&gt;CallableStatement&lt;/code&gt; object, containing the pre-compiled SQL statement, that will
+     *         generate &lt;code&gt;ResultSet&lt;/code&gt; objects with the given type, concurrency, and holdability.
+     * @throws SQLException
+     *             Thrown if a database access error occurs, this method is called on a closed connection or the given
+     *             parameters are not &lt;code&gt;ResultSet&lt;/code&gt; constants indicating type, concurrency, and holdability.
+     * @since 2.4.0
+     */
+    CallableStatement prepareCall(final String sql, final int resultSetType, final int resultSetConcurrency,
+            final int resultSetHoldability) throws SQLException {
+<span class="fc bfc" id="L480" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L481">            return connection.prepareCall(sql, resultSetType, resultSetConcurrency, resultSetHoldability);</span>
+        }
+        try {
+<span class="fc" id="L484">            return (CallableStatement) pStmtPool.borrowObject(createKey(sql, resultSetType, resultSetConcurrency,</span>
+                    resultSetHoldability, StatementType.CALLABLE_STATEMENT));
+<span class="nc" id="L486">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L487">            throw e;</span>
+<span class="nc" id="L488">        } catch (final Exception e) {</span>
+<span class="nc" id="L489">            throw new SQLException(&quot;Borrow prepareCall from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Creates or obtains a {@link PreparedStatement} from my pool.
+     *
+     * @param sql
+     *            the SQL statement.
+     * @return a {@link PoolablePreparedStatement}
+     */
+    PreparedStatement prepareStatement(final String sql) throws SQLException {
+<span class="fc bfc" id="L501" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L502">            return connection.prepareStatement(sql);</span>
+        }
+        try {
+<span class="fc" id="L505">            return pStmtPool.borrowObject(createKey(sql));</span>
+<span class="nc" id="L506">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L507">            throw e;</span>
+<span class="nc" id="L508">        } catch (final Exception e) {</span>
+<span class="nc" id="L509">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Creates or obtains a {@link PreparedStatement} from my pool.
+     *
+     * @param sql
+     *            an SQL statement that may contain one or more '?' IN parameter placeholders.
+     * @param autoGeneratedKeys
+     *            a flag indicating whether auto-generated keys should be returned; one of
+     *            &lt;code&gt;Statement.RETURN_GENERATED_KEYS&lt;/code&gt; or &lt;code&gt;Statement.NO_GENERATED_KEYS&lt;/code&gt;.
+     * @return a {@link PoolablePreparedStatement}
+     * @see Connection#prepareStatement(String, int)
+     */
+    PreparedStatement prepareStatement(final String sql, final int autoGeneratedKeys) throws SQLException {
+<span class="fc bfc" id="L525" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L526">            return connection.prepareStatement(sql, autoGeneratedKeys);</span>
+        }
+        try {
+<span class="fc" id="L529">            return pStmtPool.borrowObject(createKey(sql, autoGeneratedKeys));</span>
+<span class="nc" id="L530">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L531">            throw e;</span>
+<span class="nc" id="L532">        } catch (final Exception e) {</span>
+<span class="nc" id="L533">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    PreparedStatement prepareStatement(final String sql, final int columnIndexes[]) throws SQLException {
+<span class="fc bfc" id="L538" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L539">            return connection.prepareStatement(sql, columnIndexes);</span>
+        }
+        try {
+<span class="fc" id="L542">            return pStmtPool.borrowObject(createKey(sql, columnIndexes));</span>
+<span class="nc" id="L543">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L544">            throw e;</span>
+<span class="nc" id="L545">        } catch (final Exception e) {</span>
+<span class="nc" id="L546">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * Creates or obtains a {@link PreparedStatement} from my pool.
+     *
+     * @param sql
+     *            a &lt;code&gt;String&lt;/code&gt; object that is the SQL statement to be sent to the database; may contain one or
+     *            more '?' IN parameters.
+     * @param resultSetType
+     *            a result set type; one of &lt;code&gt;ResultSet.TYPE_FORWARD_ONLY&lt;/code&gt;,
+     *            &lt;code&gt;ResultSet.TYPE_SCROLL_INSENSITIVE&lt;/code&gt;, or &lt;code&gt;ResultSet.TYPE_SCROLL_SENSITIVE&lt;/code&gt;.
+     * @param resultSetConcurrency
+     *            a concurrency type; one of &lt;code&gt;ResultSet.CONCUR_READ_ONLY&lt;/code&gt; or
+     *            &lt;code&gt;ResultSet.CONCUR_UPDATABLE&lt;/code&gt;.
+     *
+     * @return a {@link PoolablePreparedStatement}.
+     * @see Connection#prepareStatement(String, int, int)
+     */
+    PreparedStatement prepareStatement(final String sql, final int resultSetType, final int resultSetConcurrency)
+            throws SQLException {
+<span class="fc bfc" id="L568" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L569">            return connection.prepareStatement(sql, resultSetType, resultSetConcurrency);</span>
+        }
+        try {
+<span class="fc" id="L572">            return pStmtPool.borrowObject(createKey(sql, resultSetType, resultSetConcurrency));</span>
+<span class="nc" id="L573">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L574">            throw e;</span>
+<span class="nc" id="L575">        } catch (final Exception e) {</span>
+<span class="nc" id="L576">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    PreparedStatement prepareStatement(final String sql, final int resultSetType, final int resultSetConcurrency,
+            final int resultSetHoldability) throws SQLException {
+<span class="fc bfc" id="L582" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L583">            return connection.prepareStatement(sql, resultSetType, resultSetConcurrency, resultSetHoldability);</span>
+        }
+        try {
+<span class="fc" id="L586">            return pStmtPool.borrowObject(createKey(sql, resultSetType, resultSetConcurrency, resultSetHoldability));</span>
+<span class="nc" id="L587">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L588">            throw e;</span>
+<span class="nc" id="L589">        } catch (final Exception e) {</span>
+<span class="nc" id="L590">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    PreparedStatement prepareStatement(final String sql, final String columnNames[]) throws SQLException {
+<span class="fc bfc" id="L595" title="All 2 branches covered.">        if (pStmtPool == null) {</span>
+<span class="fc" id="L596">            return connection.prepareStatement(sql, columnNames);</span>
+        }
+        try {
+<span class="fc" id="L599">            return pStmtPool.borrowObject(createKey(sql, columnNames));</span>
+<span class="nc" id="L600">        } catch (final RuntimeException e) {</span>
+<span class="nc" id="L601">            throw e;</span>
+<span class="nc" id="L602">        } catch (final Exception e) {</span>
+<span class="nc" id="L603">            throw new SQLException(&quot;Borrow prepareStatement from pool failed&quot;, e);</span>
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void removeConnectionEventListener(final ConnectionEventListener listener) {
+<span class="fc" id="L612">        eventListeners.remove(listener);</span>
+<span class="fc" id="L613">    }</span>
+
+    /* JDBC_4_ANT_KEY_BEGIN */
+    @Override
+    public void removeStatementEventListener(final StatementEventListener listener) {
+<span class="nc" id="L618">        statementEventListeners.remove(listener);</span>
+<span class="nc" id="L619">    }</span>
+    /* JDBC_4_ANT_KEY_END */
+
+    /**
+     * Sets the value of the accessToUnderlyingConnectionAllowed property. It controls if the PoolGuard allows access to
+     * the underlying connection. (Default: false.)
+     *
+     * @param allow
+     *            Access to the underlying connection is granted when true.
+     */
+    public synchronized void setAccessToUnderlyingConnectionAllowed(final boolean allow) {
+<span class="fc" id="L630">        this.accessToUnderlyingConnectionAllowed = allow;</span>
+<span class="fc" id="L631">    }</span>
+
+    public void setStatementPool(final KeyedObjectPool&lt;PStmtKey, DelegatingPreparedStatement&gt; statementPool) {
+<span class="fc" id="L634">        pStmtPool = statementPool;</span>
+<span class="fc" id="L635">    }</span>
+
+    /**
+     * My {@link KeyedPooledObjectFactory} method for validating {@link PreparedStatement}s.
+     *
+     * @param key
+     *            Ignored.
+     * @param pooledObject
+     *            Ignored.
+     * @return {@code true}
+     */
+    @Override
+    public boolean validateObject(final PStmtKey key, final PooledObject&lt;DelegatingPreparedStatement&gt; pooledObject) {
+<span class="nc" id="L648">        return true;</span>
+    }
+
+    /**
+     * @since 2.6.0
+     */
+    @Override
+    public synchronized String toString() {
+<span class="nc" id="L656">        final StringBuilder builder = new StringBuilder(super.toString());</span>
+<span class="nc" id="L657">        builder.append(&quot;[connection=&quot;);</span>
+<span class="nc" id="L658">        builder.append(connection);</span>
+<span class="nc" id="L659">        builder.append(&quot;, delegatingConnection=&quot;);</span>
+<span class="nc" id="L660">        builder.append(delegatingConnection);</span>
+<span class="nc" id="L661">        builder.append(&quot;, logicalConnection=&quot;);</span>
+<span class="nc" id="L662">        builder.append(logicalConnection);</span>
+<span class="nc" id="L663">        builder.append(&quot;, eventListeners=&quot;);</span>
+<span class="nc" id="L664">        builder.append(eventListeners);</span>
+<span class="nc" id="L665">        builder.append(&quot;, statementEventListeners=&quot;);</span>
+<span class="nc" id="L666">        builder.append(statementEventListeners);</span>
+<span class="nc" id="L667">        builder.append(&quot;, closed=&quot;);</span>
+<span class="nc" id="L668">        builder.append(closed);</span>
+<span class="nc" id="L669">        builder.append(&quot;, pStmtPool=&quot;);</span>
+<span class="nc" id="L670">        builder.append(pStmtPool);</span>
+<span class="nc" id="L671">        builder.append(&quot;, accessToUnderlyingConnectionAllowed=&quot;);</span>
+<span class="nc" id="L672">        builder.append(accessToUnderlyingConnectionAllowed);</span>
+<span class="nc" id="L673">        builder.append(&quot;]&quot;);</span>
+<span class="nc" id="L674">        return builder.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>
