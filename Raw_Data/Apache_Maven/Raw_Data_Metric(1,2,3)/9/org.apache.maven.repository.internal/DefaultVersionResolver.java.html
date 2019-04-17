@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultVersionResolver.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Maven Artifact Resolver Provider</a> &gt; <a href="index.source.html" class="el_package">org.apache.maven.repository.internal</a> &gt; <span class="el_source">DefaultVersionResolver.java</span></div><h1>DefaultVersionResolver.java</h1><pre class="source lang-java linenums">package org.apache.maven.repository.internal;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import org.apache.maven.artifact.repository.metadata.Snapshot;
+import org.apache.maven.artifact.repository.metadata.SnapshotVersion;
+import org.apache.maven.artifact.repository.metadata.Versioning;
+import org.apache.maven.artifact.repository.metadata.io.xpp3.MetadataXpp3Reader;
+import org.codehaus.plexus.util.StringUtils;
+import org.eclipse.aether.RepositoryCache;
+import org.eclipse.aether.RepositoryEvent;
+import org.eclipse.aether.RepositoryEvent.EventType;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.RequestTrace;
+import org.eclipse.aether.SyncContext;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.impl.MetadataResolver;
+import org.eclipse.aether.impl.RepositoryEventDispatcher;
+import org.eclipse.aether.impl.SyncContextFactory;
+import org.eclipse.aether.impl.VersionResolver;
+import org.eclipse.aether.internal.impl.CacheUtils;
+import org.eclipse.aether.metadata.DefaultMetadata;
+import org.eclipse.aether.metadata.Metadata;
+import org.eclipse.aether.repository.ArtifactRepository;
+import org.eclipse.aether.repository.LocalRepository;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.repository.WorkspaceReader;
+import org.eclipse.aether.repository.WorkspaceRepository;
+import org.eclipse.aether.resolution.MetadataRequest;
+import org.eclipse.aether.resolution.MetadataResult;
+import org.eclipse.aether.resolution.VersionRequest;
+import org.eclipse.aether.resolution.VersionResolutionException;
+import org.eclipse.aether.resolution.VersionResult;
+import org.eclipse.aether.spi.locator.Service;
+import org.eclipse.aether.spi.locator.ServiceLocator;
+import org.eclipse.aether.util.ConfigUtils;
+
+import javax.inject.Inject;
+import javax.inject.Named;
+import javax.inject.Singleton;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * @author Benjamin Bentmann
+ */
+@Named
+@Singleton
+public class DefaultVersionResolver
+    implements VersionResolver, Service
+{
+
+    private static final String MAVEN_METADATA_XML = &quot;maven-metadata.xml&quot;;
+
+    private static final String RELEASE = &quot;RELEASE&quot;;
+
+    private static final String LATEST = &quot;LATEST&quot;;
+
+    private static final String SNAPSHOT = &quot;SNAPSHOT&quot;;
+
+    private MetadataResolver metadataResolver;
+
+    private SyncContextFactory syncContextFactory;
+
+    private RepositoryEventDispatcher repositoryEventDispatcher;
+
+    public DefaultVersionResolver()
+<span class="fc" id="L94">    {</span>
+        // enable no-arg constructor
+<span class="fc" id="L96">    }</span>
+
+    @Inject
+    DefaultVersionResolver( MetadataResolver metadataResolver, SyncContextFactory syncContextFactory,
+                            RepositoryEventDispatcher repositoryEventDispatcher )
+<span class="fc" id="L101">    {</span>
+<span class="fc" id="L102">        setMetadataResolver( metadataResolver );</span>
+<span class="fc" id="L103">        setSyncContextFactory( syncContextFactory );</span>
+<span class="fc" id="L104">        setRepositoryEventDispatcher( repositoryEventDispatcher );</span>
+<span class="fc" id="L105">    }</span>
+
+    public void initService( ServiceLocator locator )
+    {
+<span class="fc" id="L109">        setMetadataResolver( locator.getService( MetadataResolver.class ) );</span>
+<span class="fc" id="L110">        setSyncContextFactory( locator.getService( SyncContextFactory.class ) );</span>
+<span class="fc" id="L111">        setRepositoryEventDispatcher( locator.getService( RepositoryEventDispatcher.class ) );</span>
+<span class="fc" id="L112">    }</span>
+
+    public DefaultVersionResolver setMetadataResolver( MetadataResolver metadataResolver )
+    {
+<span class="fc" id="L116">        this.metadataResolver = Objects.requireNonNull( metadataResolver, &quot;metadataResolver cannot be null&quot; );</span>
+<span class="fc" id="L117">        return this;</span>
+    }
+
+    public DefaultVersionResolver setSyncContextFactory( SyncContextFactory syncContextFactory )
+    {
+<span class="fc" id="L122">        this.syncContextFactory = Objects.requireNonNull( syncContextFactory, &quot;syncContextFactory cannot be null&quot; );</span>
+<span class="fc" id="L123">        return this;</span>
+    }
+
+    public DefaultVersionResolver setRepositoryEventDispatcher( RepositoryEventDispatcher repositoryEventDispatcher )
+    {
+<span class="fc" id="L128">        this.repositoryEventDispatcher = Objects.requireNonNull( repositoryEventDispatcher,</span>
+            &quot;repositoryEventDispatcher cannot be null&quot; );
+<span class="fc" id="L130">        return this;</span>
+    }
+
+    @SuppressWarnings( &quot;checkstyle:methodlength&quot; )
+    public VersionResult resolveVersion( RepositorySystemSession session, VersionRequest request )
+        throws VersionResolutionException
+    {
+<span class="fc" id="L137">        RequestTrace trace = RequestTrace.newChild( request.getTrace(), request );</span>
+
+<span class="fc" id="L139">        Artifact artifact = request.getArtifact();</span>
+
+<span class="fc" id="L141">        String version = artifact.getVersion();</span>
+
+<span class="fc" id="L143">        VersionResult result = new VersionResult( request );</span>
+
+<span class="fc" id="L145">        Key cacheKey = null;</span>
+<span class="fc" id="L146">        RepositoryCache cache = session.getCache();</span>
+<span class="pc bpc" id="L147" title="3 of 4 branches missed.">        if ( cache != null &amp;&amp; !ConfigUtils.getBoolean( session, false, &quot;aether.versionResolver.noCache&quot; ) )</span>
+        {
+<span class="nc" id="L149">            cacheKey = new Key( session, request );</span>
+
+<span class="nc" id="L151">            Object obj = cache.get( session, cacheKey );</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">            if ( obj instanceof Record )</span>
+            {
+<span class="nc" id="L154">                Record record = (Record) obj;</span>
+<span class="nc" id="L155">                result.setVersion( record.version );</span>
+<span class="nc" id="L156">                result.setRepository(</span>
+<span class="nc" id="L157">                    CacheUtils.getRepository( session, request.getRepositories(), record.repoClass, record.repoId ) );</span>
+<span class="nc" id="L158">                return result;</span>
+            }
+        }
+
+        Metadata metadata;
+
+<span class="pc bpc" id="L164" title="1 of 2 branches missed.">        if ( RELEASE.equals( version ) )</span>
+        {
+<span class="nc" id="L166">            metadata = new DefaultMetadata( artifact.getGroupId(), artifact.getArtifactId(), MAVEN_METADATA_XML,</span>
+                                            Metadata.Nature.RELEASE );
+        }
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        else if ( LATEST.equals( version ) )</span>
+        {
+<span class="nc" id="L171">            metadata = new DefaultMetadata( artifact.getGroupId(), artifact.getArtifactId(), MAVEN_METADATA_XML,</span>
+                                            Metadata.Nature.RELEASE_OR_SNAPSHOT );
+        }
+<span class="fc bfc" id="L174" title="All 2 branches covered.">        else if ( version.endsWith( SNAPSHOT ) )</span>
+        {
+<span class="fc" id="L176">            WorkspaceReader workspace = session.getWorkspaceReader();</span>
+<span class="pc bpc" id="L177" title="3 of 4 branches missed.">            if ( workspace != null &amp;&amp; workspace.findVersions( artifact ).contains( version ) )</span>
+            {
+<span class="nc" id="L179">                metadata = null;</span>
+<span class="nc" id="L180">                result.setRepository( workspace.getRepository() );</span>
+            }
+            else
+            {
+<span class="fc" id="L184">                metadata =</span>
+<span class="fc" id="L185">                    new DefaultMetadata( artifact.getGroupId(), artifact.getArtifactId(), version, MAVEN_METADATA_XML,</span>
+                                         Metadata.Nature.SNAPSHOT );
+            }
+<span class="fc" id="L188">        }</span>
+        else
+        {
+<span class="fc" id="L191">            metadata = null;</span>
+        }
+
+<span class="fc bfc" id="L194" title="All 2 branches covered.">        if ( metadata == null )</span>
+        {
+<span class="fc" id="L196">            result.setVersion( version );</span>
+        }
+        else
+        {
+<span class="fc" id="L200">            List&lt;MetadataRequest&gt; metadataReqs = new ArrayList&lt;&gt;( request.getRepositories().size() );</span>
+
+<span class="fc" id="L202">            metadataReqs.add( new MetadataRequest( metadata, null, request.getRequestContext() ) );</span>
+
+<span class="fc bfc" id="L204" title="All 2 branches covered.">            for ( RemoteRepository repository : request.getRepositories() )</span>
+            {
+<span class="fc" id="L206">                MetadataRequest metadataRequest =</span>
+<span class="fc" id="L207">                    new MetadataRequest( metadata, repository, request.getRequestContext() );</span>
+<span class="fc" id="L208">                metadataRequest.setDeleteLocalCopyIfMissing( true );</span>
+<span class="fc" id="L209">                metadataRequest.setFavorLocalRepository( true );</span>
+<span class="fc" id="L210">                metadataRequest.setTrace( trace );</span>
+<span class="fc" id="L211">                metadataReqs.add( metadataRequest );</span>
+<span class="fc" id="L212">            }</span>
+
+<span class="fc" id="L214">            List&lt;MetadataResult&gt; metadataResults = metadataResolver.resolveMetadata( session, metadataReqs );</span>
+
+<span class="fc" id="L216">            Map&lt;String, VersionInfo&gt; infos = new HashMap&lt;&gt;();</span>
+
+<span class="fc bfc" id="L218" title="All 2 branches covered.">            for ( MetadataResult metadataResult : metadataResults )</span>
+            {
+<span class="fc" id="L220">                result.addException( metadataResult.getException() );</span>
+
+<span class="fc" id="L222">                ArtifactRepository repository = metadataResult.getRequest().getRepository();</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">                if ( repository == null )</span>
+                {
+<span class="fc" id="L225">                    repository = session.getLocalRepository();</span>
+                }
+
+<span class="fc" id="L228">                Versioning v = readVersions( session, trace, metadataResult.getMetadata(), repository, result );</span>
+<span class="fc" id="L229">                merge( artifact, infos, v, repository );</span>
+<span class="fc" id="L230">            }</span>
+
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">            if ( RELEASE.equals( version ) )</span>
+            {
+<span class="nc" id="L234">                resolve( result, infos, RELEASE );</span>
+            }
+<span class="pc bpc" id="L236" title="1 of 2 branches missed.">            else if ( LATEST.equals( version ) )</span>
+            {
+<span class="nc bnc" id="L238" title="All 2 branches missed.">                if ( !resolve( result, infos, LATEST ) )</span>
+                {
+<span class="nc" id="L240">                    resolve( result, infos, RELEASE );</span>
+                }
+
+<span class="nc bnc" id="L243" title="All 4 branches missed.">                if ( result.getVersion() != null &amp;&amp; result.getVersion().endsWith( SNAPSHOT ) )</span>
+                {
+<span class="nc" id="L245">                    VersionRequest subRequest = new VersionRequest();</span>
+<span class="nc" id="L246">                    subRequest.setArtifact( artifact.setVersion( result.getVersion() ) );</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">                    if ( result.getRepository() instanceof RemoteRepository )</span>
+                    {
+<span class="nc" id="L249">                        RemoteRepository r = (RemoteRepository) result.getRepository();</span>
+<span class="nc" id="L250">                        subRequest.setRepositories( Collections.singletonList( r ) );</span>
+<span class="nc" id="L251">                    }</span>
+                    else
+                    {
+<span class="nc" id="L254">                        subRequest.setRepositories( request.getRepositories() );</span>
+                    }
+<span class="nc" id="L256">                    VersionResult subResult = resolveVersion( session, subRequest );</span>
+<span class="nc" id="L257">                    result.setVersion( subResult.getVersion() );</span>
+<span class="nc" id="L258">                    result.setRepository( subResult.getRepository() );</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">                    for ( Exception exception : subResult.getExceptions() )</span>
+                    {
+<span class="nc" id="L261">                        result.addException( exception );</span>
+<span class="nc" id="L262">                    }</span>
+<span class="nc" id="L263">                }</span>
+            }
+            else
+            {
+<span class="fc" id="L267">                String key = SNAPSHOT + getKey( artifact.getClassifier(), artifact.getExtension() );</span>
+<span class="fc" id="L268">                merge( infos, SNAPSHOT, key );</span>
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">                if ( !resolve( result, infos, key ) )</span>
+                {
+<span class="nc" id="L271">                    result.setVersion( version );</span>
+                }
+            }
+
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">            if ( StringUtils.isEmpty( result.getVersion() ) )</span>
+            {
+<span class="nc" id="L277">                throw new VersionResolutionException( result );</span>
+            }
+        }
+
+<span class="pc bpc" id="L281" title="5 of 6 branches missed.">        if ( cacheKey != null &amp;&amp; metadata != null &amp;&amp; isSafelyCacheable( session, artifact ) )</span>
+        {
+<span class="nc" id="L283">            cache.put( session, cacheKey, new Record( result.getVersion(), result.getRepository() ) );</span>
+        }
+
+<span class="fc" id="L286">        return result;</span>
+    }
+
+    private boolean resolve( VersionResult result, Map&lt;String, VersionInfo&gt; infos, String key )
+    {
+<span class="fc" id="L291">        VersionInfo info = infos.get( key );</span>
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">        if ( info != null )</span>
+        {
+<span class="fc" id="L294">            result.setVersion( info.version );</span>
+<span class="fc" id="L295">            result.setRepository( info.repository );</span>
+        }
+<span class="pc bpc" id="L297" title="1 of 2 branches missed.">        return info != null;</span>
+    }
+
+    private Versioning readVersions( RepositorySystemSession session, RequestTrace trace, Metadata metadata,
+                                     ArtifactRepository repository, VersionResult result )
+    {
+<span class="fc" id="L303">        Versioning versioning = null;</span>
+        try
+        {
+<span class="fc bfc" id="L306" title="All 2 branches covered.">            if ( metadata != null )</span>
+            {
+<span class="fc" id="L308">                try ( SyncContext syncContext = syncContextFactory.newInstance( session, true ) )</span>
+                {
+<span class="fc" id="L310">                    syncContext.acquire( null, Collections.singleton( metadata ) );</span>
+
+<span class="pc bpc" id="L312" title="2 of 4 branches missed.">                    if ( metadata.getFile() != null &amp;&amp; metadata.getFile().exists() )</span>
+                    {
+<span class="fc" id="L314">                        try ( final InputStream in = new FileInputStream( metadata.getFile() ) )</span>
+                        {
+<span class="fc" id="L316">                            versioning = new MetadataXpp3Reader().read( in, false ).getVersioning();</span>
+
+                            /*
+                            NOTE: Users occasionally misuse the id &quot;local&quot; for remote repos which screws up the metadata
+                            of the local repository. This is especially troublesome during snapshot resolution so we try
+                            to handle that gracefully.
+                             */
+<span class="pc bpc" id="L323" title="2 of 4 branches missed.">                            if ( versioning != null &amp;&amp; repository instanceof LocalRepository</span>
+<span class="nc bnc" id="L324" title="All 2 branches missed.">                                     &amp;&amp; versioning.getSnapshot() != null</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">                                     &amp;&amp; versioning.getSnapshot().getBuildNumber() &gt; 0 )</span>
+                            {
+<span class="nc" id="L327">                                final Versioning repaired = new Versioning();</span>
+<span class="nc" id="L328">                                repaired.setLastUpdated( versioning.getLastUpdated() );</span>
+<span class="nc" id="L329">                                repaired.setSnapshot( new Snapshot() );</span>
+<span class="nc" id="L330">                                repaired.getSnapshot().setLocalCopy( true );</span>
+<span class="nc" id="L331">                                versioning = repaired;</span>
+<span class="nc" id="L332">                                throw new IOException( &quot;Snapshot information corrupted with remote repository data&quot;</span>
+                                                           + &quot;, please verify that no remote repository uses the id '&quot;
+<span class="nc" id="L334">                                                           + repository.getId() + &quot;'&quot; );</span>
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
+<span class="nc" id="L342">        catch ( Exception e )</span>
+        {
+<span class="nc" id="L344">            invalidMetadata( session, trace, metadata, repository, e );</span>
+<span class="nc" id="L345">            result.addException( e );</span>
+<span class="fc" id="L346">        }</span>
+
+<span class="fc bfc" id="L348" title="All 2 branches covered.">        return ( versioning != null ) ? versioning : new Versioning();</span>
+    }
+
+    private void invalidMetadata( RepositorySystemSession session, RequestTrace trace, Metadata metadata,
+                                  ArtifactRepository repository, Exception exception )
+    {
+<span class="nc" id="L354">        RepositoryEvent.Builder event = new RepositoryEvent.Builder( session, EventType.METADATA_INVALID );</span>
+<span class="nc" id="L355">        event.setTrace( trace );</span>
+<span class="nc" id="L356">        event.setMetadata( metadata );</span>
+<span class="nc" id="L357">        event.setException( exception );</span>
+<span class="nc" id="L358">        event.setRepository( repository );</span>
+
+<span class="nc" id="L360">        repositoryEventDispatcher.dispatch( event.build() );</span>
+<span class="nc" id="L361">    }</span>
+
+    private void merge( Artifact artifact, Map&lt;String, VersionInfo&gt; infos, Versioning versioning,
+                        ArtifactRepository repository )
+    {
+<span class="pc bpc" id="L366" title="1 of 2 branches missed.">        if ( StringUtils.isNotEmpty( versioning.getRelease() ) )</span>
+        {
+<span class="nc" id="L368">            merge( RELEASE, infos, versioning.getLastUpdated(), versioning.getRelease(), repository );</span>
+        }
+
+<span class="pc bpc" id="L371" title="1 of 2 branches missed.">        if ( StringUtils.isNotEmpty( versioning.getLatest() ) )</span>
+        {
+<span class="nc" id="L373">            merge( LATEST, infos, versioning.getLastUpdated(), versioning.getLatest(), repository );</span>
+        }
+
+<span class="fc bfc" id="L376" title="All 2 branches covered.">        for ( SnapshotVersion sv : versioning.getSnapshotVersions() )</span>
+        {
+<span class="pc bpc" id="L378" title="1 of 2 branches missed.">            if ( StringUtils.isNotEmpty( sv.getVersion() ) )</span>
+            {
+<span class="fc" id="L380">                String key = getKey( sv.getClassifier(), sv.getExtension() );</span>
+<span class="fc" id="L381">                merge( SNAPSHOT + key, infos, sv.getUpdated(), sv.getVersion(), repository );</span>
+            }
+<span class="fc" id="L383">        }</span>
+
+<span class="fc" id="L385">        Snapshot snapshot = versioning.getSnapshot();</span>
+<span class="pc bpc" id="L386" title="1 of 4 branches missed.">        if ( snapshot != null &amp;&amp; versioning.getSnapshotVersions().isEmpty() )</span>
+        {
+<span class="nc" id="L388">            String version = artifact.getVersion();</span>
+<span class="nc bnc" id="L389" title="All 4 branches missed.">            if ( snapshot.getTimestamp() != null &amp;&amp; snapshot.getBuildNumber() &gt; 0 )</span>
+            {
+<span class="nc" id="L391">                String qualifier = snapshot.getTimestamp() + '-' + snapshot.getBuildNumber();</span>
+<span class="nc" id="L392">                version = version.substring( 0, version.length() - SNAPSHOT.length() ) + qualifier;</span>
+            }
+<span class="nc" id="L394">            merge( SNAPSHOT, infos, versioning.getLastUpdated(), version, repository );</span>
+        }
+<span class="fc" id="L396">    }</span>
+
+    private void merge( String key, Map&lt;String, VersionInfo&gt; infos, String timestamp, String version,
+                        ArtifactRepository repository )
+    {
+<span class="fc" id="L401">        VersionInfo info = infos.get( key );</span>
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">        if ( info == null )</span>
+        {
+<span class="fc" id="L404">            info = new VersionInfo( timestamp, version, repository );</span>
+<span class="fc" id="L405">            infos.put( key, info );</span>
+        }
+<span class="nc bnc" id="L407" title="All 2 branches missed.">        else if ( info.isOutdated( timestamp ) )</span>
+        {
+<span class="nc" id="L409">            info.version = version;</span>
+<span class="nc" id="L410">            info.repository = repository;</span>
+<span class="nc" id="L411">            info.timestamp = timestamp;</span>
+        }
+<span class="fc" id="L413">    }</span>
+
+    private void merge( Map&lt;String, VersionInfo&gt; infos, String srcKey, String dstKey )
+    {
+<span class="fc" id="L417">        VersionInfo srcInfo = infos.get( srcKey );</span>
+<span class="fc" id="L418">        VersionInfo dstInfo = infos.get( dstKey );</span>
+
+<span class="pc bpc" id="L420" title="6 of 8 branches missed.">        if ( dstInfo == null || ( srcInfo != null &amp;&amp; dstInfo.isOutdated( srcInfo.timestamp )</span>
+            &amp;&amp; srcInfo.repository != dstInfo.repository ) )
+        {
+<span class="nc" id="L423">            infos.put( dstKey, srcInfo );</span>
+        }
+<span class="fc" id="L425">    }</span>
+
+    private String getKey( String classifier, String extension )
+    {
+<span class="fc" id="L429">        return StringUtils.clean( classifier ) + ':' + StringUtils.clean( extension );</span>
+    }
+
+    private boolean isSafelyCacheable( RepositorySystemSession session, Artifact artifact )
+    {
+        /*
+         * The workspace/reactor is in flux so we better not assume definitive information for any of its
+         * artifacts/projects.
+         */
+
+<span class="nc" id="L439">        WorkspaceReader workspace = session.getWorkspaceReader();</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        if ( workspace == null )</span>
+        {
+<span class="nc" id="L442">            return true;</span>
+        }
+
+<span class="nc" id="L445">        Artifact pomArtifact = ArtifactDescriptorUtils.toPomArtifact( artifact );</span>
+
+<span class="nc bnc" id="L447" title="All 2 branches missed.">        return workspace.findArtifact( pomArtifact ) == null;</span>
+    }
+
+    private static class VersionInfo
+    {
+
+        String timestamp;
+
+        String version;
+
+        ArtifactRepository repository;
+
+        VersionInfo( String timestamp, String version, ArtifactRepository repository )
+<span class="fc" id="L460">        {</span>
+<span class="pc bpc" id="L461" title="1 of 2 branches missed.">            this.timestamp = ( timestamp != null ) ? timestamp : &quot;&quot;;</span>
+<span class="fc" id="L462">            this.version = version;</span>
+<span class="fc" id="L463">            this.repository = repository;</span>
+<span class="fc" id="L464">        }</span>
+
+        boolean isOutdated( String timestamp )
+        {
+<span class="nc bnc" id="L468" title="All 4 branches missed.">            return timestamp != null &amp;&amp; timestamp.compareTo( this.timestamp ) &gt; 0;</span>
+        }
+
+    }
+
+    private static class Key
+    {
+
+        private final String groupId;
+
+        private final String artifactId;
+
+        private final String classifier;
+
+        private final String extension;
+
+        private final String version;
+
+        private final String context;
+
+        private final File localRepo;
+
+        private final WorkspaceRepository workspace;
+
+        private final List&lt;RemoteRepository&gt; repositories;
+
+        private final int hashCode;
+
+        Key( RepositorySystemSession session, VersionRequest request )
+<span class="nc" id="L497">        {</span>
+<span class="nc" id="L498">            Artifact artifact = request.getArtifact();</span>
+<span class="nc" id="L499">            groupId = artifact.getGroupId();</span>
+<span class="nc" id="L500">            artifactId = artifact.getArtifactId();</span>
+<span class="nc" id="L501">            classifier = artifact.getClassifier();</span>
+<span class="nc" id="L502">            extension = artifact.getExtension();</span>
+<span class="nc" id="L503">            version = artifact.getVersion();</span>
+<span class="nc" id="L504">            localRepo = session.getLocalRepository().getBasedir();</span>
+<span class="nc" id="L505">            workspace = CacheUtils.getWorkspace( session );</span>
+<span class="nc" id="L506">            repositories = new ArrayList&lt;&gt;( request.getRepositories().size() );</span>
+<span class="nc" id="L507">            boolean repoMan = false;</span>
+<span class="nc bnc" id="L508" title="All 2 branches missed.">            for ( RemoteRepository repository : request.getRepositories() )</span>
+            {
+<span class="nc bnc" id="L510" title="All 2 branches missed.">                if ( repository.isRepositoryManager() )</span>
+                {
+<span class="nc" id="L512">                    repoMan = true;</span>
+<span class="nc" id="L513">                    repositories.addAll( repository.getMirroredRepositories() );</span>
+                }
+                else
+                {
+<span class="nc" id="L517">                    repositories.add( repository );</span>
+                }
+<span class="nc" id="L519">            }</span>
+<span class="nc bnc" id="L520" title="All 2 branches missed.">            context = repoMan ? request.getRequestContext() : &quot;&quot;;</span>
+
+<span class="nc" id="L522">            int hash = 17;</span>
+<span class="nc" id="L523">            hash = hash * 31 + groupId.hashCode();</span>
+<span class="nc" id="L524">            hash = hash * 31 + artifactId.hashCode();</span>
+<span class="nc" id="L525">            hash = hash * 31 + classifier.hashCode();</span>
+<span class="nc" id="L526">            hash = hash * 31 + extension.hashCode();</span>
+<span class="nc" id="L527">            hash = hash * 31 + version.hashCode();</span>
+<span class="nc" id="L528">            hash = hash * 31 + localRepo.hashCode();</span>
+<span class="nc" id="L529">            hash = hash * 31 + CacheUtils.repositoriesHashCode( repositories );</span>
+<span class="nc" id="L530">            hashCode = hash;</span>
+<span class="nc" id="L531">        }</span>
+
+        @Override
+        public boolean equals( Object obj )
+        {
+<span class="nc bnc" id="L536" title="All 2 branches missed.">            if ( obj == this )</span>
+            {
+<span class="nc" id="L538">                return true;</span>
+            }
+<span class="nc bnc" id="L540" title="All 4 branches missed.">            else if ( obj == null || !getClass().equals( obj.getClass() ) )</span>
+            {
+<span class="nc" id="L542">                return false;</span>
+            }
+
+<span class="nc" id="L545">            Key that = (Key) obj;</span>
+<span class="nc bnc" id="L546" title="All 6 branches missed.">            return artifactId.equals( that.artifactId ) &amp;&amp; groupId.equals( that.groupId ) &amp;&amp; classifier.equals(</span>
+<span class="nc bnc" id="L547" title="All 4 branches missed.">                that.classifier ) &amp;&amp; extension.equals( that.extension ) &amp;&amp; version.equals( that.version )</span>
+<span class="nc bnc" id="L548" title="All 4 branches missed.">                &amp;&amp; context.equals( that.context ) &amp;&amp; localRepo.equals( that.localRepo )</span>
+<span class="nc bnc" id="L549" title="All 2 branches missed.">                &amp;&amp; CacheUtils.eq( workspace, that.workspace )</span>
+<span class="nc bnc" id="L550" title="All 2 branches missed.">                &amp;&amp; CacheUtils.repositoriesEquals( repositories, that.repositories );</span>
+        }
+
+        @Override
+        public int hashCode()
+        {
+<span class="nc" id="L556">            return hashCode;</span>
+        }
+
+    }
+
+    private static class Record
+    {
+        final String version;
+
+        final String repoId;
+
+        final Class&lt;?&gt; repoClass;
+
+        Record( String version, ArtifactRepository repository )
+<span class="nc" id="L570">        {</span>
+<span class="nc" id="L571">            this.version = version;</span>
+<span class="nc bnc" id="L572" title="All 2 branches missed.">            if ( repository != null )</span>
+            {
+<span class="nc" id="L574">                repoId = repository.getId();</span>
+<span class="nc" id="L575">                repoClass = repository.getClass();</span>
+            }
+            else
+            {
+<span class="nc" id="L579">                repoId = null;</span>
+<span class="nc" id="L580">                repoClass = null;</span>
+            }
+<span class="nc" id="L582">        }</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>
