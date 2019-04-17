@@ -1,0 +1,694 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ComparableVersion.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Maven Artifact</a> &gt; <a href="index.source.html" class="el_package">org.apache.maven.artifact.versioning</a> &gt; <span class="el_source">ComparableVersion.java</span></div><h1>ComparableVersion.java</h1><pre class="source lang-java linenums">package org.apache.maven.artifact.versioning;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import java.math.BigInteger;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
+
+import org.apache.commons.lang3.StringUtils;
+
+/**
+ * &lt;p&gt;
+ * Generic implementation of version comparison.
+ * &lt;/p&gt;
+ * 
+ * Features:
+ * &lt;ul&gt;
+ * &lt;li&gt;mixing of '&lt;code&gt;-&lt;/code&gt;' (hyphen) and '&lt;code&gt;.&lt;/code&gt;' (dot) separators,&lt;/li&gt;
+ * &lt;li&gt;transition between characters and digits also constitutes a separator:
+ *     &lt;code&gt;1.0alpha1 =&amp;gt; [1, 0, alpha, 1]&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;unlimited number of version components,&lt;/li&gt;
+ * &lt;li&gt;version components in the text can be digits or strings,&lt;/li&gt;
+ * &lt;li&gt;strings are checked for well-known qualifiers and the qualifier ordering is used for version ordering.
+ *     Well-known qualifiers (case insensitive) are:&lt;ul&gt;
+ *     &lt;li&gt;&lt;code&gt;alpha&lt;/code&gt; or &lt;code&gt;a&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;beta&lt;/code&gt; or &lt;code&gt;b&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;milestone&lt;/code&gt; or &lt;code&gt;m&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;rc&lt;/code&gt; or &lt;code&gt;cr&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;snapshot&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;(the empty string)&lt;/code&gt; or &lt;code&gt;ga&lt;/code&gt; or &lt;code&gt;final&lt;/code&gt;&lt;/li&gt;
+ *     &lt;li&gt;&lt;code&gt;sp&lt;/code&gt;&lt;/li&gt;
+ *     &lt;/ul&gt;
+ *     Unknown qualifiers are considered after known qualifiers, with lexical order (always case insensitive),
+ *   &lt;/li&gt;
+ * &lt;li&gt;a hyphen usually precedes a qualifier, and is always less important than something preceded with a dot.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @see &lt;a href=&quot;https://cwiki.apache.org/confluence/display/MAVENOLD/Versioning&quot;&gt;&quot;Versioning&quot; on Maven Wiki&lt;/a&gt;
+ * @author &lt;a href=&quot;mailto:kenney@apache.org&quot;&gt;Kenney Westerhof&lt;/a&gt;
+ * @author &lt;a href=&quot;mailto:hboutemy@apache.org&quot;&gt;Hervé Boutemy&lt;/a&gt;
+ */
+public class ComparableVersion
+    implements Comparable&lt;ComparableVersion&gt;
+{
+    private static final int MAX_INTITEM_LENGTH = 9;
+
+    private static final int MAX_LONGITEM_LENGTH = 18;
+
+    private String value;
+
+    private String canonical;
+
+    private ListItem items;
+
+    private interface Item
+    {
+        int INT_ITEM = 3;
+        int LONG_ITEM = 4;
+        int BIGINTEGER_ITEM = 0;
+        int STRING_ITEM = 1;
+        int LIST_ITEM = 2;
+
+        int compareTo( Item item );
+
+        int getType();
+
+        boolean isNull();
+    }
+
+    /**
+     * Represents a numeric item in the version item list that can be represented with an int.
+     */
+    private static class IntItem
+        implements Item
+    {
+        private final int value;
+
+<span class="fc" id="L101">        public static final IntItem ZERO = new IntItem();</span>
+
+        private IntItem()
+<span class="fc" id="L104">        {</span>
+<span class="fc" id="L105">            this.value = 0;</span>
+<span class="fc" id="L106">        }</span>
+
+        IntItem( String str )
+<span class="fc" id="L109">        {</span>
+<span class="fc" id="L110">            this.value = Integer.parseInt( str );</span>
+<span class="fc" id="L111">        }</span>
+
+        @Override
+        public int getType()
+        {
+<span class="fc" id="L116">            return INT_ITEM;</span>
+        }
+
+        @Override
+        public boolean isNull()
+        {
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            return value == 0;</span>
+        }
+
+        @Override
+        public int compareTo( Item item )
+        {
+<span class="fc bfc" id="L128" title="All 2 branches covered.">            if ( item == null )</span>
+            {
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                return ( value == 0 ) ? 0 : 1; // 1.0 == 1, 1.1 &gt; 1</span>
+            }
+
+<span class="pc bpc" id="L133" title="1 of 5 branches missed.">            switch ( item.getType() )</span>
+            {
+                case INT_ITEM:
+<span class="fc" id="L136">                    int itemValue = ( (IntItem) item ).value;</span>
+<span class="fc bfc" id="L137" title="All 4 branches covered.">                    return ( value &lt; itemValue ) ? -1 : ( ( value == itemValue ) ? 0 : 1 );</span>
+                case LONG_ITEM:
+                case BIGINTEGER_ITEM:
+<span class="fc" id="L140">                    return -1;</span>
+
+                case STRING_ITEM:
+<span class="fc" id="L143">                    return 1; // 1.1 &gt; 1-sp</span>
+
+                case LIST_ITEM:
+<span class="fc" id="L146">                    return 1; // 1.1 &gt; 1-1</span>
+
+                default:
+<span class="nc" id="L149">                    throw new IllegalStateException( &quot;invalid item: &quot; + item.getClass() );</span>
+            }
+        }
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L156">            return Integer.toString( value );</span>
+        }
+    }
+
+    /**
+     * Represents a numeric item in the version item list that can be represented with a long.
+     */
+    private static class LongItem
+        implements Item
+    {
+        private final long value;
+
+        LongItem( String str )
+<span class="fc" id="L169">        {</span>
+<span class="fc" id="L170">            this.value = Long.parseLong( str );</span>
+<span class="fc" id="L171">        }</span>
+
+        @Override
+        public int getType()
+        {
+<span class="fc" id="L176">            return LONG_ITEM;</span>
+        }
+
+        @Override
+        public boolean isNull()
+        {
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">            return value == 0;</span>
+        }
+
+        @Override
+        public int compareTo( Item item )
+        {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">            if ( item == null )</span>
+            {
+<span class="nc bnc" id="L190" title="All 2 branches missed.">                return ( value == 0 ) ? 0 : 1; // 1.0 == 1, 1.1 &gt; 1</span>
+            }
+
+<span class="pc bpc" id="L193" title="3 of 6 branches missed.">            switch ( item.getType() )</span>
+            {
+                case INT_ITEM:
+<span class="fc" id="L196">                    return 1;</span>
+                case LONG_ITEM:
+<span class="fc" id="L198">                    long itemValue = ( (LongItem) item ).value;</span>
+<span class="pc bpc" id="L199" title="1 of 4 branches missed.">                    return ( value &lt; itemValue ) ? -1 : ( ( value == itemValue ) ? 0 : 1 );</span>
+                case BIGINTEGER_ITEM:
+<span class="fc" id="L201">                    return -1;</span>
+
+                case STRING_ITEM:
+<span class="nc" id="L204">                    return 1; // 1.1 &gt; 1-sp</span>
+
+                case LIST_ITEM:
+<span class="nc" id="L207">                    return 1; // 1.1 &gt; 1-1</span>
+
+                default:
+<span class="nc" id="L210">                    throw new IllegalStateException( &quot;invalid item: &quot; + item.getClass() );</span>
+            }
+        }
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L217">            return Long.toString( value );</span>
+        }
+    }
+
+    /**
+     * Represents a numeric item in the version item list.
+     */
+    private static class BigIntegerItem
+        implements Item
+    {
+        private final BigInteger value;
+
+        BigIntegerItem( String str )
+<span class="fc" id="L230">        {</span>
+<span class="fc" id="L231">            this.value = new BigInteger( str );</span>
+<span class="fc" id="L232">        }</span>
+
+        @Override
+        public int getType()
+        {
+<span class="fc" id="L237">            return BIGINTEGER_ITEM;</span>
+        }
+
+        @Override
+        public boolean isNull()
+        {
+<span class="nc" id="L243">            return BigInteger.ZERO.equals( value );</span>
+        }
+
+        @Override
+        public int compareTo( Item item )
+        {
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">            if ( item == null )</span>
+            {
+<span class="nc bnc" id="L251" title="All 2 branches missed.">                return BigInteger.ZERO.equals( value ) ? 0 : 1; // 1.0 == 1, 1.1 &gt; 1</span>
+            }
+
+<span class="pc bpc" id="L254" title="4 of 5 branches missed.">            switch ( item.getType() )</span>
+            {
+                case INT_ITEM:
+                case LONG_ITEM:
+<span class="fc" id="L258">                    return 1;</span>
+
+                case BIGINTEGER_ITEM:
+<span class="nc" id="L261">                    return value.compareTo( ( (BigIntegerItem) item ).value );</span>
+
+                case STRING_ITEM:
+<span class="nc" id="L264">                    return 1; // 1.1 &gt; 1-sp</span>
+
+                case LIST_ITEM:
+<span class="nc" id="L267">                    return 1; // 1.1 &gt; 1-1</span>
+
+                default:
+<span class="nc" id="L270">                    throw new IllegalStateException( &quot;invalid item: &quot; + item.getClass() );</span>
+            }
+        }
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L277">            return value.toString();</span>
+        }
+    }
+
+    /**
+     * Represents a string in the version item list, usually a qualifier.
+     */
+    private static class StringItem
+        implements Item
+    {
+<span class="fc" id="L287">        private static final List&lt;String&gt; QUALIFIERS =</span>
+<span class="fc" id="L288">                Arrays.asList( &quot;alpha&quot;, &quot;beta&quot;, &quot;milestone&quot;, &quot;rc&quot;, &quot;snapshot&quot;, &quot;&quot;, &quot;sp&quot;  );</span>
+
+<span class="fc" id="L290">        private static final Properties ALIASES = new Properties();</span>
+        static
+        {
+<span class="fc" id="L293">            ALIASES.put( &quot;ga&quot;, &quot;&quot; );</span>
+<span class="fc" id="L294">            ALIASES.put( &quot;final&quot;, &quot;&quot; );</span>
+<span class="fc" id="L295">            ALIASES.put( &quot;cr&quot;, &quot;rc&quot; );</span>
+        }
+
+        /**
+         * A comparable value for the empty-string qualifier. This one is used to determine if a given qualifier makes
+         * the version older than one without a qualifier, or more recent.
+         */
+<span class="fc" id="L302">        private static final String RELEASE_VERSION_INDEX = String.valueOf( QUALIFIERS.indexOf( &quot;&quot; ) );</span>
+
+        private final String value;
+
+        StringItem( String value, boolean followedByDigit )
+<span class="fc" id="L307">        {</span>
+<span class="fc bfc" id="L308" title="All 4 branches covered.">            if ( followedByDigit &amp;&amp; value.length() == 1 )</span>
+            {
+                // a1 = alpha-1, b1 = beta-1, m1 = milestone-1
+<span class="fc bfc" id="L311" title="All 4 branches covered.">                switch ( value.charAt( 0 ) )</span>
+                {
+                    case 'a':
+<span class="fc" id="L314">                        value = &quot;alpha&quot;;</span>
+<span class="fc" id="L315">                        break;</span>
+                    case 'b':
+<span class="fc" id="L317">                        value = &quot;beta&quot;;</span>
+<span class="fc" id="L318">                        break;</span>
+                    case 'm':
+<span class="fc" id="L320">                        value = &quot;milestone&quot;;</span>
+<span class="fc" id="L321">                        break;</span>
+                    default:
+                }
+            }
+<span class="fc" id="L325">            this.value = ALIASES.getProperty( value , value );</span>
+<span class="fc" id="L326">        }</span>
+
+        @Override
+        public int getType()
+        {
+<span class="fc" id="L331">            return STRING_ITEM;</span>
+        }
+
+        @Override
+        public boolean isNull()
+        {
+<span class="fc bfc" id="L337" title="All 2 branches covered.">            return ( comparableQualifier( value ).compareTo( RELEASE_VERSION_INDEX ) == 0 );</span>
+        }
+
+        /**
+         * Returns a comparable value for a qualifier.
+         *
+         * This method takes into account the ordering of known qualifiers then unknown qualifiers with lexical
+         * ordering.
+         *
+         * just returning an Integer with the index here is faster, but requires a lot of if/then/else to check for -1
+         * or QUALIFIERS.size and then resort to lexical ordering. Most comparisons are decided by the first character,
+         * so this is still fast. If more characters are needed then it requires a lexical sort anyway.
+         *
+         * @param qualifier
+         * @return an equivalent value that can be used with lexical comparison
+         */
+        public static String comparableQualifier( String qualifier )
+        {
+<span class="fc" id="L355">            int i = QUALIFIERS.indexOf( qualifier );</span>
+
+<span class="fc bfc" id="L357" title="All 2 branches covered.">            return i == -1 ? ( QUALIFIERS.size() + &quot;-&quot; + qualifier ) : String.valueOf( i );</span>
+        }
+
+        @Override
+        public int compareTo( Item item )
+        {
+<span class="fc bfc" id="L363" title="All 2 branches covered.">            if ( item == null )</span>
+            {
+                // 1-rc &lt; 1, 1-ga &gt; 1
+<span class="fc" id="L366">                return comparableQualifier( value ).compareTo( RELEASE_VERSION_INDEX );</span>
+            }
+<span class="pc bpc" id="L368" title="1 of 4 branches missed.">            switch ( item.getType() )</span>
+            {
+                case INT_ITEM:
+                case LONG_ITEM:
+                case BIGINTEGER_ITEM:
+<span class="fc" id="L373">                    return -1; // 1.any &lt; 1.1 ?</span>
+
+                case STRING_ITEM:
+<span class="fc" id="L376">                    return comparableQualifier( value ).compareTo( comparableQualifier( ( (StringItem) item ).value ) );</span>
+
+                case LIST_ITEM:
+<span class="fc" id="L379">                    return -1; // 1.any &lt; 1-1</span>
+
+                default:
+<span class="nc" id="L382">                    throw new IllegalStateException( &quot;invalid item: &quot; + item.getClass() );</span>
+            }
+        }
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L389">            return value;</span>
+        }
+    }
+
+    /**
+     * Represents a version list item. This class is used both for the global item list and for sub-lists (which start
+     * with '-(number)' in the version specification).
+     */
+    private static class ListItem
+        extends ArrayList&lt;Item&gt;
+        implements Item
+    {
+        @Override
+        public int getType()
+        {
+<span class="fc" id="L404">            return LIST_ITEM;</span>
+        }
+
+        @Override
+        public boolean isNull()
+        {
+<span class="fc bfc" id="L410" title="All 2 branches covered.">            return ( size() == 0 );</span>
+        }
+
+        void normalize()
+        {
+<span class="fc bfc" id="L415" title="All 2 branches covered.">            for ( int i = size() - 1; i &gt;= 0; i-- )</span>
+            {
+<span class="fc" id="L417">                Item lastItem = get( i );</span>
+
+<span class="fc bfc" id="L419" title="All 2 branches covered.">                if ( lastItem.isNull() )</span>
+                {
+                    // remove null trailing items: 0, &quot;&quot;, empty list
+<span class="fc" id="L422">                    remove( i );</span>
+                }
+<span class="fc bfc" id="L424" title="All 2 branches covered.">                else if ( !( lastItem instanceof ListItem ) )</span>
+                {
+<span class="fc" id="L426">                    break;</span>
+                }
+            }
+<span class="fc" id="L429">        }</span>
+
+        @Override
+        public int compareTo( Item item )
+        {
+<span class="fc bfc" id="L434" title="All 2 branches covered.">            if ( item == null )</span>
+            {
+<span class="pc bpc" id="L436" title="1 of 2 branches missed.">                if ( size() == 0 )</span>
+                {
+<span class="nc" id="L438">                    return 0; // 1-0 = 1- (normalize) = 1</span>
+                }
+<span class="fc" id="L440">                Item first = get( 0 );</span>
+<span class="fc" id="L441">                return first.compareTo( null );</span>
+            }
+<span class="pc bpc" id="L443" title="1 of 4 branches missed.">            switch ( item.getType() )</span>
+            {
+                case INT_ITEM:
+                case LONG_ITEM:
+                case BIGINTEGER_ITEM:
+<span class="fc" id="L448">                    return -1; // 1-1 &lt; 1.0.x</span>
+
+                case STRING_ITEM:
+<span class="fc" id="L451">                    return 1; // 1-1 &gt; 1-sp</span>
+
+                case LIST_ITEM:
+<span class="fc" id="L454">                    Iterator&lt;Item&gt; left = iterator();</span>
+<span class="fc" id="L455">                    Iterator&lt;Item&gt; right = ( (ListItem) item ).iterator();</span>
+
+<span class="fc bfc" id="L457" title="All 4 branches covered.">                    while ( left.hasNext() || right.hasNext() )</span>
+                    {
+<span class="fc bfc" id="L459" title="All 2 branches covered.">                        Item l = left.hasNext() ? left.next() : null;</span>
+<span class="fc bfc" id="L460" title="All 2 branches covered.">                        Item r = right.hasNext() ? right.next() : null;</span>
+
+                        // if this is shorter, then invert the compare and mul with -1
+<span class="pc bpc" id="L463" title="1 of 4 branches missed.">                        int result = l == null ? ( r == null ? 0 : -1 * r.compareTo( l ) ) : l.compareTo( r );</span>
+
+<span class="fc bfc" id="L465" title="All 2 branches covered.">                        if ( result != 0 )</span>
+                        {
+<span class="fc" id="L467">                            return result;</span>
+                        }
+<span class="fc" id="L469">                    }</span>
+
+<span class="fc" id="L471">                    return 0;</span>
+
+                default:
+<span class="nc" id="L474">                    throw new IllegalStateException( &quot;invalid item: &quot; + item.getClass() );</span>
+            }
+        }
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L481">            StringBuilder buffer = new StringBuilder();</span>
+<span class="fc bfc" id="L482" title="All 2 branches covered.">            for ( Item item : this )</span>
+            {
+<span class="fc bfc" id="L484" title="All 2 branches covered.">                if ( buffer.length() &gt; 0 )</span>
+                {
+<span class="fc bfc" id="L486" title="All 2 branches covered.">                    buffer.append( ( item instanceof ListItem ) ? '-' : '.' );</span>
+                }
+<span class="fc" id="L488">                buffer.append( item );</span>
+<span class="fc" id="L489">            }</span>
+<span class="fc" id="L490">            return buffer.toString();</span>
+        }
+    }
+
+    public ComparableVersion( String version )
+<span class="fc" id="L495">    {</span>
+<span class="fc" id="L496">        parseVersion( version );</span>
+<span class="fc" id="L497">    }</span>
+
+    @SuppressWarnings( &quot;checkstyle:innerassignment&quot; )
+    public final void parseVersion( String version )
+    {
+<span class="fc" id="L502">        this.value = version;</span>
+
+<span class="fc" id="L504">        items = new ListItem();</span>
+
+<span class="fc" id="L506">        version = version.toLowerCase( Locale.ENGLISH );</span>
+
+<span class="fc" id="L508">        ListItem list = items;</span>
+
+<span class="fc" id="L510">        Deque&lt;Item&gt; stack = new ArrayDeque&lt;&gt;();</span>
+<span class="fc" id="L511">        stack.push( list );</span>
+
+<span class="fc" id="L513">        boolean isDigit = false;</span>
+
+<span class="fc" id="L515">        int startIndex = 0;</span>
+
+<span class="fc bfc" id="L517" title="All 2 branches covered.">        for ( int i = 0; i &lt; version.length(); i++ )</span>
+        {
+<span class="fc" id="L519">            char c = version.charAt( i );</span>
+
+<span class="fc bfc" id="L521" title="All 2 branches covered.">            if ( c == '.' )</span>
+            {
+<span class="fc bfc" id="L523" title="All 2 branches covered.">                if ( i == startIndex )</span>
+                {
+<span class="fc" id="L525">                    list.add( IntItem.ZERO );</span>
+                }
+                else
+                {
+<span class="fc" id="L529">                    list.add( parseItem( isDigit, version.substring( startIndex, i ) ) );</span>
+                }
+<span class="fc" id="L531">                startIndex = i + 1;</span>
+            }
+<span class="fc bfc" id="L533" title="All 2 branches covered.">            else if ( c == '-' )</span>
+            {
+<span class="fc bfc" id="L535" title="All 2 branches covered.">                if ( i == startIndex )</span>
+                {
+<span class="fc" id="L537">                    list.add( IntItem.ZERO );</span>
+                }
+                else
+                {
+<span class="fc" id="L541">                    list.add( parseItem( isDigit, version.substring( startIndex, i ) ) );</span>
+                }
+<span class="fc" id="L543">                startIndex = i + 1;</span>
+
+<span class="fc" id="L545">                list.add( list = new ListItem() );</span>
+<span class="fc" id="L546">                stack.push( list );</span>
+            }
+<span class="fc bfc" id="L548" title="All 2 branches covered.">            else if ( Character.isDigit( c ) )</span>
+            {
+<span class="fc bfc" id="L550" title="All 4 branches covered.">                if ( !isDigit &amp;&amp; i &gt; startIndex )</span>
+                {
+<span class="fc" id="L552">                    list.add( new StringItem( version.substring( startIndex, i ), true ) );</span>
+<span class="fc" id="L553">                    startIndex = i;</span>
+
+<span class="fc" id="L555">                    list.add( list = new ListItem() );</span>
+<span class="fc" id="L556">                    stack.push( list );</span>
+                }
+
+<span class="fc" id="L559">                isDigit = true;</span>
+            }
+            else
+            {
+<span class="fc bfc" id="L563" title="All 4 branches covered.">                if ( isDigit &amp;&amp; i &gt; startIndex )</span>
+                {
+<span class="fc" id="L565">                    list.add( parseItem( true, version.substring( startIndex, i ) ) );</span>
+<span class="fc" id="L566">                    startIndex = i;</span>
+
+<span class="fc" id="L568">                    list.add( list = new ListItem() );</span>
+<span class="fc" id="L569">                    stack.push( list );</span>
+                }
+
+<span class="fc" id="L572">                isDigit = false;</span>
+            }
+        }
+
+<span class="fc bfc" id="L576" title="All 2 branches covered.">        if ( version.length() &gt; startIndex )</span>
+        {
+<span class="fc" id="L578">            list.add( parseItem( isDigit, version.substring( startIndex ) ) );</span>
+        }
+
+<span class="fc bfc" id="L581" title="All 2 branches covered.">        while ( !stack.isEmpty() )</span>
+        {
+<span class="fc" id="L583">            list = (ListItem) stack.pop();</span>
+<span class="fc" id="L584">            list.normalize();</span>
+        }
+
+<span class="fc" id="L587">        canonical = items.toString();</span>
+<span class="fc" id="L588">    }</span>
+
+    private static Item parseItem( boolean isDigit, String buf )
+    {
+<span class="fc bfc" id="L592" title="All 2 branches covered.">        if ( isDigit )</span>
+        {
+<span class="fc" id="L594">            buf = stripLeadingZeroes( buf );</span>
+<span class="fc bfc" id="L595" title="All 2 branches covered.">            if ( buf.length() &lt;= MAX_INTITEM_LENGTH )</span>
+            {
+                // lower than 2^31
+<span class="fc" id="L598">                return new IntItem( buf );</span>
+            }
+<span class="fc bfc" id="L600" title="All 2 branches covered.">            else if ( buf.length() &lt;= MAX_LONGITEM_LENGTH )</span>
+            {
+                // lower than 2^63
+<span class="fc" id="L603">                return new LongItem( buf );</span>
+            }
+<span class="fc" id="L605">            return new BigIntegerItem( buf );</span>
+        }
+<span class="fc" id="L607">        return new StringItem( buf, false );</span>
+    }
+
+    private static String stripLeadingZeroes( String buf )
+    {
+<span class="fc" id="L612">        String strippedBuf = StringUtils.stripStart( buf, &quot;0&quot; );</span>
+<span class="fc bfc" id="L613" title="All 2 branches covered.">        if ( strippedBuf.isEmpty() )</span>
+        {
+<span class="fc" id="L615">            return &quot;0&quot;;</span>
+        }
+<span class="fc" id="L617">        return strippedBuf;</span>
+    }
+
+    @Override
+    public int compareTo( ComparableVersion o )
+    {
+<span class="fc" id="L623">        return items.compareTo( o.items );</span>
+    }
+
+    @Override
+    public String toString()
+    {
+<span class="fc" id="L629">        return value;</span>
+    }
+
+    public String getCanonical()
+    {
+<span class="fc" id="L634">        return canonical;</span>
+    }
+
+    @Override
+    public boolean equals( Object o )
+    {
+<span class="pc bpc" id="L640" title="2 of 4 branches missed.">        return ( o instanceof ComparableVersion ) &amp;&amp; canonical.equals( ( (ComparableVersion) o ).canonical );</span>
+    }
+
+    @Override
+    public int hashCode()
+    {
+<span class="fc" id="L646">        return canonical.hashCode();</span>
+    }
+
+    // CHECKSTYLE_OFF: LineLength
+    /**
+     * Main to test version parsing and comparison.
+     * &lt;p&gt;
+     * To check how &quot;1.2.7&quot; compares to &quot;1.2-SNAPSHOT&quot;, for example, you can issue
+     * &lt;pre&gt;java -jar ${maven.repo.local}/org/apache/maven/maven-artifact/${maven.version}/maven-artifact-${maven.version}.jar &quot;1.2.7&quot; &quot;1.2-SNAPSHOT&quot;&lt;/pre&gt;
+     * command to command line. Result of given command will be something like this:
+     * &lt;pre&gt;
+     * Display parameters as parsed by Maven (in canonical form) and comparison result:
+     * 1. 1.2.7 == 1.2.7
+     *    1.2.7 &amp;gt; 1.2-SNAPSHOT
+     * 2. 1.2-SNAPSHOT == 1.2-snapshot
+     * &lt;/pre&gt;
+     *
+     * @param args the version strings to parse and compare. You can pass arbitrary number of version strings and always
+     * two adjacent will be compared
+     */
+    // CHECKSTYLE_ON: LineLength
+    public static void main( String... args )
+    {
+<span class="nc" id="L669">        System.out.println( &quot;Display parameters as parsed by Maven (in canonical form) and comparison result:&quot; );</span>
+<span class="nc bnc" id="L670" title="All 2 branches missed.">        if ( args.length == 0 )</span>
+        {
+<span class="nc" id="L672">            return;</span>
+        }
+
+<span class="nc" id="L675">        ComparableVersion prev = null;</span>
+<span class="nc" id="L676">        int i = 1;</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">        for ( String version : args )</span>
+        {
+<span class="nc" id="L679">            ComparableVersion c = new ComparableVersion( version );</span>
+
+<span class="nc bnc" id="L681" title="All 2 branches missed.">            if ( prev != null )</span>
+            {
+<span class="nc" id="L683">                int compare = prev.compareTo( c );</span>
+<span class="nc bnc" id="L684" title="All 4 branches missed.">                System.out.println( &quot;   &quot; + prev.toString() + ' '</span>
+                    + ( ( compare == 0 ) ? &quot;==&quot; : ( ( compare &lt; 0 ) ? &quot;&lt;&quot; : &quot;&gt;&quot; ) ) + ' ' + version );
+            }
+
+<span class="nc" id="L688">            System.out.println( String.valueOf( i++ ) + &quot;. &quot; + version + &quot; == &quot; + c.getCanonical() );</span>
+
+<span class="nc" id="L690">            prev = c;</span>
+        }
+<span class="nc" id="L692">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>
