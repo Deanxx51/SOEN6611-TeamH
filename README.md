@@ -21,14 +21,14 @@ contains 5 different folders named after 5 projects, in each of these folders it
 
 ## Requirements:
 1. For the collections of Metric 1,2 and 4, the jacoco plugin need to be added to pom.xml file.  
-    > <groupId>org.apache.maven.plugins</groupId>  
-      <artifactId>maven-jar-plugin</artifactId>  
-      <version>0.8.2</version>
+    > &lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;  
+      &lt;artifactId&gt;maven-jar-plugin&lt;/artifactId&gt;  
+      &lt;version&gt;0.8.2&lt;/version&gt;
    Also designed the output dictory and execution phase in plugin.
 2. For the collections of Metrics 3, the pitest plugin need to be added to pom.xml file.
-    > <groupId>org.pitest</groupId>  
-      <artifactId>pitest-maven</artifactId>  
-      <version>1.4.7</version>
+    > &lt;groupId&gt;org.pitest&lt;/groupId&gt;  
+      &lt;artifactId&gt;pitest-maven&lt;/artifactId&gt;  
+      &lt;version&gt;1.4.7&lt;/version&gt;
    Running the "mvn org.pitest:pitest-maven:mutationCoverage" could get the mutation report.
 3. For Metric 5, the git command can get the Delta line of code of java file  
    "git diff --shortstat versionName1 versionName2 '*.java'"
