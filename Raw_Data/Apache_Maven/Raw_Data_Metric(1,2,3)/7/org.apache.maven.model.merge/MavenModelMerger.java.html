@@ -1,0 +1,700 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MavenModelMerger.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Maven Model Builder</a> &gt; <a href="index.source.html" class="el_package">org.apache.maven.model.merge</a> &gt; <span class="el_source">MavenModelMerger.java</span></div><h1>MavenModelMerger.java</h1><pre class="source lang-java linenums">package org.apache.maven.model.merge;
+
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * &quot;License&quot;); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.maven.model.BuildBase;
+import org.apache.maven.model.CiManagement;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.DeploymentRepository;
+import org.apache.maven.model.DistributionManagement;
+import org.apache.maven.model.Exclusion;
+import org.apache.maven.model.Extension;
+import org.apache.maven.model.InputLocation;
+import org.apache.maven.model.IssueManagement;
+import org.apache.maven.model.Model;
+import org.apache.maven.model.ModelBase;
+import org.apache.maven.model.Organization;
+import org.apache.maven.model.Plugin;
+import org.apache.maven.model.PluginExecution;
+import org.apache.maven.model.ReportPlugin;
+import org.apache.maven.model.ReportSet;
+import org.apache.maven.model.Repository;
+import org.apache.maven.model.RepositoryBase;
+import org.apache.maven.model.Scm;
+import org.apache.maven.model.Site;
+import org.codehaus.plexus.util.StringUtils;
+
+/**
+ * The domain-specific model merger for the Maven POM, overriding generic code from parent class when necessary with
+ * more adapted algorithms.
+ *
+ * @author Benjamin Bentmann
+ */
+<span class="fc" id="L57">public class MavenModelMerger</span>
+    extends ModelMerger
+{
+
+    /**
+     * The hint key for the child path adjustment used during inheritance for URL calculations.
+     */
+    public static final String CHILD_PATH_ADJUSTMENT = &quot;child-path-adjustment&quot;;
+
+    /**
+     * The context key for the artifact id of the target model.
+     */
+    public static final String ARTIFACT_ID = &quot;artifact-id&quot;;
+
+    @Override
+    protected void mergeModel( Model target, Model source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L74">        context.put( ARTIFACT_ID, target.getArtifactId() );</span>
+
+<span class="fc" id="L76">        super.mergeModel( target, source, sourceDominant, context );</span>
+<span class="fc" id="L77">    }</span>
+
+    @Override
+    protected void mergeModel_Name( Model target, Model source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L82">        String src = source.getName();</span>
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L85" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L87">                target.setName( src );</span>
+<span class="nc" id="L88">                target.setLocation( &quot;name&quot;, source.getLocation( &quot;name&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L91">    }</span>
+
+    @Override
+    protected void mergeModel_Url( Model target, Model source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L96">        String src = source.getUrl();</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L99" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L101">                target.setUrl( src );</span>
+<span class="nc" id="L102">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            else if ( target.getUrl() == null )</span>
+            {
+<span class="fc" id="L106">                target.setUrl( extrapolateChildUrl( src, source.isChildProjectUrlInheritAppendPath(), context ) );</span>
+<span class="fc" id="L107">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L110">    }</span>
+
+    /*
+     * TODO: Whether the merge continues recursively into an existing node or not could be an option for the generated
+     * merger
+     */
+    @Override
+    protected void mergeModel_Organization( Model target, Model source, boolean sourceDominant,
+                                            Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L120">        Organization src = source.getOrganization();</span>
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="nc" id="L123">            Organization tgt = target.getOrganization();</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">            if ( tgt == null )</span>
+            {
+<span class="nc" id="L126">                tgt = new Organization();</span>
+<span class="nc" id="L127">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="nc" id="L128">                target.setOrganization( tgt );</span>
+<span class="nc" id="L129">                mergeOrganization( tgt, src, sourceDominant, context );</span>
+            }
+        }
+<span class="fc" id="L132">    }</span>
+
+    @Override
+    protected void mergeModel_IssueManagement( Model target, Model source, boolean sourceDominant,
+                                               Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L138">        IssueManagement src = source.getIssueManagement();</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="nc" id="L141">            IssueManagement tgt = target.getIssueManagement();</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            if ( tgt == null )</span>
+            {
+<span class="nc" id="L144">                tgt = new IssueManagement();</span>
+<span class="nc" id="L145">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="nc" id="L146">                target.setIssueManagement( tgt );</span>
+<span class="nc" id="L147">                mergeIssueManagement( tgt, src, sourceDominant, context );</span>
+            }
+        }
+<span class="fc" id="L150">    }</span>
+
+    @Override
+    protected void mergeModel_CiManagement( Model target, Model source, boolean sourceDominant,
+                                            Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L156">        CiManagement src = source.getCiManagement();</span>
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="nc" id="L159">            CiManagement tgt = target.getCiManagement();</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">            if ( tgt == null )</span>
+            {
+<span class="nc" id="L162">                tgt = new CiManagement();</span>
+<span class="nc" id="L163">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="nc" id="L164">                target.setCiManagement( tgt );</span>
+<span class="nc" id="L165">                mergeCiManagement( tgt, src, sourceDominant, context );</span>
+            }
+        }
+<span class="fc" id="L168">    }</span>
+
+    @Override
+    protected void mergeModel_ModelVersion( Model target, Model source, boolean sourceDominant,
+                                            Map&lt;Object, Object&gt; context )
+    {
+        // neither inherited nor injected
+<span class="fc" id="L175">    }</span>
+
+    @Override
+    protected void mergeModel_ArtifactId( Model target, Model source, boolean sourceDominant,
+                                          Map&lt;Object, Object&gt; context )
+    {
+        // neither inherited nor injected
+<span class="fc" id="L182">    }</span>
+
+    @Override
+    protected void mergeModel_Profiles( Model target, Model source, boolean sourceDominant,
+                                        Map&lt;Object, Object&gt; context )
+    {
+        // neither inherited nor injected
+<span class="fc" id="L189">    }</span>
+
+    @Override
+    protected void mergeModel_Prerequisites( Model target, Model source, boolean sourceDominant,
+                                             Map&lt;Object, Object&gt; context )
+    {
+        // neither inherited nor injected
+<span class="fc" id="L196">    }</span>
+
+    @Override
+    protected void mergeModel_Licenses( Model target, Model source, boolean sourceDominant,
+                                        Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">        if ( target.getLicenses().isEmpty() )</span>
+        {
+<span class="fc" id="L204">            target.setLicenses( new ArrayList&lt;&gt;( source.getLicenses() ) );</span>
+        }
+<span class="fc" id="L206">    }</span>
+
+    @Override
+    protected void mergeModel_Developers( Model target, Model source, boolean sourceDominant,
+                                          Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">        if ( target.getDevelopers().isEmpty() )</span>
+        {
+<span class="fc" id="L214">            target.setDevelopers( new ArrayList&lt;&gt;( source.getDevelopers() ) );</span>
+        }
+<span class="fc" id="L216">    }</span>
+
+    @Override
+    protected void mergeModel_Contributors( Model target, Model source, boolean sourceDominant,
+                                            Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">        if ( target.getContributors().isEmpty() )</span>
+        {
+<span class="fc" id="L224">            target.setContributors( new ArrayList&lt;&gt;( source.getContributors() ) );</span>
+        }
+<span class="fc" id="L226">    }</span>
+
+    @Override
+    protected void mergeModel_MailingLists( Model target, Model source, boolean sourceDominant,
+                                            Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if ( target.getMailingLists().isEmpty() )</span>
+        {
+<span class="fc" id="L234">            target.setMailingLists( new ArrayList&lt;&gt;( source.getMailingLists() ) );</span>
+        }
+<span class="fc" id="L236">    }</span>
+
+    @Override
+    protected void mergeModelBase_Modules( ModelBase target, ModelBase source, boolean sourceDominant,
+                                           Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L242">        List&lt;String&gt; src = source.getModules();</span>
+<span class="pc bpc" id="L243" title="1 of 4 branches missed.">        if ( !src.isEmpty() &amp;&amp; sourceDominant )</span>
+        {
+<span class="nc" id="L245">            List&lt;Integer&gt; indices = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L246">            List&lt;String&gt; tgt = target.getModules();</span>
+<span class="nc" id="L247">            Set&lt;String&gt; excludes = new LinkedHashSet&lt;&gt;( tgt );</span>
+<span class="nc" id="L248">            List&lt;String&gt; merged = new ArrayList&lt;&gt;( tgt.size() + src.size() );</span>
+<span class="nc" id="L249">            merged.addAll( tgt );</span>
+<span class="nc bnc" id="L250" title="All 2 branches missed.">            for ( int i = 0, n = tgt.size(); i &lt; n; i++ )</span>
+            {
+<span class="nc" id="L252">                indices.add( i );</span>
+            }
+<span class="nc bnc" id="L254" title="All 2 branches missed.">            for ( int i = 0, n = src.size(); i &lt; n; i++ )</span>
+            {
+<span class="nc" id="L256">                String s = src.get( i );</span>
+<span class="nc bnc" id="L257" title="All 2 branches missed.">                if ( !excludes.contains( s ) )</span>
+                {
+<span class="nc" id="L259">                    merged.add( s );</span>
+<span class="nc" id="L260">                    indices.add( ~i );</span>
+                }
+            }
+<span class="nc" id="L263">            target.setModules( merged );</span>
+<span class="nc" id="L264">            target.setLocation( &quot;modules&quot;, InputLocation.merge( target.getLocation( &quot;modules&quot; ),</span>
+<span class="nc" id="L265">                                                                source.getLocation( &quot;modules&quot; ), indices ) );</span>
+        }
+<span class="fc" id="L267">    }</span>
+
+    /*
+     * TODO: The order of the merged list could be controlled by an attribute in the model association: target-first,
+     * source-first, dominant-first, recessive-first
+     */
+    @Override
+    protected void mergeModelBase_Repositories( ModelBase target, ModelBase source, boolean sourceDominant,
+                                                Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L277">        List&lt;Repository&gt; src = source.getRepositories();</span>
+<span class="fc bfc" id="L278" title="All 2 branches covered.">        if ( !src.isEmpty() )</span>
+        {
+<span class="fc" id="L280">            List&lt;Repository&gt; tgt = target.getRepositories();</span>
+<span class="fc" id="L281">            Map&lt;Object, Repository&gt; merged = new LinkedHashMap&lt;&gt;( ( src.size() + tgt.size() ) * 2 );</span>
+
+            List&lt;Repository&gt; dominant, recessive;
+<span class="pc bpc" id="L284" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L286">                dominant = src;</span>
+<span class="nc" id="L287">                recessive = tgt;</span>
+            }
+            else
+            {
+<span class="fc" id="L291">                dominant = tgt;</span>
+<span class="fc" id="L292">                recessive = src;</span>
+            }
+
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">            for ( Repository element : dominant )</span>
+            {
+<span class="nc" id="L297">                Object key = getRepositoryKey( element );</span>
+<span class="nc" id="L298">                merged.put( key, element );</span>
+<span class="nc" id="L299">            }</span>
+
+<span class="fc bfc" id="L301" title="All 2 branches covered.">            for ( Repository element : recessive )</span>
+            {
+<span class="fc" id="L303">                Object key = getRepositoryKey( element );</span>
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">                if ( !merged.containsKey( key ) )</span>
+                {
+<span class="fc" id="L306">                    merged.put( key, element );</span>
+                }
+<span class="fc" id="L308">            }</span>
+
+<span class="fc" id="L310">            target.setRepositories( new ArrayList&lt;&gt;( merged.values() ) );</span>
+        }
+<span class="fc" id="L312">    }</span>
+
+    @Override
+    protected void mergeModelBase_PluginRepositories( ModelBase target, ModelBase source, boolean sourceDominant,
+                                                      Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L318">        List&lt;Repository&gt; src = source.getPluginRepositories();</span>
+<span class="fc bfc" id="L319" title="All 2 branches covered.">        if ( !src.isEmpty() )</span>
+        {
+<span class="fc" id="L321">            List&lt;Repository&gt; tgt = target.getPluginRepositories();</span>
+<span class="fc" id="L322">            Map&lt;Object, Repository&gt; merged = new LinkedHashMap&lt;&gt;( ( src.size() + tgt.size() ) * 2 );</span>
+
+            List&lt;Repository&gt; dominant, recessive;
+<span class="pc bpc" id="L325" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L327">                dominant = src;</span>
+<span class="nc" id="L328">                recessive = tgt;</span>
+            }
+            else
+            {
+<span class="fc" id="L332">                dominant = tgt;</span>
+<span class="fc" id="L333">                recessive = src;</span>
+            }
+
+<span class="pc bpc" id="L336" title="1 of 2 branches missed.">            for ( Repository element : dominant )</span>
+            {
+<span class="nc" id="L338">                Object key = getRepositoryKey( element );</span>
+<span class="nc" id="L339">                merged.put( key, element );</span>
+<span class="nc" id="L340">            }</span>
+
+<span class="fc bfc" id="L342" title="All 2 branches covered.">            for ( Repository element : recessive )</span>
+            {
+<span class="fc" id="L344">                Object key = getRepositoryKey( element );</span>
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">                if ( !merged.containsKey( key ) )</span>
+                {
+<span class="fc" id="L347">                    merged.put( key, element );</span>
+                }
+<span class="fc" id="L349">            }</span>
+
+<span class="fc" id="L351">            target.setPluginRepositories( new ArrayList&lt;&gt;( merged.values() ) );</span>
+        }
+<span class="fc" id="L353">    }</span>
+
+    /*
+     * TODO: Whether duplicates should be removed looks like an option for the generated merger.
+     */
+    @Override
+    protected void mergeBuildBase_Filters( BuildBase target, BuildBase source, boolean sourceDominant,
+                                           Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L362">        List&lt;String&gt; src = source.getFilters();</span>
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">        if ( !src.isEmpty() )</span>
+        {
+<span class="nc" id="L365">            List&lt;String&gt; tgt = target.getFilters();</span>
+<span class="nc" id="L366">            Set&lt;String&gt; excludes = new LinkedHashSet&lt;&gt;( tgt );</span>
+<span class="nc" id="L367">            List&lt;String&gt; merged = new ArrayList&lt;&gt;( tgt.size() + src.size() );</span>
+<span class="nc" id="L368">            merged.addAll( tgt );</span>
+<span class="nc bnc" id="L369" title="All 2 branches missed.">            for ( String s : src )</span>
+            {
+<span class="nc bnc" id="L371" title="All 2 branches missed.">                if ( !excludes.contains( s ) )</span>
+                {
+<span class="nc" id="L373">                    merged.add( s );</span>
+                }
+<span class="nc" id="L375">            }</span>
+<span class="nc" id="L376">            target.setFilters( merged );</span>
+        }
+<span class="fc" id="L378">    }</span>
+
+    @Override
+    protected void mergeBuildBase_Resources( BuildBase target, BuildBase source, boolean sourceDominant,
+                                             Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L384" title="2 of 4 branches missed.">        if ( sourceDominant || target.getResources().isEmpty() )</span>
+        {
+<span class="fc" id="L386">            super.mergeBuildBase_Resources( target, source, sourceDominant, context );</span>
+        }
+<span class="fc" id="L388">    }</span>
+
+    @Override
+    protected void mergeBuildBase_TestResources( BuildBase target, BuildBase source, boolean sourceDominant,
+                                                 Map&lt;Object, Object&gt; context )
+    {
+<span class="pc bpc" id="L394" title="2 of 4 branches missed.">        if ( sourceDominant || target.getTestResources().isEmpty() )</span>
+        {
+<span class="fc" id="L396">            super.mergeBuildBase_TestResources( target, source, sourceDominant, context );</span>
+        }
+<span class="fc" id="L398">    }</span>
+
+    @Override
+    protected void mergeDistributionManagement_Repository( DistributionManagement target,
+                                                           DistributionManagement source, boolean sourceDominant,
+                                                           Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L405">        DeploymentRepository src = source.getRepository();</span>
+<span class="pc bpc" id="L406" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="nc" id="L408">            DeploymentRepository tgt = target.getRepository();</span>
+<span class="nc bnc" id="L409" title="All 4 branches missed.">            if ( sourceDominant || tgt == null )</span>
+            {
+<span class="nc" id="L411">                tgt = new DeploymentRepository();</span>
+<span class="nc" id="L412">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="nc" id="L413">                target.setRepository( tgt );</span>
+<span class="nc" id="L414">                mergeDeploymentRepository( tgt, src, sourceDominant, context );</span>
+            }
+        }
+<span class="fc" id="L417">    }</span>
+
+    @Override
+    protected void mergeDistributionManagement_SnapshotRepository( DistributionManagement target,
+                                                                   DistributionManagement source,
+                                                                   boolean sourceDominant,
+                                                                   Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L425">        DeploymentRepository src = source.getSnapshotRepository();</span>
+<span class="pc bpc" id="L426" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="nc" id="L428">            DeploymentRepository tgt = target.getSnapshotRepository();</span>
+<span class="nc bnc" id="L429" title="All 4 branches missed.">            if ( sourceDominant || tgt == null )</span>
+            {
+<span class="nc" id="L431">                tgt = new DeploymentRepository();</span>
+<span class="nc" id="L432">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="nc" id="L433">                target.setSnapshotRepository( tgt );</span>
+<span class="nc" id="L434">                mergeDeploymentRepository( tgt, src, sourceDominant, context );</span>
+            }
+        }
+<span class="fc" id="L437">    }</span>
+
+    @Override
+    protected void mergeDistributionManagement_Site( DistributionManagement target, DistributionManagement source,
+                                                     boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L443">        Site src = source.getSite();</span>
+<span class="pc bpc" id="L444" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="fc" id="L446">            Site tgt = target.getSite();</span>
+<span class="pc bpc" id="L447" title="1 of 6 branches missed.">            if ( sourceDominant || tgt == null || isSiteEmpty( tgt ) )</span>
+            {
+<span class="fc bfc" id="L449" title="All 2 branches covered.">                if ( tgt == null )</span>
+                {
+<span class="fc" id="L451">                    tgt = new Site();</span>
+                }
+<span class="fc" id="L453">                tgt.setLocation( &quot;&quot;, src.getLocation( &quot;&quot; ) );</span>
+<span class="fc" id="L454">                target.setSite( tgt );</span>
+<span class="fc" id="L455">                mergeSite( tgt, src, sourceDominant, context );</span>
+            }
+<span class="fc" id="L457">            mergeSite_ChildSiteUrlInheritAppendPath( tgt, src, sourceDominant, context );</span>
+        }
+<span class="fc" id="L459">    }</span>
+
+    @Override
+    protected void mergeSite( Site target, Site source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L464">        mergeSite_Id( target, source, sourceDominant, context );</span>
+<span class="fc" id="L465">        mergeSite_Name( target, source, sourceDominant, context );</span>
+<span class="fc" id="L466">        mergeSite_Url( target, source, sourceDominant, context );</span>
+<span class="fc" id="L467">    }</span>
+
+    protected boolean isSiteEmpty( Site site )
+    {
+<span class="pc bpc" id="L471" title="1 of 4 branches missed.">        return StringUtils.isEmpty( site.getId() ) &amp;&amp; StringUtils.isEmpty( site.getName() )</span>
+<span class="pc bpc" id="L472" title="1 of 2 branches missed.">            &amp;&amp; StringUtils.isEmpty( site.getUrl() );</span>
+    }
+
+    @Override
+    protected void mergeSite_Url( Site target, Site source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L478">        String src = source.getUrl();</span>
+<span class="pc bpc" id="L479" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L481" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L483">                target.setUrl( src );</span>
+<span class="nc" id="L484">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+<span class="pc bpc" id="L486" title="1 of 2 branches missed.">            else if ( target.getUrl() == null )</span>
+            {
+<span class="fc" id="L488">                target.setUrl( extrapolateChildUrl( src, source.isChildSiteUrlInheritAppendPath(), context ) );</span>
+<span class="fc" id="L489">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L492">    }</span>
+
+    @Override
+    protected void mergeScm_Url( Scm target, Scm source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L497">        String src = source.getUrl();</span>
+<span class="pc bpc" id="L498" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L500" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L502">                target.setUrl( src );</span>
+<span class="nc" id="L503">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+<span class="fc bfc" id="L505" title="All 2 branches covered.">            else if ( target.getUrl() == null )</span>
+            {
+<span class="fc" id="L507">                target.setUrl( extrapolateChildUrl( src, source.isChildScmUrlInheritAppendPath(), context ) );</span>
+<span class="fc" id="L508">                target.setLocation( &quot;url&quot;, source.getLocation( &quot;url&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L511">    }</span>
+
+    @Override
+    protected void mergeScm_Connection( Scm target, Scm source, boolean sourceDominant, Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L516">        String src = source.getConnection();</span>
+<span class="pc bpc" id="L517" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L519" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L521">                target.setConnection( src );</span>
+<span class="nc" id="L522">                target.setLocation( &quot;connection&quot;, source.getLocation( &quot;connection&quot; ) );</span>
+            }
+<span class="pc bpc" id="L524" title="1 of 2 branches missed.">            else if ( target.getConnection() == null )</span>
+            {
+<span class="fc" id="L526">                target.setConnection( extrapolateChildUrl( src, source.isChildScmConnectionInheritAppendPath(),</span>
+                                                           context ) );
+<span class="fc" id="L528">                target.setLocation( &quot;connection&quot;, source.getLocation( &quot;connection&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L531">    }</span>
+
+    @Override
+    protected void mergeScm_DeveloperConnection( Scm target, Scm source, boolean sourceDominant,
+                                                 Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L537">        String src = source.getDeveloperConnection();</span>
+<span class="pc bpc" id="L538" title="1 of 2 branches missed.">        if ( src != null )</span>
+        {
+<span class="pc bpc" id="L540" title="1 of 2 branches missed.">            if ( sourceDominant )</span>
+            {
+<span class="nc" id="L542">                target.setDeveloperConnection( src );</span>
+<span class="nc" id="L543">                target.setLocation( &quot;developerConnection&quot;, source.getLocation( &quot;developerConnection&quot; ) );</span>
+            }
+<span class="pc bpc" id="L545" title="1 of 2 branches missed.">            else if ( target.getDeveloperConnection() == null )</span>
+            {
+<span class="fc" id="L547">                String e = extrapolateChildUrl( src, source.isChildScmDeveloperConnectionInheritAppendPath(), context );</span>
+<span class="fc" id="L548">                target.setDeveloperConnection( e );</span>
+<span class="fc" id="L549">                target.setLocation( &quot;developerConnection&quot;, source.getLocation( &quot;developerConnection&quot; ) );</span>
+            }
+        }
+<span class="fc" id="L552">    }</span>
+
+    @Override
+    protected void mergePlugin_Executions( Plugin target, Plugin source, boolean sourceDominant,
+                                           Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L558">        List&lt;PluginExecution&gt; src = source.getExecutions();</span>
+<span class="pc bpc" id="L559" title="1 of 2 branches missed.">        if ( !src.isEmpty() )</span>
+        {
+<span class="nc" id="L561">            List&lt;PluginExecution&gt; tgt = target.getExecutions();</span>
+<span class="nc" id="L562">            Map&lt;Object, PluginExecution&gt; merged =</span>
+<span class="nc" id="L563">                new LinkedHashMap&lt;&gt;( ( src.size() + tgt.size() ) * 2 );</span>
+
+<span class="nc bnc" id="L565" title="All 2 branches missed.">            for ( PluginExecution element : src )</span>
+            {
+<span class="nc bnc" id="L567" title="All 2 branches missed.">                if ( sourceDominant</span>
+<span class="nc bnc" id="L568" title="All 6 branches missed.">                                || ( element.getInherited() != null ? element.isInherited() : source.isInherited() ) )</span>
+                {
+<span class="nc" id="L570">                    Object key = getPluginExecutionKey( element );</span>
+<span class="nc" id="L571">                    merged.put( key, element );</span>
+                }
+<span class="nc" id="L573">            }</span>
+
+<span class="nc bnc" id="L575" title="All 2 branches missed.">            for ( PluginExecution element : tgt )</span>
+            {
+<span class="nc" id="L577">                Object key = getPluginExecutionKey( element );</span>
+<span class="nc" id="L578">                PluginExecution existing = merged.get( key );</span>
+<span class="nc bnc" id="L579" title="All 2 branches missed.">                if ( existing != null )</span>
+                {
+<span class="nc" id="L581">                    mergePluginExecution( element, existing, sourceDominant, context );</span>
+                }
+<span class="nc" id="L583">                merged.put( key, element );</span>
+<span class="nc" id="L584">            }</span>
+
+<span class="nc" id="L586">            target.setExecutions( new ArrayList&lt;&gt;( merged.values() ) );</span>
+        }
+<span class="fc" id="L588">    }</span>
+
+    @Override
+    protected void mergePluginExecution_Goals( PluginExecution target, PluginExecution source, boolean sourceDominant,
+                                               Map&lt;Object, Object&gt; context )
+    {
+<span class="nc" id="L594">        List&lt;String&gt; src = source.getGoals();</span>
+<span class="nc bnc" id="L595" title="All 2 branches missed.">        if ( !src.isEmpty() )</span>
+        {
+<span class="nc" id="L597">            List&lt;String&gt; tgt = target.getGoals();</span>
+<span class="nc" id="L598">            Set&lt;String&gt; excludes = new LinkedHashSet&lt;&gt;( tgt );</span>
+<span class="nc" id="L599">            List&lt;String&gt; merged = new ArrayList&lt;&gt;( tgt.size() + src.size() );</span>
+<span class="nc" id="L600">            merged.addAll( tgt );</span>
+<span class="nc bnc" id="L601" title="All 2 branches missed.">            for ( String s : src )</span>
+            {
+<span class="nc bnc" id="L603" title="All 2 branches missed.">                if ( !excludes.contains( s ) )</span>
+                {
+<span class="nc" id="L605">                    merged.add( s );</span>
+                }
+<span class="nc" id="L607">            }</span>
+<span class="nc" id="L608">            target.setGoals( merged );</span>
+        }
+<span class="nc" id="L610">    }</span>
+
+    @Override
+    protected void mergeReportPlugin_ReportSets( ReportPlugin target, ReportPlugin source, boolean sourceDominant,
+                                                 Map&lt;Object, Object&gt; context )
+    {
+<span class="fc" id="L616">        List&lt;ReportSet&gt; src = source.getReportSets();</span>
+<span class="pc bpc" id="L617" title="1 of 2 branches missed.">        if ( !src.isEmpty() )</span>
+        {
+<span class="fc" id="L619">            List&lt;ReportSet&gt; tgt = target.getReportSets();</span>
+<span class="fc" id="L620">            Map&lt;Object, ReportSet&gt; merged = new LinkedHashMap&lt;&gt;( ( src.size() + tgt.size() ) * 2 );</span>
+
+<span class="fc bfc" id="L622" title="All 2 branches covered.">            for ( ReportSet rset : src )</span>
+            {
+<span class="pc bpc" id="L624" title="3 of 8 branches missed.">                if ( sourceDominant || ( rset.getInherited() != null ? rset.isInherited() : source.isInherited() ) )</span>
+                {
+<span class="fc" id="L626">                    Object key = getReportSetKey( rset );</span>
+<span class="fc" id="L627">                    merged.put( key, rset );</span>
+                }
+<span class="fc" id="L629">            }</span>
+
+<span class="pc bpc" id="L631" title="1 of 2 branches missed.">            for ( ReportSet element : tgt )</span>
+            {
+<span class="nc" id="L633">                Object key = getReportSetKey( element );</span>
+<span class="nc" id="L634">                ReportSet existing = merged.get( key );</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">                if ( existing != null )</span>
+                {
+<span class="nc" id="L637">                    mergeReportSet( element, existing, sourceDominant, context );</span>
+                }
+<span class="nc" id="L639">                merged.put( key, element );</span>
+<span class="nc" id="L640">            }</span>
+
+<span class="fc" id="L642">            target.setReportSets( new ArrayList&lt;&gt;( merged.values() ) );</span>
+        }
+<span class="fc" id="L644">    }</span>
+
+    @Override
+    protected Object getDependencyKey( Dependency dependency )
+    {
+<span class="nc" id="L649">        return dependency.getManagementKey();</span>
+    }
+
+    @Override
+    protected Object getPluginKey( Plugin plugin )
+    {
+<span class="fc" id="L655">        return plugin.getKey();</span>
+    }
+
+    @Override
+    protected Object getPluginExecutionKey( PluginExecution pluginExecution )
+    {
+<span class="nc" id="L661">        return pluginExecution.getId();</span>
+    }
+
+    @Override
+    protected Object getReportPluginKey( ReportPlugin reportPlugin )
+    {
+<span class="fc" id="L667">        return reportPlugin.getKey();</span>
+    }
+
+    @Override
+    protected Object getReportSetKey( ReportSet reportSet )
+    {
+<span class="fc" id="L673">        return reportSet.getId();</span>
+    }
+
+    @Override
+    protected Object getRepositoryBaseKey( RepositoryBase repositoryBase )
+    {
+<span class="fc" id="L679">        return repositoryBase.getId();</span>
+    }
+
+    @Override
+    protected Object getExtensionKey( Extension extension )
+    {
+<span class="nc" id="L685">        return extension.getGroupId() + ':' + extension.getArtifactId();</span>
+    }
+
+    @Override
+    protected Object getExclusionKey( Exclusion exclusion )
+    {
+<span class="nc" id="L691">        return exclusion.getGroupId() + ':' + exclusion.getArtifactId();</span>
+    }
+
+    protected String extrapolateChildUrl( String parentUrl, boolean appendPath, Map&lt;Object, Object&gt; context )
+    {
+<span class="nc" id="L696">        return parentUrl;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>
