@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultURLConstructor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.url</a> &gt; <span class="el_source">DefaultURLConstructor.java</span></div><h1>DefaultURLConstructor.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.url;
+
+import java.io.UnsupportedEncodingException;
+import java.util.Properties;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.ui.Command;
+import org.apache.wiki.ui.CommandResolver;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Implements the default URL constructor using links directly to the
+ *  JSP pages.  This is what JSPWiki by default is using.  For example,
+ *  WikiContext.VIEW points at &quot;Wiki.jsp&quot;, etc.
+ *
+ *  @since 2.2
+ */
+<span class="fc" id="L40">public class DefaultURLConstructor</span>
+    implements URLConstructor
+{
+    protected WikiEngine m_engine;
+
+    /**
+     *  Contains the absolute path of the JSPWiki Web application without the
+     *  actual servlet (which is the m_urlPrefix).
+     */
+<span class="fc" id="L49">    protected String m_pathPrefix = &quot;&quot;;</span>
+
+    /**
+     *
+     * {@inheritDoc}
+     */
+    public void initialize( WikiEngine engine,
+                            Properties properties )
+    {
+<span class="fc" id="L58">        m_engine = engine;</span>
+
+<span class="fc" id="L60">        m_pathPrefix = engine.getBaseURL() + &quot;/&quot;;</span>
+<span class="fc" id="L61">    }</span>
+
+    /**
+     *  Does replacement of some particular variables.  The variables are:
+     *
+     *  &lt;ul&gt;
+     *  &lt;li&gt; &quot;%u&quot; - inserts either the base URL (when absolute is required), or the base path
+     *       (which is an absolute path without the host name).
+     *  &lt;li&gt; &quot;%U&quot; - always inserts the base URL
+     *  &lt;li&gt; &quot;%p&quot; - always inserts the base path
+     *  &lt;li&gt; &quot;%n&quot; - inserts the page name
+     *  &lt;/ul&gt;
+     *
+     * @param baseptrn  The pattern to use
+     * @param name The page name
+     * @param absolute If true, %u is always the entire base URL, otherwise it depends on
+     *                 the setting in jspwiki.properties.
+     * @return A replacement.
+     */
+    protected final String doReplacement( String baseptrn, String name, boolean absolute )
+    {
+<span class="fc" id="L82">        String baseurl = m_pathPrefix;</span>
+
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        if( absolute ) baseurl = m_engine.getBaseURL() + &quot;/&quot;;</span>
+
+<span class="fc" id="L86">        baseptrn = TextUtil.replaceString( baseptrn, &quot;%u&quot;, baseurl );</span>
+<span class="fc" id="L87">        baseptrn = TextUtil.replaceString( baseptrn, &quot;%U&quot;, m_engine.getBaseURL() );</span>
+<span class="fc" id="L88">        baseptrn = TextUtil.replaceString( baseptrn, &quot;%n&quot;, encodeURI(name) );</span>
+<span class="fc" id="L89">        baseptrn = TextUtil.replaceString( baseptrn, &quot;%p&quot;, m_pathPrefix );</span>
+
+<span class="fc" id="L91">        return baseptrn;</span>
+    }
+
+    /**
+     *  URLEncoder returns pluses, when we want to have the percent
+     *  encoding.  See http://issues.apache.org/bugzilla/show_bug.cgi?id=39278
+     *  for more info.
+     *
+     *  We also convert any %2F's back to slashes to make nicer-looking URLs.
+     */
+    private String encodeURI( String uri )
+    {
+<span class="fc" id="L103">        uri = m_engine.encodeName(uri);</span>
+
+<span class="fc" id="L105">        uri = StringUtils.replace( uri, &quot;+&quot;, &quot;%20&quot; );</span>
+<span class="fc" id="L106">        uri = StringUtils.replace( uri, &quot;%2F&quot;, &quot;/&quot; );</span>
+
+<span class="fc" id="L108">        return uri;</span>
+    }
+
+    /**
+     * Returns the URL pattern for a supplied wiki request context.
+     * @param context the wiki context
+     * @param name the wiki page
+     * @return A pattern for replacement.
+     * @throws IllegalArgumentException if the context cannot be found
+     */
+    public static String getURLPattern( String context, String name )
+        throws IllegalArgumentException
+    {
+<span class="pc bpc" id="L121" title="1 of 4 branches missed.">        if( context.equals(WikiContext.VIEW) &amp;&amp; name == null)</span>
+        {
+            // FIXME
+<span class="nc" id="L124">            return &quot;%uWiki.jsp&quot;;</span>
+        }
+
+        // Find the action matching our pattern (could throw exception)
+<span class="fc" id="L128">        Command command = CommandResolver.findCommand( context );</span>
+
+<span class="fc" id="L130">        return command.getURLPattern();</span>
+    }
+
+    /**
+     *  Constructs the actual URL based on the context.
+     */
+    private String makeURL( String context,
+                            String name,
+                            boolean absolute )
+    {
+<span class="fc" id="L140">        return doReplacement( getURLPattern(context,name), name, absolute );</span>
+    }
+
+    /**
+     *  Constructs the URL with a bunch of parameters.
+     *  @param parameters If null or empty, no parameters are added.
+     *
+     *  {@inheritDoc}
+     */
+    public String makeURL( String context,
+                           String name,
+                           boolean absolute,
+                           String parameters )
+    {
+<span class="pc bpc" id="L154" title="1 of 4 branches missed.">        if( parameters != null &amp;&amp; parameters.length() &gt; 0 )</span>
+        {
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">            if( context.equals(WikiContext.ATTACH) )</span>
+            {
+<span class="nc" id="L158">                parameters = &quot;?&quot;+parameters;</span>
+            }
+<span class="fc bfc" id="L160" title="All 2 branches covered.">            else if( context.equals(WikiContext.NONE) )</span>
+            {
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                parameters = (name.indexOf('?') != -1 ) ? &quot;&amp;amp;&quot; : &quot;?&quot; + parameters;</span>
+            }
+            else
+            {
+<span class="fc" id="L166">                parameters = &quot;&amp;amp;&quot;+parameters;</span>
+            }
+        }
+        else
+        {
+<span class="fc" id="L171">            parameters = &quot;&quot;;</span>
+        }
+<span class="fc" id="L173">        return makeURL( context, name, absolute )+parameters;</span>
+    }
+
+    /**
+     *  Should parse the &quot;page&quot; parameter from the actual
+     *  request.
+     *
+     *  {@inheritDoc}
+     */
+    public String parsePage( String context,
+                             HttpServletRequest request,
+                             String encoding )
+        throws UnsupportedEncodingException
+    {
+<span class="fc" id="L187">        String pagereq = request.getParameter( &quot;page&quot; );</span>
+
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if( context.equals(WikiContext.ATTACH) )</span>
+        {
+<span class="nc" id="L191">            pagereq = parsePageFromURL( request, encoding );</span>
+        }
+
+<span class="fc" id="L194">        return pagereq;</span>
+    }
+
+    /**
+     *  There's a bug in Tomcat until 5.5.16 at least: The &quot;+&quot; sign is not
+     *  properly decoded by the servlet container, and therefore request.getPathInfo()
+     *  will return faulty results for paths which contains + signs to signify spaces.
+     *  &lt;p&gt;
+     *  This method provides a workaround by simply parsing the getRequestURI(), which
+     *  is returned from the servlet container undedecoded.
+     *  &lt;p&gt;
+     *  Please see &lt;a href=&quot;http://issues.apache.org/bugzilla/show_bug.cgi?id=39278&quot;&gt;Tomcat Bug 39278&lt;/a&gt;
+     *  for more information.
+     *
+     *  @param request A HTTP servlet request
+     *  @param encoding The used encoding
+     *  @return a String, decoded by JSPWiki, specifying extra path information that comes
+     *          after the servlet path but before the query string in the request URL;
+     *          or null if the URL does not have any extra path information
+     *  @throws UnsupportedEncodingException
+     */
+    /*
+    private static String getPathInfo( HttpServletRequest request, String encoding )
+        throws UnsupportedEncodingException
+    {
+        String c = request.getContextPath(); // Undecoded
+        String s = request.getServletPath(); // Decoded
+        String u = request.getRequestURI();  // Undecoded
+
+        c = URLDecoder.decode( c, encoding );
+        u = URLDecoder.decode( u, encoding );
+
+        String pi = u.substring( s.length()+c.length() );
+
+        if( pi.length() == 0 ) pi = null;
+
+        return pi;
+    }
+    */
+    /**
+     *  Takes the name of the page from the request URI.
+     *  The initial slash is also removed.  If there is no page,
+     *  returns null.
+     *
+     *  @param request The request to parse
+     *  @param encoding The encoding to use
+     *
+     *  @return a parsed page name, or null, if it cannot be found
+     *
+     *  @throws UnsupportedEncodingException If the encoding is not recognized.
+     */
+    public static String parsePageFromURL( HttpServletRequest request,
+                                           String encoding )
+        throws UnsupportedEncodingException
+    {
+<span class="nc" id="L249">        String name = request.getPathInfo();</span>
+
+<span class="nc bnc" id="L251" title="All 4 branches missed.">        if( name == null || name.length() &lt;= 1 )</span>
+        {
+<span class="nc" id="L253">            return null;</span>
+        }
+<span class="nc bnc" id="L255" title="All 2 branches missed.">        else if( name.charAt(0) == '/' )</span>
+        {
+<span class="nc" id="L257">            name = name.substring(1);</span>
+        }
+
+        //
+        //  This is required, because by default all URLs are handled
+        //  as Latin1, even if they are really UTF-8.
+        //
+
+        // name = TextUtil.urlDecode( name, encoding );
+
+<span class="nc" id="L267">        return name;</span>
+    }
+
+
+    /**
+     *  This method is not needed for the DefaultURLConstructor.
+     *
+     * @param request The HTTP Request that was used to end up in this page.
+     * @return &quot;Wiki.jsp&quot;, &quot;PageInfo.jsp&quot;, etc.  Just return the name,
+     *         JSPWiki will figure out the page.
+     */
+    public String getForwardPage( HttpServletRequest request )
+    {
+<span class="nc" id="L280">        return request.getPathInfo();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

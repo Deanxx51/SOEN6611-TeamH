@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InsertPageTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">InsertPageTag.java</span></div><h1>InsertPageTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspWriter;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+
+/**
+ *  Renders WikiPage content.  For InsertPage tag and the InsertPage plugin
+ *  the difference is that the tag will always render in the context of the page
+ *  which is referenced (i.e. a LeftMenu inserted on a JSP page with the InsertPage tag
+ *  will always render in the context of the actual URL, e.g. Main.), whereas
+ *  the InsertPage plugin always renders in local context.  This allows this like
+ *  ReferringPagesPlugin to really refer to the Main page instead of having to
+ *  resort to any trickery.
+ *  &lt;p&gt;
+ *  This tag sets the &quot;realPage&quot; field of the WikiContext to point at the inserted
+ *  page, while the &quot;page&quot; will contain the actual page in which the rendering
+ *  is being made.
+ *   
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;page - Page name to refer to.  Default is the current page.
+ *    &lt;li&gt;mode - In which format to insert the page.  Can be either &quot;plain&quot; or &quot;html&quot;.
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L51">public class InsertPageTag extends WikiTagBase {</span>
+
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L54">    private static final Logger log = Logger.getLogger( InsertPageTag.class );</span>
+    
+    public static final int HTML  = 0;
+    public static final int PLAIN = 1;
+
+<span class="nc" id="L59">    protected String m_pageName = null;</span>
+<span class="nc" id="L60">    private   int    m_mode = HTML;</span>
+
+    public void initTag()
+    {
+<span class="nc" id="L64">        super.initTag();</span>
+<span class="nc" id="L65">        m_pageName = null;</span>
+<span class="nc" id="L66">        m_mode = HTML;</span>
+<span class="nc" id="L67">    }</span>
+
+    public void setPage( String page )
+    {
+<span class="nc" id="L71">        m_pageName = page;</span>
+<span class="nc" id="L72">    }</span>
+
+    public String getPage()
+    {
+<span class="nc" id="L76">        return m_pageName;</span>
+    }
+
+    public void setMode( String arg )
+    {
+<span class="nc bnc" id="L81" title="All 2 branches missed.">        if( &quot;plain&quot;.equals(arg) )</span>
+        {
+<span class="nc" id="L83">            m_mode = PLAIN;</span>
+        }
+        else
+        {
+<span class="nc" id="L87">            m_mode = HTML;</span>
+        }
+<span class="nc" id="L89">    }</span>
+
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+<span class="nc" id="L95">        WikiEngine engine = m_wikiContext.getEngine();</span>
+        WikiPage   insertedPage;
+
+        //
+        //  NB: The page might not really exist if the user is currently
+        //      creating it (i.e. it is not yet in the cache or providers), 
+        //      AND we got the page from the wikiContext.
+        //
+
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if( m_pageName == null )</span>
+        {
+<span class="nc" id="L106">            insertedPage = m_wikiContext.getPage();</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            if( !engine.pageExists(insertedPage) ) return SKIP_BODY;</span>
+        }
+        else
+        {
+<span class="nc" id="L111">            insertedPage = engine.getPage( m_pageName );</span>
+        }
+
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if( insertedPage != null )</span>
+        {
+            // FIXME: Do version setting later.
+            // page.setVersion( WikiProvider.LATEST_VERSION );
+
+<span class="nc" id="L119">            log.debug(&quot;Inserting page &quot;+insertedPage);</span>
+
+<span class="nc" id="L121">            JspWriter out = pageContext.getOut();</span>
+
+<span class="nc" id="L123">            WikiPage oldPage = m_wikiContext.setRealPage( insertedPage );</span>
+            
+<span class="nc bnc" id="L125" title="All 3 branches missed.">            switch( m_mode )</span>
+            {
+              case HTML:
+<span class="nc" id="L128">                out.print( engine.getHTML( m_wikiContext, insertedPage ) );</span>
+<span class="nc" id="L129">                break;</span>
+              case PLAIN:
+<span class="nc" id="L131">                out.print( engine.getText( m_wikiContext, insertedPage ) );</span>
+                break;
+            }
+            
+<span class="nc" id="L135">            m_wikiContext.setRealPage( oldPage );</span>
+        }
+
+<span class="nc" id="L138">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

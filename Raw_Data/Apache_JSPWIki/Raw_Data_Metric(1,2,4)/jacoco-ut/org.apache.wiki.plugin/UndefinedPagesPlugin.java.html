@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UndefinedPagesPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">UndefinedPagesPlugin.java</span></div><h1>UndefinedPagesPlugin.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.util.Collection;
+import java.util.Map;
+
+import org.apache.wiki.ReferenceManager;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+
+/**
+ *  Plugin that enumerates the pages in the wiki that have not yet been defined.
+ *  
+ *  Parameters  (from AbstractReferralPlugin):
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;separator&lt;/b&gt; - how to separate generated links; default is a wikitext line break,  producing a vertical list&lt;/li&gt;
+ * &lt;li&gt;&lt;b&gt; maxwidth&lt;/b&gt; - maximum width, in chars, of generated links.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ */
+<span class="fc" id="L38">public class UndefinedPagesPlugin</span>
+    extends AbstractReferralPlugin
+{
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="fc" id="L47">        ReferenceManager refmgr = context.getEngine().getReferenceManager();</span>
+<span class="fc" id="L48">        Collection&lt; String &gt; links = refmgr.findUncreated();</span>
+
+<span class="fc" id="L50">        super.initialize( context, params );</span>
+
+<span class="fc" id="L52">        links = filterAndSortCollection( links );</span>
+        
+<span class="fc" id="L54">        String wikitext = null;</span>
+        
+<span class="fc bfc" id="L56" title="All 2 branches covered.">        if (m_lastModified)</span>
+        {
+<span class="fc" id="L58">            throw new PluginException(&quot;parameter &quot; + PARAM_LASTMODIFIED + &quot; is not valid for the UndefinedPagesPlugin&quot;);</span>
+        }
+        
+<span class="fc bfc" id="L61" title="All 2 branches covered.">        if (m_show.equals(PARAM_SHOW_VALUE_COUNT))</span>
+        {
+<span class="fc" id="L63">            wikitext = &quot;&quot; + links.size();</span>
+        }
+        else
+        {
+<span class="fc" id="L67">            wikitext = wikitizeCollection( links, m_separator, ALL_ITEMS );</span>
+        }
+        
+<span class="fc" id="L70">        return makeHTML( context, wikitext );</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

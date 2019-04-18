@@ -1,0 +1,479 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>XMLGroupDatabase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.authorize</a> &gt; <span class="el_source">XMLGroupDatabase.java</span></div><h1>XMLGroupDatabase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.authorize;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.security.Principal;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.util.TextUtil;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
+
+/**
+ * &lt;p&gt;
+ * GroupDatabase implementation for loading, persisting and storing wiki groups,
+ * using an XML file for persistence. Group entries are simple
+ * &lt;code&gt;&amp;lt;group&amp;gt;&lt;/code&gt; elements under the root. Each group member is
+ * representated by a &lt;code&gt;&amp;lt;member&amp;gt;&lt;/code&gt; element. For example:
+ * &lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;
+ * &amp;lt;groups&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;lt;group name=&quot;TV&quot; created=&quot;Jun 20, 2006 2:50:54 PM&quot; lastModified=&quot;Jan 21, 2006 2:50:54 PM&quot;&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;member principal=&quot;Archie Bunker&quot; /&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;member principal=&quot;BullwinkleMoose&quot; /&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;member principal=&quot;Fred Friendly&quot; /&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;lt;/group&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;lt;group name=&quot;Literature&quot; created=&quot;Jun 22, 2006 2:50:54 PM&quot; lastModified=&quot;Jan 23, 2006 2:50:54 PM&quot;&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;member principal=&quot;Charles Dickens&quot; /&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;member principal=&quot;Homer&quot; /&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;lt;/group&amp;gt;&lt;br/&gt;
+ * &amp;lt;/groups&amp;gt;
+ * &lt;/code&gt;&lt;/blockquote&gt;
+ * @since 2.4.17
+ */
+<span class="fc" id="L75">public class XMLGroupDatabase implements GroupDatabase</span>
+{
+<span class="fc" id="L77">    protected static final Logger log              = Logger.getLogger( XMLGroupDatabase.class );</span>
+
+    /**
+     * The jspwiki.properties property specifying the file system location of
+     * the group database.
+     */
+    public static final String    PROP_DATABASE    = &quot;jspwiki.xmlGroupDatabaseFile&quot;;
+
+    private static final String   DEFAULT_DATABASE = &quot;groupdatabase.xml&quot;;
+
+    private static final String   CREATED          = &quot;created&quot;;
+
+    private static final String   CREATOR          = &quot;creator&quot;;
+
+    private static final String   GROUP_TAG        = &quot;group&quot;;
+
+    private static final String   GROUP_NAME       = &quot;name&quot;;
+
+    private static final String   LAST_MODIFIED    = &quot;lastModified&quot;;
+
+    private static final String   MODIFIER         = &quot;modifier&quot;;
+
+    private static final String   MEMBER_TAG       = &quot;member&quot;;
+
+    private static final String   PRINCIPAL        = &quot;principal&quot;;
+
+<span class="fc" id="L103">    private Document              m_dom            = null;</span>
+
+<span class="fc" id="L105">    private DateFormat            m_defaultFormat  = DateFormat.getDateTimeInstance();</span>
+
+<span class="fc" id="L107">    private DateFormat            m_format         = new SimpleDateFormat(&quot;yyyy.MM.dd 'at' HH:mm:ss:SSS z&quot;);</span>
+
+<span class="fc" id="L109">    private File                  m_file           = null;</span>
+
+<span class="fc" id="L111">    private WikiEngine            m_engine         = null;</span>
+
+<span class="fc" id="L113">    private Map&lt;String, Group&gt;                   m_groups         = new HashMap&lt;&gt;();</span>
+
+    /**
+     * No-op method that in previous versions of JSPWiki was intended to
+     * atomically commit changes to the user database. Now, the
+     * {@link #save(Group, Principal)} and {@link #delete(Group)} methods
+     * are atomic themselves.
+     * @throws WikiSecurityException never...
+     * @deprecated there is no need to call this method because the save and
+     * delete methods contain their own commit logic
+     */
+    @Deprecated
+    @Override
+    public void commit() throws WikiSecurityException
+<span class="nc" id="L127">    { }</span>
+
+    /**
+      * Looks up and deletes a {@link Group} from the group database. If the
+     * group database does not contain the supplied Group. this method throws a
+     * {@link NoSuchPrincipalException}. The method commits the results
+     * of the delete to persistent storage.
+     * @param group the group to remove
+    * @throws WikiSecurityException if the database does not contain the
+     * supplied group (thrown as {@link NoSuchPrincipalException}) or if
+     * the commit did not succeed
+     */
+    @Override
+    public void delete( Group group ) throws WikiSecurityException
+    {
+<span class="fc" id="L142">        String index = group.getName();</span>
+<span class="fc" id="L143">        boolean exists = m_groups.containsKey( index );</span>
+
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">        if ( !exists )</span>
+        {
+<span class="nc" id="L147">            throw new NoSuchPrincipalException( &quot;Not in database: &quot; + group.getName() );</span>
+        }
+
+<span class="fc" id="L150">        m_groups.remove( index );</span>
+
+        // Commit to disk
+<span class="fc" id="L153">        saveDOM();</span>
+<span class="fc" id="L154">    }</span>
+
+    /**
+     * Returns all wiki groups that are stored in the GroupDatabase as an array
+     * of Group objects. If the database does not contain any groups, this
+     * method will return a zero-length array. This method causes back-end
+     * storage to load the entire set of group; thus, it should be called
+     * infrequently (e.g., at initialization time).
+     * @return the wiki groups
+     * @throws WikiSecurityException if the groups cannot be returned by the back-end
+     */
+    @Override
+    public Group[] groups() throws WikiSecurityException
+    {
+<span class="fc" id="L168">        buildDOM();</span>
+<span class="fc" id="L169">        Collection&lt;Group&gt; groups = m_groups.values();</span>
+<span class="fc" id="L170">        return groups.toArray( new Group[groups.size()] );</span>
+    }
+
+    /**
+     * Initializes the group database based on values from a Properties object.
+     * The properties object must contain a file path to the XML database file
+     * whose key is {@link #PROP_DATABASE}.
+     * @param engine the wiki engine
+     * @param props the properties used to initialize the group database
+     * @throws NoRequiredPropertyException if the user database cannot be
+     *             located, parsed, or opened
+     * @throws WikiSecurityException if the database could not be initialized successfully
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties props ) throws NoRequiredPropertyException, WikiSecurityException
+    {
+<span class="fc" id="L186">        m_engine = engine;</span>
+
+<span class="fc" id="L188">        File defaultFile = null;</span>
+<span class="pc bpc" id="L189" title="1 of 2 branches missed.">        if ( engine.getRootPath() == null )</span>
+        {
+<span class="fc" id="L191">            log.warn( &quot;Cannot identify JSPWiki root path&quot; );</span>
+<span class="fc" id="L192">            defaultFile = new File( &quot;WEB-INF/&quot; + DEFAULT_DATABASE ).getAbsoluteFile();</span>
+        }
+        else
+        {
+<span class="nc" id="L196">            defaultFile = new File( engine.getRootPath() + &quot;/WEB-INF/&quot; + DEFAULT_DATABASE );</span>
+        }
+
+        // Get database file location
+<span class="fc" id="L200">        String file = TextUtil.getStringProperty(props, PROP_DATABASE , defaultFile.getAbsolutePath());</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if ( file == null )</span>
+        {
+<span class="nc" id="L203">            log.warn( &quot;XML group database property &quot; + PROP_DATABASE + &quot; not found; trying &quot; + defaultFile );</span>
+<span class="nc" id="L204">            m_file = defaultFile;</span>
+        }
+        else
+        {
+<span class="fc" id="L208">            m_file = new File( file );</span>
+        }
+
+<span class="fc" id="L211">        log.info( &quot;XML group database at &quot; + m_file.getAbsolutePath() );</span>
+
+        // Read DOM
+<span class="fc" id="L214">        buildDOM();</span>
+<span class="fc" id="L215">    }</span>
+
+    /**
+     * Saves a Group to the group database. Note that this method &lt;em&gt;must&lt;/em&gt;
+     * fail, and throw an &lt;code&gt;IllegalArgumentException&lt;/code&gt;, if the
+     * proposed group is the same name as one of the built-in Roles: e.g.,
+     * Admin, Authenticated, etc. The database is responsible for setting
+     * create/modify timestamps, upon a successful save, to the Group.
+     * The method commits the results of the delete to persistent storage.
+     * @param group the Group to save
+     * @param modifier the user who saved the Group
+     * @throws WikiSecurityException if the Group could not be saved successfully
+     */
+    @Override
+    public void save( Group group, Principal modifier ) throws WikiSecurityException
+    {
+<span class="pc bpc" id="L231" title="2 of 4 branches missed.">        if ( group == null || modifier == null )</span>
+        {
+<span class="nc" id="L233">            throw new IllegalArgumentException( &quot;Group or modifier cannot be null.&quot; );</span>
+        }
+
+<span class="fc" id="L236">        checkForRefresh();</span>
+
+<span class="fc" id="L238">        String index = group.getName();</span>
+<span class="fc bfc" id="L239" title="All 2 branches covered.">        boolean isNew = !( m_groups.containsKey( index ) );</span>
+<span class="fc" id="L240">        Date modDate = new Date( System.currentTimeMillis() );</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        if ( isNew )</span>
+        {
+            // If new, set created info
+<span class="fc" id="L244">            group.setCreated( modDate );</span>
+<span class="fc" id="L245">            group.setCreator( modifier.getName() );</span>
+        }
+<span class="fc" id="L247">        group.setModifier( modifier.getName() );</span>
+<span class="fc" id="L248">        group.setLastModified( modDate );</span>
+
+        // Add the group to the 'saved' list
+<span class="fc" id="L251">        m_groups.put( index, group );</span>
+
+        // Commit to disk
+<span class="fc" id="L254">        saveDOM();</span>
+<span class="fc" id="L255">    }</span>
+
+    private void buildDOM() throws WikiSecurityException
+    {
+<span class="fc" id="L259">        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();</span>
+<span class="fc" id="L260">        factory.setValidating( false );</span>
+<span class="fc" id="L261">        factory.setExpandEntityReferences( false );</span>
+<span class="fc" id="L262">        factory.setIgnoringComments( true );</span>
+<span class="fc" id="L263">        factory.setNamespaceAware( false );</span>
+        try
+        {
+<span class="fc" id="L266">            m_dom = factory.newDocumentBuilder().parse( m_file );</span>
+<span class="fc" id="L267">            log.debug( &quot;Database successfully initialized&quot; );</span>
+<span class="fc" id="L268">            m_lastModified = m_file.lastModified();</span>
+<span class="fc" id="L269">            m_lastCheck    = System.currentTimeMillis();</span>
+        }
+<span class="nc" id="L271">        catch( ParserConfigurationException e )</span>
+        {
+<span class="nc" id="L273">            log.error( &quot;Configuration error: &quot; + e.getMessage() );</span>
+        }
+<span class="nc" id="L275">        catch( SAXException e )</span>
+        {
+<span class="nc" id="L277">            log.error( &quot;SAX error: &quot; + e.getMessage() );</span>
+        }
+<span class="fc" id="L279">        catch( FileNotFoundException e )</span>
+        {
+<span class="fc" id="L281">            log.info( &quot;Group database not found; creating from scratch...&quot; );</span>
+        }
+<span class="nc" id="L283">        catch( IOException e )</span>
+        {
+<span class="nc" id="L285">            log.error( &quot;IO error: &quot; + e.getMessage() );</span>
+<span class="pc" id="L286">        }</span>
+<span class="fc bfc" id="L287" title="All 2 branches covered.">        if ( m_dom == null )</span>
+        {
+            try
+            {
+                //
+                // Create the DOM from scratch
+                //
+<span class="fc" id="L294">                m_dom = factory.newDocumentBuilder().newDocument();</span>
+<span class="fc" id="L295">                m_dom.appendChild( m_dom.createElement( &quot;groups&quot; ) );</span>
+            }
+<span class="nc" id="L297">            catch( ParserConfigurationException e )</span>
+            {
+<span class="nc" id="L299">                log.fatal( &quot;Could not create in-memory DOM&quot; );</span>
+<span class="fc" id="L300">            }</span>
+        }
+
+        // Ok, now go and read this sucker in
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">        if ( m_dom != null )</span>
+        {
+<span class="fc" id="L306">            NodeList groupNodes = m_dom.getElementsByTagName( GROUP_TAG );</span>
+<span class="fc bfc" id="L307" title="All 2 branches covered.">            for( int i = 0; i &lt; groupNodes.getLength(); i++ )</span>
+            {
+<span class="fc" id="L309">                Element groupNode = (Element) groupNodes.item( i );</span>
+<span class="fc" id="L310">                String groupName = groupNode.getAttribute( GROUP_NAME );</span>
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">                if ( groupName == null )</span>
+                {
+<span class="nc" id="L313">                    log.warn( &quot;Detected null group name in XMLGroupDataBase. Check your group database.&quot; );</span>
+                }
+                else
+                {
+<span class="fc" id="L317">                    Group group = buildGroup( groupNode, groupName );</span>
+<span class="fc" id="L318">                    m_groups.put( groupName, group );</span>
+                }
+            }
+        }
+<span class="fc" id="L322">    }</span>
+
+<span class="fc" id="L324">    private long m_lastCheck    = 0;</span>
+<span class="fc" id="L325">    private long m_lastModified = 0;</span>
+
+    private void checkForRefresh()
+    {
+<span class="fc" id="L329">        long time = System.currentTimeMillis();</span>
+
+<span class="pc bpc" id="L331" title="1 of 2 branches missed.">        if( time - m_lastCheck &gt; 60*1000L )</span>
+        {
+<span class="nc" id="L333">            long lastModified = m_file.lastModified();</span>
+
+<span class="nc bnc" id="L335" title="All 2 branches missed.">            if( lastModified &gt; m_lastModified )</span>
+            {
+                try
+                {
+<span class="nc" id="L339">                    buildDOM();</span>
+                }
+<span class="nc" id="L341">                catch( WikiSecurityException e )</span>
+                {
+<span class="nc" id="L343">                    log.error(&quot;Could not refresh DOM&quot;,e);</span>
+<span class="nc" id="L344">                }</span>
+            }
+        }
+<span class="fc" id="L347">    }</span>
+    /**
+     * Constructs a Group based on a DOM group node.
+     * @param groupNode the node in the DOM containing the node
+     * @param name the name of the group
+     * @throws NoSuchPrincipalException
+     * @throws WikiSecurityException
+     */
+    private Group buildGroup( Element groupNode, String name )
+    {
+        // It's an error if either param is null (very odd)
+<span class="pc bpc" id="L358" title="2 of 4 branches missed.">        if ( groupNode == null || name == null )</span>
+        {
+<span class="nc" id="L360">            throw new IllegalArgumentException( &quot;DOM element or name cannot be null.&quot; );</span>
+        }
+
+        // Construct a new group
+<span class="fc" id="L364">        Group group = new Group( name, m_engine.getApplicationName() );</span>
+
+        // Get the users for this group, and add them
+<span class="fc" id="L367">        NodeList members = groupNode.getElementsByTagName( MEMBER_TAG );</span>
+<span class="fc bfc" id="L368" title="All 2 branches covered.">        for( int i = 0; i &lt; members.getLength(); i++ )</span>
+        {
+<span class="fc" id="L370">            Element memberNode = (Element) members.item( i );</span>
+<span class="fc" id="L371">            String principalName = memberNode.getAttribute( PRINCIPAL );</span>
+<span class="fc" id="L372">            Principal member = new WikiPrincipal( principalName );</span>
+<span class="fc" id="L373">            group.add( member );</span>
+        }
+
+        // Add the created/last-modified info
+<span class="fc" id="L377">        String creator = groupNode.getAttribute( CREATOR );</span>
+<span class="fc" id="L378">        String created = groupNode.getAttribute( CREATED );</span>
+<span class="fc" id="L379">        String modifier = groupNode.getAttribute( MODIFIER );</span>
+<span class="fc" id="L380">        String modified = groupNode.getAttribute( LAST_MODIFIED );</span>
+        try
+        {
+<span class="fc" id="L383">            group.setCreated( m_format.parse( created ) );</span>
+<span class="fc" id="L384">            group.setLastModified( m_format.parse( modified ) );</span>
+        }
+<span class="nc" id="L386">        catch ( ParseException e )</span>
+        {
+            // If parsing failed, use the platform default
+            try
+            {
+<span class="nc" id="L391">                group.setCreated( m_defaultFormat.parse( created ) );</span>
+<span class="nc" id="L392">                group.setLastModified( m_defaultFormat.parse( modified ) );</span>
+            }
+<span class="nc" id="L394">            catch ( ParseException e2)</span>
+            {
+<span class="nc" id="L396">                log.warn( &quot;Could not parse 'created' or 'lastModified' &quot; + &quot;attribute for &quot; + &quot; group'&quot;</span>
+<span class="nc" id="L397">                          + group.getName() + &quot;'.&quot; + &quot; It may have been tampered with.&quot; );</span>
+<span class="nc" id="L398">            }</span>
+<span class="fc" id="L399">        }</span>
+<span class="fc" id="L400">        group.setCreator( creator );</span>
+<span class="fc" id="L401">        group.setModifier( modifier );</span>
+<span class="fc" id="L402">        return group;</span>
+    }
+
+    private void saveDOM() throws WikiSecurityException
+    {
+<span class="pc bpc" id="L407" title="1 of 2 branches missed.">        if ( m_dom == null )</span>
+        {
+<span class="nc" id="L409">            log.fatal( &quot;Group database doesn't exist in memory.&quot; );</span>
+        }
+
+<span class="fc" id="L412">        File newFile = new File( m_file.getAbsolutePath() + &quot;.new&quot; );</span>
+        try
+        {
+<span class="fc" id="L415">            BufferedWriter io = new BufferedWriter( new OutputStreamWriter( new FileOutputStream( newFile ), &quot;UTF-8&quot; ) );</span>
+
+            // Write the file header and document root
+<span class="fc" id="L418">            io.write( &quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n&quot; );</span>
+<span class="fc" id="L419">            io.write( &quot;&lt;groups&gt;\n&quot; );</span>
+
+            // Write each profile as a &lt;group&gt; node
+<span class="fc bfc" id="L422" title="All 2 branches covered.">            for( Group group : m_groups.values() )</span>
+            {
+<span class="fc" id="L424">                io.write( &quot;  &lt;&quot; + GROUP_TAG + &quot; &quot; );</span>
+<span class="fc" id="L425">                io.write( GROUP_NAME );</span>
+<span class="fc" id="L426">                io.write( &quot;=\&quot;&quot; + StringEscapeUtils.escapeXml( group.getName() )+ &quot;\&quot; &quot; );</span>
+<span class="fc" id="L427">                io.write( CREATOR );</span>
+<span class="fc" id="L428">                io.write( &quot;=\&quot;&quot; + StringEscapeUtils.escapeXml( group.getCreator() ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L429">                io.write( CREATED );</span>
+<span class="fc" id="L430">                io.write( &quot;=\&quot;&quot; + m_format.format( group.getCreated() ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L431">                io.write( MODIFIER );</span>
+<span class="fc" id="L432">                io.write( &quot;=\&quot;&quot; + group.getModifier() + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L433">                io.write( LAST_MODIFIED );</span>
+<span class="fc" id="L434">                io.write( &quot;=\&quot;&quot; + m_format.format( group.getLastModified() ) + &quot;\&quot;&quot; );</span>
+<span class="fc" id="L435">                io.write( &quot;&gt;\n&quot; );</span>
+
+                // Write each member as a &lt;member&gt; node
+<span class="fc bfc" id="L438" title="All 2 branches covered.">                for( Principal member : group.members() )</span>
+                {
+<span class="fc" id="L440">                    io.write( &quot;    &lt;&quot; + MEMBER_TAG + &quot; &quot; );</span>
+<span class="fc" id="L441">                    io.write( PRINCIPAL );</span>
+<span class="fc" id="L442">                    io.write( &quot;=\&quot;&quot; + StringEscapeUtils.escapeXml(member.getName()) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L443">                    io.write( &quot;/&gt;\n&quot; );</span>
+                }
+
+                // Close tag
+<span class="fc" id="L447">                io.write( &quot;  &lt;/&quot; + GROUP_TAG + &quot;&gt;\n&quot; );</span>
+<span class="fc" id="L448">            }</span>
+<span class="fc" id="L449">            io.write( &quot;&lt;/groups&gt;&quot; );</span>
+<span class="fc" id="L450">            io.close();</span>
+        }
+<span class="nc" id="L452">        catch( IOException e )</span>
+        {
+<span class="nc" id="L454">            throw new WikiSecurityException( e.getLocalizedMessage(), e );</span>
+<span class="fc" id="L455">        }</span>
+
+        // Copy new file over old version
+<span class="fc" id="L458">        File backup = new File( m_file.getAbsolutePath() + &quot;.old&quot; );</span>
+<span class="pc bpc" id="L459" title="1 of 4 branches missed.">        if ( backup.exists() &amp;&amp; !backup.delete())</span>
+        {
+<span class="nc" id="L461">            log.error( &quot;Could not delete old group database backup: &quot; + backup );</span>
+        }
+<span class="pc bpc" id="L463" title="1 of 2 branches missed.">        if ( !m_file.renameTo( backup ) )</span>
+        {
+<span class="nc" id="L465">            log.error( &quot;Could not create group database backup: &quot; + backup );</span>
+        }
+<span class="pc bpc" id="L467" title="1 of 2 branches missed.">        if ( !newFile.renameTo( m_file ) )</span>
+        {
+<span class="nc" id="L469">            log.error( &quot;Could not save database: &quot; + backup + &quot; restoring backup.&quot; );</span>
+<span class="nc bnc" id="L470" title="All 2 branches missed.">            if ( !backup.renameTo( m_file ) )</span>
+            {
+<span class="nc" id="L472">                log.error( &quot;Restore failed. Check the file permissions.&quot; );</span>
+            }
+<span class="nc" id="L474">            log.error( &quot;Could not save database: &quot; + m_file + &quot;. Check the file permissions&quot; );</span>
+        }
+<span class="fc" id="L476">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

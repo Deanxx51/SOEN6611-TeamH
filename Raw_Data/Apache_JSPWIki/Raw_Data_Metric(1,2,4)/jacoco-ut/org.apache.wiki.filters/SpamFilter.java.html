@@ -1,0 +1,1159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SpamFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.filters</a> &gt; <span class="el_source">SpamFilter.java</span></div><h1>SpamFilter.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.filters;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.Properties;
+import java.util.Random;
+import java.util.StringTokenizer;
+import java.util.Vector;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.jsp.PageContext;
+
+import org.apache.commons.lang.time.StopWatch;
+import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.MatchResult;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Compiler;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.RedirectException;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.ui.EditorManager;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.TextUtil;
+import org.suigeneris.jrcs.diff.Diff;
+import org.suigeneris.jrcs.diff.DifferentiationFailedException;
+import org.suigeneris.jrcs.diff.Revision;
+import org.suigeneris.jrcs.diff.delta.AddDelta;
+import org.suigeneris.jrcs.diff.delta.ChangeDelta;
+import org.suigeneris.jrcs.diff.delta.DeleteDelta;
+import org.suigeneris.jrcs.diff.delta.Delta;
+import org.suigeneris.jrcs.diff.myers.MyersDiff;
+
+import net.sf.akismet.Akismet;
+
+
+/**
+ *  This is Herb, the JSPWiki spamfilter that can also do choke modifications.
+ *
+ *  Parameters:
+ *  &lt;ul&gt;
+ *    &lt;li&gt;wordlist - Page name where the spamword regexps are found.  Use [{SET spamwords='regexp list separated with spaces'}] on
+ *     that page.  Default is &quot;SpamFilterWordList&quot;.
+ *    &lt;li&gt;IPlist - Page name where the IP regexps are found.  Use [{SET ips='regexp list separated with spaces'}] on
+ *     that page.  Default is &quot;SpamFilterIPList&quot;.
+ *    &lt;li&gt;maxpagenamelength - Maximum page name length. Default is 100.
+ *    &lt;li&gt;blacklist - The name of an attachment containing the list of spam patterns, one per line. Default is
+ *        &quot;SpamFilterWordList/blacklist.txt&quot;&lt;/li&gt;
+ *    &lt;li&gt;errorpage - The page to which the user is redirected.  Has a special variable $msg which states the reason. Default is &quot;RejectedMessage&quot;.
+ *    &lt;li&gt;pagechangesinminute - How many page changes are allowed/minute.  Default is 5.&lt;/li&gt;
+ *    &lt;li&gt;similarchanges - How many similar page changes are allowed before the host is banned.  Default is 2.  (since 2.4.72)&lt;/li&gt;
+ *    &lt;li&gt;bantime - How long an IP address stays on the temporary ban list (default is 60 for 60 minutes).&lt;/li&gt;
+ *    &lt;li&gt;maxurls - How many URLs can be added to the page before it is considered spam (default is 5)&lt;/li&gt;
+ *    &lt;li&gt;akismet-apikey - The Akismet API key (see akismet.org)&lt;/li&gt;
+ *    &lt;li&gt;ignoreauthenticated - If set to &quot;true&quot;, all authenticated users are ignored and never caught in SpamFilter&lt;/li&gt;
+ *    &lt;li&gt;captcha - Sets the captcha technology to use.  Current allowed values are &quot;none&quot; and &quot;asirra&quot;.&lt;/li&gt;
+ *    &lt;li&gt;strategy - Sets the filtering strategy to use.  If set to &quot;eager&quot;, will stop at the first probable
+ *        match, and won't consider any other tests.  This is the default, as it's considerably lighter. If set to &quot;score&quot;, will go through all of the tests
+ *        and calculates a score for the spam, which is then compared to a filter level value.
+ *  &lt;/ul&gt;
+ *
+ *  &lt;p&gt;Please see the default editors/plain.jsp for examples on how the SpamFilter integrates
+ *  with the editor system.&lt;/p&gt;
+ *  
+ *  &lt;p&gt;Changes by admin users are ignored in any case.&lt;/p&gt;
+ *
+ *  @since 2.1.112
+ */
+<span class="nc" id="L107">public class SpamFilter extends BasicPageFilter {</span>
+	
+    private static final String ATTR_SPAMFILTER_SCORE = &quot;spamfilter.score&quot;;
+    private static final String REASON_REGEXP = &quot;Regexp&quot;;
+    private static final String REASON_IP_BANNED_TEMPORARILY = &quot;IPBannedTemporarily&quot;;
+    private static final String REASON_IP_BANNED_PERMANENTLY = &quot;IPBannedPermanently&quot;;
+    private static final String REASON_BOT_TRAP = &quot;BotTrap&quot;;
+    private static final String REASON_AKISMET = &quot;Akismet&quot;;
+    private static final String REASON_TOO_MANY_URLS = &quot;TooManyUrls&quot;;
+    private static final String REASON_SIMILAR_MODIFICATIONS = &quot;SimilarModifications&quot;;
+    private static final String REASON_TOO_MANY_MODIFICATIONS = &quot;TooManyModifications&quot;;
+    private static final String REASON_PAGENAME_TOO_LONG = &quot;PageNameTooLong&quot;;
+    private static final String REASON_UTF8_TRAP = &quot;UTF8Trap&quot;;
+
+    private static final String LISTVAR = &quot;spamwords&quot;;
+    private static final String LISTIPVAR = &quot;ips&quot;;
+
+    /** The filter property name for specifying the page which contains the list of spamwords.
+     *  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_WORDLIST              = &quot;wordlist&quot;;
+
+    /** The filter property name for specifying the page which contains the list of IPs to ban.
+     *  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_IPLIST                = &quot;IPlist&quot;;
+
+    /** The filter property name for specifying the maximum page name length.
+     *  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_MAX_PAGENAME_LENGTH   = &quot;maxpagenamelength&quot;;
+
+    /** The filter property name for the page to which you are directed if Herb rejects your
+     *  edit.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_ERRORPAGE             = &quot;errorpage&quot;;
+    
+    /** The filter property name for specifying how many changes is any given IP address
+     *  allowed to do per minute.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String  PROP_PAGECHANGES           = &quot;pagechangesinminute&quot;;
+    
+    /** The filter property name for specifying how many similar changes are allowed
+     *  before a host is banned.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String  PROP_SIMILARCHANGES        = &quot;similarchanges&quot;;
+    
+    /** The filter property name for specifying how long a host is banned.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.*/
+    public static final String  PROP_BANTIME               = &quot;bantime&quot;;
+    
+    /** The filter property name for the attachment containing the blacklist.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.*/
+    public static final String  PROP_BLACKLIST             = &quot;blacklist&quot;;
+    
+    /** The filter property name for specifying how many URLs can any given edit contain.  
+     *  Value is &lt;tt&gt;{@value}&lt;/tt&gt; */
+    public static final String  PROP_MAXURLS               = &quot;maxurls&quot;;
+    
+    /** The filter property name for specifying the Akismet API-key.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_AKISMET_API_KEY       = &quot;akismet-apikey&quot;;
+    
+    /** The filter property name for specifying whether authenticated users should be ignored. Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_IGNORE_AUTHENTICATED  = &quot;ignoreauthenticated&quot;;
+    
+    /** The filter property name for specifying which captcha technology should be used. Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_CAPTCHA               = &quot;captcha&quot;;
+    
+    /** The filter property name for specifying which filter strategy should be used.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PROP_FILTERSTRATEGY        = &quot;strategy&quot;;
+
+    /** The string specifying the &quot;eager&quot; strategy. Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  STRATEGY_EAGER             = &quot;eager&quot;;
+    
+    /** The string specifying the &quot;score&quot; strategy. Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  STRATEGY_SCORE             = &quot;score&quot;;
+
+    private static final String URL_REGEXP = &quot;(http://|https://|mailto:)([A-Za-z0-9_/\\.\\+\\?\\#\\-\\@=&amp;;]+)&quot;;
+
+<span class="nc" id="L180">    private String          m_forbiddenWordsPage = &quot;SpamFilterWordList&quot;;</span>
+<span class="nc" id="L181">    private String          m_forbiddenIPsPage   = &quot;SpamFilterIPList&quot;;</span>
+<span class="nc" id="L182">    private String          m_pageNameMaxLength  = &quot;100&quot;;</span>
+<span class="nc" id="L183">    private String          m_errorPage          = &quot;RejectedMessage&quot;;</span>
+<span class="nc" id="L184">    private String          m_blacklist          = &quot;SpamFilterWordList/blacklist.txt&quot;;</span>
+
+<span class="nc" id="L186">    private PatternMatcher  m_matcher = new Perl5Matcher();</span>
+<span class="nc" id="L187">    private PatternCompiler m_compiler = new Perl5Compiler();</span>
+
+<span class="nc" id="L189">    private Collection&lt;Pattern&gt; m_spamPatterns = null;</span>
+<span class="nc" id="L190">    private Collection&lt;Pattern&gt; m_IPPatterns = null;</span>
+
+<span class="nc" id="L192">    private Date            m_lastRebuild = new Date( 0L );</span>
+
+<span class="nc" id="L194">    private static  Logger  c_spamlog = Logger.getLogger( &quot;SpamLog&quot; );</span>
+<span class="nc" id="L195">    private static  Logger  log = Logger.getLogger( SpamFilter.class );</span>
+
+
+<span class="nc" id="L198">    private Vector&lt;Host&gt;    m_temporaryBanList = new Vector&lt;Host&gt;();</span>
+
+<span class="nc" id="L200">    private int             m_banTime = 60; // minutes</span>
+
+<span class="nc" id="L202">    private Vector&lt;Host&gt;    m_lastModifications = new Vector&lt;Host&gt;();</span>
+
+    /**
+     *  How many times a single IP address can change a page per minute?
+     */
+<span class="nc" id="L207">    private int             m_limitSinglePageChanges = 5;</span>
+
+    /**
+     *  How many times can you add the exact same string to a page?
+     */
+<span class="nc" id="L212">    private int             m_limitSimilarChanges = 2;</span>
+
+    /**
+     *  How many URLs can be added at maximum.
+     */
+<span class="nc" id="L217">    private int             m_maxUrls = 10;</span>
+
+    private Pattern         m_urlPattern;
+    private Akismet         m_akismet;
+
+<span class="nc" id="L222">    private String          m_akismetAPIKey = null;</span>
+
+<span class="nc" id="L224">    private boolean         m_useCaptcha = false;</span>
+
+    /** The limit at which we consider something to be spam. */
+<span class="nc" id="L227">    private int             m_scoreLimit = 1;</span>
+
+    /**
+     * If set to true, will ignore anyone who is in Authenticated role.
+     */
+<span class="nc" id="L232">    private boolean         m_ignoreAuthenticated = false;</span>
+
+<span class="nc" id="L234">    private boolean         m_stopAtFirstMatch = true;</span>
+
+    private static String   c_hashName;
+    private static long     c_lastUpdate;
+
+    /** The HASH_DELAY value is a maximum amount of time that an user can keep
+     *  a session open, because after the value has expired, we will invent a new
+     *  hash field name.  By default this is {@value} hours, which should be ample
+     *  time for someone.
+     */
+    private static final long HASH_DELAY = 24;
+
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties properties ) {
+<span class="nc" id="L252">        m_forbiddenWordsPage = properties.getProperty( PROP_WORDLIST, m_forbiddenWordsPage );</span>
+<span class="nc" id="L253">        m_forbiddenIPsPage = properties.getProperty( PROP_IPLIST, m_forbiddenIPsPage);</span>
+<span class="nc" id="L254">        m_pageNameMaxLength = properties.getProperty( PROP_MAX_PAGENAME_LENGTH, m_pageNameMaxLength);</span>
+<span class="nc" id="L255">        m_errorPage = properties.getProperty( PROP_ERRORPAGE, m_errorPage );</span>
+<span class="nc" id="L256">        m_limitSinglePageChanges = TextUtil.getIntegerProperty( properties,</span>
+                                                                PROP_PAGECHANGES,
+                                                                m_limitSinglePageChanges );
+        
+<span class="nc" id="L260">        m_limitSimilarChanges = TextUtil.getIntegerProperty( properties,</span>
+                                                             PROP_SIMILARCHANGES,
+                                                             m_limitSimilarChanges );
+
+<span class="nc" id="L264">        m_maxUrls = TextUtil.getIntegerProperty( properties, PROP_MAXURLS, m_maxUrls );</span>
+<span class="nc" id="L265">        m_banTime = TextUtil.getIntegerProperty( properties, PROP_BANTIME, m_banTime );</span>
+<span class="nc" id="L266">        m_blacklist = properties.getProperty( PROP_BLACKLIST, m_blacklist );</span>
+
+<span class="nc" id="L268">        m_ignoreAuthenticated = TextUtil.getBooleanProperty( properties,</span>
+                                                             PROP_IGNORE_AUTHENTICATED,
+                                                             m_ignoreAuthenticated );
+
+<span class="nc" id="L272">        m_useCaptcha = properties.getProperty( PROP_CAPTCHA, &quot;&quot; ).equals(&quot;asirra&quot;);</span>
+
+        try {
+<span class="nc" id="L275">            m_urlPattern = m_compiler.compile( URL_REGEXP );</span>
+<span class="nc" id="L276">        } catch( MalformedPatternException e ) {</span>
+<span class="nc" id="L277">            log.fatal( &quot;Internal error: Someone put in a faulty pattern.&quot;, e );</span>
+<span class="nc" id="L278">            throw new InternalWikiException( &quot;Faulty pattern.&quot; , e);</span>
+<span class="nc" id="L279">        }</span>
+
+<span class="nc" id="L281">        m_akismetAPIKey = TextUtil.getStringProperty( properties,</span>
+                                                      PROP_AKISMET_API_KEY,
+                                                      m_akismetAPIKey );
+
+<span class="nc" id="L285">        m_stopAtFirstMatch = TextUtil.getStringProperty( properties,</span>
+                                                         PROP_FILTERSTRATEGY,
+<span class="nc" id="L287">                                                         STRATEGY_EAGER ).equals( STRATEGY_EAGER );</span>
+
+<span class="nc" id="L289">        log.info( &quot;# Spam filter initialized.  Temporary ban time &quot; + m_banTime +</span>
+                  &quot; mins, max page changes/minute: &quot; + m_limitSinglePageChanges );
+
+
+<span class="nc" id="L293">    }</span>
+
+    private static final int REJECT = 0;
+    private static final int ACCEPT = 1;
+    private static final int NOTE   = 2;
+
+    private static String log( WikiContext ctx, int type, String source, String message ) {
+<span class="nc" id="L300">        message = TextUtil.replaceString( message, &quot;\r\n&quot;, &quot;\\r\\n&quot; );</span>
+<span class="nc" id="L301">        message = TextUtil.replaceString( message, &quot;\&quot;&quot;, &quot;\\\&quot;&quot; );</span>
+
+<span class="nc" id="L303">        String uid = getUniqueID();</span>
+
+<span class="nc" id="L305">        String page   = ctx.getPage().getName();</span>
+<span class="nc" id="L306">        String reason = &quot;UNKNOWN&quot;;</span>
+<span class="nc bnc" id="L307" title="All 2 branches missed.">        String addr   = ctx.getHttpRequest() != null ? HttpUtil.getRemoteAddress( ctx.getHttpRequest() ) : &quot;-&quot;;</span>
+
+<span class="nc bnc" id="L309" title="All 4 branches missed.">        switch( type ) {</span>
+            case REJECT:
+<span class="nc" id="L311">                reason = &quot;REJECTED&quot;;</span>
+<span class="nc" id="L312">                break;</span>
+            case ACCEPT:
+<span class="nc" id="L314">                reason = &quot;ACCEPTED&quot;;</span>
+<span class="nc" id="L315">                break;</span>
+            case NOTE:
+<span class="nc" id="L317">                reason = &quot;NOTE&quot;;</span>
+<span class="nc" id="L318">                break;</span>
+            default:
+<span class="nc" id="L320">                throw new InternalWikiException( &quot;Illegal type &quot; + type );</span>
+        }
+<span class="nc" id="L322">        c_spamlog.info( reason + &quot; &quot; + source + &quot; &quot; + uid + &quot; &quot; + addr + &quot; \&quot;&quot; + page + &quot;\&quot; &quot; + message );</span>
+
+<span class="nc" id="L324">        return uid;</span>
+    }
+
+    /** {@inheritDoc} */
+    public String preSave( WikiContext context, String content ) throws RedirectException {
+<span class="nc" id="L329">        cleanBanList();</span>
+<span class="nc" id="L330">        refreshBlacklists( context );</span>
+<span class="nc" id="L331">        Change change = getChange( context, content );</span>
+
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        if( !ignoreThisUser( context ) ) {</span>
+<span class="nc" id="L334">            checkBanList( context, change );</span>
+<span class="nc" id="L335">            checkSinglePageChange( context, content, change );</span>
+<span class="nc" id="L336">            checkIPList( context );</span>
+<span class="nc" id="L337">            checkPatternList( context, content, change );</span>
+<span class="nc" id="L338">            checkPageName( context, content, change);</span>
+        }
+
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        if( !m_stopAtFirstMatch ) {</span>
+<span class="nc" id="L342">            Integer score = ( Integer )context.getVariable( ATTR_SPAMFILTER_SCORE );</span>
+
+<span class="nc bnc" id="L344" title="All 4 branches missed.">            if( score != null &amp;&amp; score.intValue() &gt;= m_scoreLimit ) {</span>
+<span class="nc" id="L345">                throw new RedirectException( &quot;Herb says you got too many points&quot;, getRedirectPage( context ) );</span>
+            }
+        }
+
+<span class="nc" id="L349">        log( context, ACCEPT, &quot;-&quot;, change.toString() );</span>
+<span class="nc" id="L350">        return content;</span>
+    }
+
+    private void checkPageName(WikiContext context, String content, Change change) throws RedirectException {
+<span class="nc" id="L354">        WikiPage page = context.getPage();</span>
+<span class="nc" id="L355">        String pageName = page.getName();</span>
+<span class="nc" id="L356">        int maxlength = Integer.valueOf(m_pageNameMaxLength);</span>
+<span class="nc bnc" id="L357" title="All 2 branches missed.">        if ( pageName.length() &gt; maxlength) {</span>
+            //
+            //  Spam filter has a match.
+            //
+
+<span class="nc" id="L362">            String uid = log( context, REJECT, REASON_PAGENAME_TOO_LONG + &quot;(&quot; + m_pageNameMaxLength + &quot;)&quot; , pageName);</span>
+
+<span class="nc" id="L364">            log.info(&quot;SPAM:PageNameTooLong (&quot; + uid + &quot;). The length of the page name is too large (&quot; + pageName.length() + &quot; , limit is &quot; + m_pageNameMaxLength + &quot;)&quot;);</span>
+<span class="nc" id="L365">            checkStrategy( context, REASON_PAGENAME_TOO_LONG, &quot;Herb says '&quot; + pageName + &quot;' is a bad pageName and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+
+        }
+<span class="nc" id="L368">    }</span>
+
+    private void checkStrategy( WikiContext context, String error, String message ) throws RedirectException {
+<span class="nc bnc" id="L371" title="All 2 branches missed.">        if( m_stopAtFirstMatch ) {</span>
+<span class="nc" id="L372">            throw new RedirectException( message, getRedirectPage( context ) );</span>
+        }
+
+<span class="nc" id="L375">        Integer score = ( Integer )context.getVariable( ATTR_SPAMFILTER_SCORE );</span>
+<span class="nc bnc" id="L376" title="All 2 branches missed.">        if( score != null ) {</span>
+<span class="nc" id="L377">            score = score + 1;</span>
+        } else {
+<span class="nc" id="L379">            score = 1;</span>
+        }
+
+<span class="nc" id="L382">        context.setVariable( ATTR_SPAMFILTER_SCORE, score );</span>
+<span class="nc" id="L383">    }</span>
+    
+    /**
+     *  Parses a list of patterns and returns a Collection of compiled Pattern
+     *  objects.
+     *
+     * @param source
+     * @param list
+     * @return A Collection of the Patterns that were found from the lists.
+     */
+    private Collection&lt; Pattern &gt; parseWordList( WikiPage source, String list ) {
+<span class="nc" id="L394">        ArrayList&lt; Pattern &gt; compiledpatterns = new ArrayList&lt; Pattern &gt;();</span>
+
+<span class="nc bnc" id="L396" title="All 2 branches missed.">        if( list != null ) {</span>
+<span class="nc" id="L397">            StringTokenizer tok = new StringTokenizer( list, &quot; \t\n&quot; );</span>
+
+<span class="nc bnc" id="L399" title="All 2 branches missed.">            while( tok.hasMoreTokens() ) {</span>
+<span class="nc" id="L400">                String pattern = tok.nextToken();</span>
+
+                try {
+<span class="nc" id="L403">                    compiledpatterns.add( m_compiler.compile( pattern ) );</span>
+<span class="nc" id="L404">                } catch( MalformedPatternException e ) {</span>
+<span class="nc" id="L405">                    log.debug( &quot;Malformed spam filter pattern &quot; + pattern );</span>
+<span class="nc" id="L406">                    source.setAttribute(&quot;error&quot;, &quot;Malformed spam filter pattern &quot; + pattern);</span>
+<span class="nc" id="L407">                }</span>
+<span class="nc" id="L408">            }</span>
+        }
+
+<span class="nc" id="L411">        return compiledpatterns;</span>
+    }
+
+    /**
+     *  Takes a MT-Blacklist -formatted blacklist and returns a list of compiled Pattern objects.
+     *
+     *  @param list
+     *  @return The parsed blacklist patterns.
+     */
+    private Collection&lt; Pattern &gt; parseBlacklist( String list ) {
+<span class="nc" id="L421">        ArrayList&lt; Pattern &gt; compiledpatterns = new ArrayList&lt; Pattern &gt;();</span>
+
+<span class="nc bnc" id="L423" title="All 2 branches missed.">        if( list != null ) {</span>
+            try {
+<span class="nc" id="L425">                BufferedReader in = new BufferedReader( new StringReader(list) );</span>
+                String line;
+<span class="nc bnc" id="L427" title="All 2 branches missed.">                while( (line = in.readLine() ) != null ) {</span>
+<span class="nc" id="L428">                    line = line.trim();</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">                    if( line.length() == 0 ) continue; // Empty line</span>
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                    if( line.startsWith(&quot;#&quot;) ) continue; // It's a comment</span>
+
+<span class="nc" id="L432">                    int ws = line.indexOf( ' ' );</span>
+<span class="nc bnc" id="L433" title="All 2 branches missed.">                    if( ws == -1 ) ws = line.indexOf( '\t' );</span>
+<span class="nc bnc" id="L434" title="All 2 branches missed.">                    if( ws != -1 ) line = line.substring( 0, ws );</span>
+
+                    try {
+<span class="nc" id="L437">                        compiledpatterns.add( m_compiler.compile( line ) );</span>
+<span class="nc" id="L438">                    } catch( MalformedPatternException e ) {</span>
+<span class="nc" id="L439">                        log.debug( &quot;Malformed spam filter pattern &quot; + line );</span>
+<span class="nc" id="L440">                    }</span>
+<span class="nc" id="L441">                }</span>
+<span class="nc" id="L442">            } catch( IOException e ) {</span>
+<span class="nc" id="L443">                log.info( &quot;Could not read patterns; returning what I got&quot; , e );</span>
+<span class="nc" id="L444">            }</span>
+        }
+
+<span class="nc" id="L447">        return compiledpatterns;</span>
+    }
+
+    /**
+     *  Takes a single page change and performs a load of tests on the content change.
+     *  An admin can modify anything.
+     *
+     *  @param context
+     *  @param content
+     *  @throws RedirectException
+     */
+    private synchronized void checkSinglePageChange( WikiContext context, String content, Change change ) 
+    		throws RedirectException {
+<span class="nc" id="L460">        HttpServletRequest req = context.getHttpRequest();</span>
+
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        if( req != null ) {</span>
+<span class="nc" id="L463">            String addr = HttpUtil.getRemoteAddress( req );</span>
+<span class="nc" id="L464">            int hostCounter = 0;</span>
+<span class="nc" id="L465">            int changeCounter = 0;</span>
+
+<span class="nc" id="L467">            log.debug( &quot;Change is &quot; + change.m_change );</span>
+
+<span class="nc" id="L469">            long time = System.currentTimeMillis() - 60*1000L; // 1 minute</span>
+
+<span class="nc bnc" id="L471" title="All 2 branches missed.">            for( Iterator&lt; Host &gt; i = m_lastModifications.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L472">                Host host = i.next();</span>
+
+                //
+                //  Check if this item is invalid
+                //
+<span class="nc bnc" id="L477" title="All 2 branches missed.">                if( host.getAddedTime() &lt; time ) {</span>
+<span class="nc" id="L478">                    log.debug( &quot;Removed host &quot; + host.getAddress() + &quot; from modification queue (expired)&quot; );</span>
+<span class="nc" id="L479">                    i.remove();</span>
+<span class="nc" id="L480">                    continue;</span>
+                }
+
+                //
+                // Check if this IP address has been seen before
+                //
+
+<span class="nc bnc" id="L487" title="All 2 branches missed.">                if( host.getAddress().equals( addr ) ) {</span>
+<span class="nc" id="L488">                    hostCounter++;</span>
+                }
+
+                //
+                //  Check, if this change has been seen before
+                //
+
+<span class="nc bnc" id="L495" title="All 4 branches missed.">                if( host.getChange() != null &amp;&amp; host.getChange().equals( change ) ) {</span>
+<span class="nc" id="L496">                    changeCounter++;</span>
+                }
+<span class="nc" id="L498">            }</span>
+
+            //
+            //  Now, let's check against the limits.
+            //
+<span class="nc bnc" id="L503" title="All 2 branches missed.">            if( hostCounter &gt;= m_limitSinglePageChanges ) {</span>
+<span class="nc" id="L504">                Host host = new Host( addr, null );</span>
+<span class="nc" id="L505">                m_temporaryBanList.add( host );</span>
+
+<span class="nc" id="L507">                String uid = log( context, REJECT, REASON_TOO_MANY_MODIFICATIONS, change.m_change );</span>
+<span class="nc" id="L508">                log.info( &quot;SPAM:TooManyModifications (&quot; + uid + &quot;). Added host &quot; + addr + &quot; to temporary ban list for doing too many modifications/minute&quot; );</span>
+<span class="nc" id="L509">                checkStrategy( context, REASON_TOO_MANY_MODIFICATIONS, &quot;Herb says you look like a spammer, and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+
+<span class="nc bnc" id="L512" title="All 2 branches missed.">            if( changeCounter &gt;= m_limitSimilarChanges ) {</span>
+<span class="nc" id="L513">                Host host = new Host( addr, null );</span>
+<span class="nc" id="L514">                m_temporaryBanList.add( host );</span>
+
+<span class="nc" id="L516">                String uid = log( context, REJECT, REASON_SIMILAR_MODIFICATIONS, change.m_change );</span>
+<span class="nc" id="L517">                log.info( &quot;SPAM:SimilarModifications (&quot; + uid + &quot;). Added host &quot; + addr + &quot; to temporary ban list for doing too many similar modifications&quot; );</span>
+<span class="nc" id="L518">                checkStrategy( context, REASON_SIMILAR_MODIFICATIONS, &quot;Herb says you look like a spammer, and I trust Herb! (Incident code &quot;+uid+&quot;)&quot;);</span>
+            }
+
+            //
+            //  Calculate the number of links in the addition.
+            //
+<span class="nc" id="L524">            String tstChange  = change.toString();</span>
+<span class="nc" id="L525">            int    urlCounter = 0;</span>
+<span class="nc bnc" id="L526" title="All 2 branches missed.">            while( m_matcher.contains( tstChange,m_urlPattern ) ) {</span>
+<span class="nc" id="L527">                MatchResult m = m_matcher.getMatch();</span>
+<span class="nc" id="L528">                tstChange = tstChange.substring( m.endOffset(0) );</span>
+<span class="nc" id="L529">                urlCounter++;</span>
+<span class="nc" id="L530">            }</span>
+
+<span class="nc bnc" id="L532" title="All 2 branches missed.">            if( urlCounter &gt; m_maxUrls ) {</span>
+<span class="nc" id="L533">                Host host = new Host( addr, null );</span>
+<span class="nc" id="L534">                m_temporaryBanList.add( host );</span>
+
+<span class="nc" id="L536">                String uid = log( context, REJECT, REASON_TOO_MANY_URLS, change.toString() );</span>
+<span class="nc" id="L537">                log.info( &quot;SPAM:TooManyUrls (&quot; + uid + &quot;). Added host &quot; + addr + &quot; to temporary ban list for adding too many URLs&quot; );</span>
+<span class="nc" id="L538">                checkStrategy( context, REASON_TOO_MANY_URLS, &quot;Herb says you look like a spammer, and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+
+            //
+            //  Check bot trap
+            //
+<span class="nc" id="L544">            checkBotTrap( context, change );</span>
+
+            //
+            //  Check UTF-8 mangling
+            //
+<span class="nc" id="L549">            checkUTF8( context, change );</span>
+
+            //
+            //  Do Akismet check.  This is good to be the last, because this is the most
+            //  expensive operation.
+            //
+<span class="nc" id="L555">            checkAkismet( context, change );</span>
+
+<span class="nc" id="L557">            m_lastModifications.add( new Host( addr, change ) );</span>
+        }
+<span class="nc" id="L559">    }</span>
+
+
+    /**
+     *  Checks against the akismet system.
+     *
+     * @param context
+     * @param change
+     * @throws RedirectException
+     */
+    private void checkAkismet( WikiContext context, Change change ) throws RedirectException {
+<span class="nc bnc" id="L570" title="All 2 branches missed.">        if( m_akismetAPIKey != null ) {</span>
+<span class="nc bnc" id="L571" title="All 2 branches missed.">            if( m_akismet == null ) {</span>
+<span class="nc" id="L572">                log.info( &quot;Initializing Akismet spam protection.&quot; );</span>
+<span class="nc" id="L573">                m_akismet = new Akismet( m_akismetAPIKey, context.getEngine().getBaseURL() );</span>
+
+<span class="nc bnc" id="L575" title="All 2 branches missed.">                if( !m_akismet.verifyAPIKey() ) {</span>
+<span class="nc" id="L576">                    log.error( &quot;Akismet API key cannot be verified.  Please check your config.&quot; );</span>
+<span class="nc" id="L577">                    m_akismetAPIKey = null;</span>
+<span class="nc" id="L578">                    m_akismet = null;</span>
+                }
+            }
+
+<span class="nc" id="L582">            HttpServletRequest req = context.getHttpRequest();</span>
+
+            //
+            //  Akismet will mark all empty statements as spam, so we'll just
+            //  ignore them.
+            //
+<span class="nc bnc" id="L588" title="All 4 branches missed.">            if( change.m_adds == 0 &amp;&amp; change.m_removals &gt; 0 ) {</span>
+<span class="nc" id="L589">                return;</span>
+            }
+            
+<span class="nc bnc" id="L592" title="All 4 branches missed.">            if( req != null &amp;&amp; m_akismet != null ) {</span>
+<span class="nc" id="L593">                log.debug( &quot;Calling Akismet to check for spam...&quot; );</span>
+
+<span class="nc" id="L595">                StopWatch sw = new StopWatch();</span>
+<span class="nc" id="L596">                sw.start();</span>
+
+<span class="nc" id="L598">                String ipAddress     = HttpUtil.getRemoteAddress( req );</span>
+<span class="nc" id="L599">                String userAgent     = req.getHeader( &quot;User-Agent&quot; );</span>
+<span class="nc" id="L600">                String referrer      = req.getHeader( &quot;Referer&quot;);</span>
+<span class="nc" id="L601">                String permalink     = context.getViewURL( context.getPage().getName() );</span>
+<span class="nc bnc" id="L602" title="All 2 branches missed.">                String commentType   = context.getRequestContext().equals( WikiContext.COMMENT ) ? &quot;comment&quot; : &quot;edit&quot;;</span>
+<span class="nc" id="L603">                String commentAuthor = context.getCurrentUser().getName();</span>
+<span class="nc" id="L604">                String commentAuthorEmail = null;</span>
+<span class="nc" id="L605">                String commentAuthorURL   = null;</span>
+
+<span class="nc" id="L607">                boolean isSpam = m_akismet.commentCheck( ipAddress,</span>
+                                                         userAgent,
+                                                         referrer,
+                                                         permalink,
+                                                         commentType,
+                                                         commentAuthor,
+                                                         commentAuthorEmail,
+                                                         commentAuthorURL,
+<span class="nc" id="L615">                                                         change.toString(),</span>
+                                                         null );
+
+<span class="nc" id="L618">                sw.stop();</span>
+<span class="nc" id="L619">                log.debug( &quot;Akismet request done in: &quot; + sw );</span>
+
+<span class="nc bnc" id="L621" title="All 2 branches missed.">                if( isSpam ) {</span>
+                    // Host host = new Host( ipAddress, null );
+                    // m_temporaryBanList.add( host );
+
+<span class="nc" id="L625">                    String uid = log( context, REJECT, REASON_AKISMET, change.toString() );</span>
+<span class="nc" id="L626">                    log.info( &quot;SPAM:Akismet (&quot; + uid + &quot;). Akismet thinks this change is spam; added host to temporary ban list.&quot; );</span>
+<span class="nc" id="L627">                    checkStrategy( context, REASON_AKISMET, &quot;Akismet tells Herb you're a spammer, Herb trusts Akismet, and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+                }
+            }
+        }
+<span class="nc" id="L631">    }</span>
+
+    /**
+     * Returns a static string which can be used to detect spambots which just wildly fill in all the fields.
+     *
+     * @return A string
+     */
+    public static String getBotFieldName() {
+<span class="nc" id="L639">        return &quot;submit_auth&quot;;</span>
+    }
+
+    /**
+     * This checks whether an invisible field is available in the request, and whether it's contents are suspected spam.
+     *
+     * @param context
+     * @param change
+     * @throws RedirectException
+     */
+    private void checkBotTrap( WikiContext context, Change change ) throws RedirectException {
+<span class="nc" id="L650">        HttpServletRequest request = context.getHttpRequest();</span>
+
+<span class="nc bnc" id="L652" title="All 2 branches missed.">        if( request != null ) {</span>
+<span class="nc" id="L653">            String unspam = request.getParameter( getBotFieldName() );</span>
+<span class="nc bnc" id="L654" title="All 4 branches missed.">            if( unspam != null &amp;&amp; unspam.length() &gt; 0 ) {</span>
+<span class="nc" id="L655">                String uid = log( context, REJECT, REASON_BOT_TRAP, change.toString() );</span>
+
+<span class="nc" id="L657">                log.info( &quot;SPAM:BotTrap (&quot; + uid + &quot;).  Wildly behaving bot detected.&quot; );</span>
+<span class="nc" id="L658">                checkStrategy( context, REASON_BOT_TRAP, &quot;Spamming attempt detected. (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+        }
+<span class="nc" id="L661">    }</span>
+
+    private void checkUTF8( WikiContext context, Change change ) throws RedirectException {
+<span class="nc" id="L664">        HttpServletRequest request = context.getHttpRequest();</span>
+
+<span class="nc bnc" id="L666" title="All 2 branches missed.">        if( request != null ) {</span>
+<span class="nc" id="L667">            String utf8field = request.getParameter( &quot;encodingcheck&quot; );</span>
+
+<span class="nc bnc" id="L669" title="All 4 branches missed.">            if( utf8field != null &amp;&amp; !utf8field.equals( &quot;\u3041&quot; ) ) {</span>
+<span class="nc" id="L670">                String uid = log( context, REJECT, REASON_UTF8_TRAP, change.toString() );</span>
+
+<span class="nc" id="L672">                log.info( &quot;SPAM:UTF8Trap (&quot; + uid + &quot;).  Wildly posting dumb bot detected.&quot; );</span>
+<span class="nc" id="L673">                checkStrategy( context, REASON_UTF8_TRAP, &quot;Spamming attempt detected. (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+        }
+<span class="nc" id="L676">    }</span>
+
+    /** Goes through the ban list and cleans away any host which has expired from it. */
+    private synchronized void cleanBanList() {
+<span class="nc" id="L680">        long now = System.currentTimeMillis();</span>
+
+<span class="nc bnc" id="L682" title="All 2 branches missed.">        for( Iterator&lt; Host &gt; i = m_temporaryBanList.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L683">            Host host = i.next();</span>
+
+<span class="nc bnc" id="L685" title="All 2 branches missed.">            if( host.getReleaseTime() &lt; now ) {</span>
+<span class="nc" id="L686">                log.debug( &quot;Removed host &quot; + host.getAddress() + &quot; from temporary ban list (expired)&quot; );</span>
+<span class="nc" id="L687">                i.remove();</span>
+            }
+<span class="nc" id="L689">        }</span>
+<span class="nc" id="L690">    }</span>
+
+    /**
+     *  Checks the ban list if the IP address of the changer is already on it.
+     *
+     *  @param context
+     *  @throws RedirectException
+     */
+    private void checkBanList( WikiContext context, Change change ) throws RedirectException {
+<span class="nc" id="L699">        HttpServletRequest req = context.getHttpRequest();</span>
+
+<span class="nc bnc" id="L701" title="All 2 branches missed.">        if( req != null ) {</span>
+<span class="nc" id="L702">            String remote = HttpUtil.getRemoteAddress(req);</span>
+<span class="nc" id="L703">            long now = System.currentTimeMillis();</span>
+
+<span class="nc bnc" id="L705" title="All 2 branches missed.">            for( Iterator&lt; Host &gt; i = m_temporaryBanList.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L706">                Host host = i.next();</span>
+
+<span class="nc bnc" id="L708" title="All 2 branches missed.">                if( host.getAddress().equals( remote ) ) {</span>
+<span class="nc" id="L709">                    long timeleft = ( host.getReleaseTime() - now ) / 1000L;</span>
+
+<span class="nc" id="L711">                    log( context, REJECT, REASON_IP_BANNED_TEMPORARILY, change.m_change );</span>
+<span class="nc" id="L712">                    checkStrategy( context, REASON_IP_BANNED_TEMPORARILY, &quot;You have been temporarily banned from modifying this wiki. (&quot; + timeleft + &quot; seconds of ban left)&quot; );</span>
+                }
+<span class="nc" id="L714">            }</span>
+        }
+<span class="nc" id="L716">    }</span>
+
+    /**
+     *  If the spam filter notices changes in the black list page, it will refresh them automatically.
+     *
+     *  @param context
+     */
+    private void refreshBlacklists( WikiContext context ) {
+        try {
+
+<span class="nc" id="L726">            boolean rebuild = false;</span>
+
+            //
+            //  Rebuild, if the spam words page, the attachment or the IP ban page has changed since.
+            //
+<span class="nc" id="L731">            WikiPage sourceSpam = context.getEngine().getPage( m_forbiddenWordsPage );</span>
+<span class="nc bnc" id="L732" title="All 2 branches missed.">            if( sourceSpam != null ) {</span>
+<span class="nc bnc" id="L733" title="All 6 branches missed.">                if( m_spamPatterns == null || m_spamPatterns.isEmpty() || sourceSpam.getLastModified().after( m_lastRebuild ) ) {</span>
+<span class="nc" id="L734">                    rebuild = true;</span>
+                }
+            }
+
+<span class="nc" id="L738">            Attachment att = context.getEngine().getAttachmentManager().getAttachmentInfo( context, m_blacklist );</span>
+<span class="nc bnc" id="L739" title="All 2 branches missed.">            if( att != null ) {</span>
+<span class="nc bnc" id="L740" title="All 6 branches missed.">                if( m_spamPatterns == null || m_spamPatterns.isEmpty() || att.getLastModified().after( m_lastRebuild ) ) {</span>
+<span class="nc" id="L741">                    rebuild = true;</span>
+                }
+            }
+
+<span class="nc" id="L745">            WikiPage sourceIPs = context.getEngine().getPage( m_forbiddenIPsPage );</span>
+<span class="nc bnc" id="L746" title="All 2 branches missed.">            if( sourceIPs != null ) {</span>
+<span class="nc bnc" id="L747" title="All 6 branches missed.">                if( m_IPPatterns == null || m_IPPatterns.isEmpty() || sourceIPs.getLastModified().after( m_lastRebuild ) ) {</span>
+<span class="nc" id="L748">                    rebuild = true;</span>
+                }
+            }
+
+            //
+            //  Do the actual rebuilding.  For simplicity's sake, we always rebuild the complete
+            //  filter list regardless of what changed.
+            //
+<span class="nc bnc" id="L756" title="All 2 branches missed.">            if( rebuild ) {</span>
+<span class="nc" id="L757">                m_lastRebuild = new Date();</span>
+<span class="nc bnc" id="L758" title="All 2 branches missed.">                m_spamPatterns = parseWordList( sourceSpam,</span>
+<span class="nc" id="L759">                                                ( sourceSpam != null ) ? ( String )sourceSpam.getAttribute( LISTVAR ) : null );</span>
+
+<span class="nc" id="L761">                log.info( &quot;Spam filter reloaded - recognizing &quot; + m_spamPatterns.size() + &quot; patterns from page &quot; + m_forbiddenWordsPage );</span>
+
+<span class="nc bnc" id="L763" title="All 2 branches missed.">                m_IPPatterns = parseWordList( sourceIPs,</span>
+<span class="nc" id="L764">                        ( sourceIPs != null ) ? ( String )sourceIPs.getAttribute( LISTIPVAR ) : null );</span>
+<span class="nc" id="L765">                log.info( &quot;IP filter reloaded - recognizing &quot; + m_IPPatterns.size() + &quot; patterns from page &quot; + m_forbiddenIPsPage );</span>
+
+<span class="nc bnc" id="L767" title="All 2 branches missed.">                if( att != null ) {</span>
+<span class="nc" id="L768">                    InputStream in = context.getEngine().getAttachmentManager().getAttachmentStream(att);</span>
+<span class="nc" id="L769">                    StringWriter out = new StringWriter();</span>
+<span class="nc" id="L770">                    FileUtil.copyContents( new InputStreamReader( in,&quot;UTF-8&quot; ), out );</span>
+<span class="nc" id="L771">                    Collection&lt; Pattern &gt; blackList = parseBlacklist( out.toString() );</span>
+<span class="nc" id="L772">                    log.info( &quot;...recognizing additional &quot; + blackList.size() + &quot; patterns from blacklist &quot; + m_blacklist );</span>
+<span class="nc" id="L773">                    m_spamPatterns.addAll( blackList );</span>
+                }
+            }
+<span class="nc" id="L776">        } catch( IOException ex ) {</span>
+<span class="nc" id="L777">            log.info( &quot;Unable to read attachment data, continuing...&quot;, ex );</span>
+<span class="nc" id="L778">        } catch( ProviderException ex ) {</span>
+<span class="nc" id="L779">            log.info( &quot;Failed to read spam filter attachment, continuing...&quot;, ex );</span>
+<span class="nc" id="L780">        }</span>
+<span class="nc" id="L781">    }</span>
+
+    /**
+     *  Does a check against a known pattern list.
+     *
+     *  @param context
+     *  @param content
+     *  @param change
+     *  @throws RedirectException
+     */
+    private void checkPatternList( WikiContext context, String content, Change change ) throws RedirectException {
+        //
+        //  If we have no spam patterns defined, or we're trying to save
+        //  the page containing the patterns, just return.
+        //
+<span class="nc bnc" id="L796" title="All 4 branches missed.">        if( m_spamPatterns == null || context.getPage().getName().equals( m_forbiddenWordsPage ) ) {</span>
+<span class="nc" id="L797">            return;</span>
+        }
+
+<span class="nc" id="L800">        String ch = change.toString();</span>
+<span class="nc bnc" id="L801" title="All 2 branches missed.">        if( context.getHttpRequest() != null ) {</span>
+<span class="nc" id="L802">            ch += HttpUtil.getRemoteAddress( context.getHttpRequest() );</span>
+        }
+
+<span class="nc bnc" id="L805" title="All 2 branches missed.">        for( Pattern p : m_spamPatterns ) {</span>
+            // log.debug(&quot;Attempting to match page contents with &quot;+p.getPattern());
+
+<span class="nc bnc" id="L808" title="All 2 branches missed.">            if( m_matcher.contains( ch, p ) ) {</span>
+                //
+                //  Spam filter has a match.
+                //
+<span class="nc" id="L812">                String uid = log( context, REJECT, REASON_REGEXP + &quot;(&quot; + p.getPattern() + &quot;)&quot;, ch );</span>
+
+<span class="nc" id="L814">                log.info( &quot;SPAM:Regexp (&quot; + uid + &quot;). Content matches the spam filter '&quot; + p.getPattern() + &quot;'&quot; );</span>
+<span class="nc" id="L815">                checkStrategy( context, REASON_REGEXP, &quot;Herb says '&quot; + p.getPattern() + &quot;' is a bad spam word and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+<span class="nc" id="L817">        }</span>
+<span class="nc" id="L818">    }</span>
+
+
+    /**
+     *  Does a check against a pattern list of IPs.
+     *
+     *  @param context
+     *  @throws RedirectException
+     */
+    private void checkIPList( WikiContext context ) throws RedirectException {
+        //
+        //  If we have no IP patterns defined, or we're trying to save
+        //  the page containing the IP patterns, just return.
+        //
+<span class="nc bnc" id="L832" title="All 4 branches missed.">        if( m_IPPatterns == null || context.getPage().getName().equals( m_forbiddenIPsPage ) ) {</span>
+<span class="nc" id="L833">            return;</span>
+        }
+
+<span class="nc" id="L836">        String remoteIP = HttpUtil.getRemoteAddress( context.getHttpRequest() );</span>
+<span class="nc" id="L837">        log.info(&quot;Attempting to match remoteIP &quot; + remoteIP + &quot; against &quot; + m_IPPatterns.size() + &quot; patterns&quot;);</span>
+
+<span class="nc bnc" id="L839" title="All 2 branches missed.">        for( Pattern p : m_IPPatterns ) {</span>
+<span class="nc" id="L840">             log.debug(&quot;Attempting to match remoteIP with &quot; + p.getPattern());</span>
+
+<span class="nc bnc" id="L842" title="All 2 branches missed.">            if( m_matcher.contains( remoteIP, p ) ) {</span>
+
+                //  IP filter has a match.
+                //
+<span class="nc" id="L846">                String uid = log( context, REJECT, REASON_IP_BANNED_PERMANENTLY + &quot;(&quot; + p.getPattern() + &quot;)&quot;, remoteIP );</span>
+
+<span class="nc" id="L848">                log.info( &quot;SPAM:IPBanList (&quot; + uid + &quot;). remoteIP matches the IP filter '&quot; + p.getPattern() + &quot;'&quot; );</span>
+<span class="nc" id="L849">                checkStrategy( context, REASON_IP_BANNED_PERMANENTLY, &quot;Herb says '&quot; + p.getPattern() + &quot;' is a banned IP and I trust Herb! (Incident code &quot; + uid + &quot;)&quot; );</span>
+            }
+<span class="nc" id="L851">        }</span>
+<span class="nc" id="L852">    }</span>
+
+    private void checkPatternList( WikiContext context, String content, String change ) throws RedirectException {
+<span class="nc" id="L855">        Change c = new Change();</span>
+<span class="nc" id="L856">        c.m_change = change;</span>
+<span class="nc" id="L857">        checkPatternList( context, content, c );</span>
+<span class="nc" id="L858">    }</span>
+ 
+    /**
+     *  Creates a simple text string describing the added content.
+     *
+     *  @param context
+     *  @param newText
+     *  @return Empty string, if there is no change.
+     */
+    private static Change getChange( WikiContext context, String newText ) {
+<span class="nc" id="L868">        WikiPage page = context.getPage();</span>
+<span class="nc" id="L869">        StringBuffer change = new StringBuffer();</span>
+<span class="nc" id="L870">        WikiEngine engine = context.getEngine();</span>
+        // Get current page version
+
+<span class="nc" id="L873">        Change ch = new Change();</span>
+        
+        try {
+<span class="nc" id="L876">            String oldText = engine.getPureText( page.getName(), WikiProvider.LATEST_VERSION );</span>
+
+<span class="nc" id="L878">            String[] first  = Diff.stringToArray( oldText );</span>
+<span class="nc" id="L879">            String[] second = Diff.stringToArray( newText );</span>
+<span class="nc" id="L880">            Revision rev = Diff.diff( first, second, new MyersDiff() );</span>
+
+<span class="nc bnc" id="L882" title="All 4 branches missed.">            if( rev == null || rev.size() == 0 ) {</span>
+<span class="nc" id="L883">                return ch;</span>
+            }
+            
+<span class="nc bnc" id="L886" title="All 2 branches missed.">            for( int i = 0; i &lt; rev.size(); i++ ) {</span>
+<span class="nc" id="L887">                Delta d = rev.getDelta( i );</span>
+
+<span class="nc bnc" id="L889" title="All 2 branches missed.">                if( d instanceof AddDelta ) {</span>
+<span class="nc" id="L890">                    d.getRevised().toString( change, &quot;&quot;, &quot;\r\n&quot; );</span>
+<span class="nc" id="L891">                    ch.m_adds++;</span>
+                    
+<span class="nc bnc" id="L893" title="All 2 branches missed.">                } else if( d instanceof ChangeDelta ) {</span>
+<span class="nc" id="L894">                    d.getRevised().toString( change, &quot;&quot;, &quot;\r\n&quot; );</span>
+<span class="nc" id="L895">                    ch.m_adds++;</span>
+                    
+<span class="nc bnc" id="L897" title="All 2 branches missed.">                } else if( d instanceof DeleteDelta ) {</span>
+<span class="nc" id="L898">                    ch.m_removals++;</span>
+                }
+            }
+<span class="nc" id="L901">        } catch( DifferentiationFailedException e ) {</span>
+<span class="nc" id="L902">            log.error( &quot;Diff failed&quot;, e );</span>
+<span class="nc" id="L903">        }</span>
+
+        //
+        //  Don't forget to include the change note, too
+        //
+<span class="nc" id="L908">        String changeNote = ( String )page.getAttribute( WikiPage.CHANGENOTE );</span>
+
+<span class="nc bnc" id="L910" title="All 2 branches missed.">        if( changeNote != null ) {</span>
+<span class="nc" id="L911">            change.append( &quot;\r\n&quot; );</span>
+<span class="nc" id="L912">            change.append( changeNote );</span>
+        }
+
+        //
+        //  And author as well
+        //
+<span class="nc bnc" id="L918" title="All 2 branches missed.">        if( page.getAuthor() != null ) {</span>
+<span class="nc" id="L919">            change.append( &quot;\r\n&quot; + page.getAuthor() );</span>
+        }
+
+<span class="nc" id="L922">        ch.m_change = change.toString();</span>
+<span class="nc" id="L923">        return ch;</span>
+    }
+
+    /**
+     *  Returns true, if this user should be ignored.  For example, admin users.
+     *
+     * @param context
+     * @return True, if this users should be ignored.
+     */
+    private boolean ignoreThisUser( WikiContext context ) {
+<span class="nc bnc" id="L933" title="All 2 branches missed.">        if( context.hasAdminPermissions() ) {</span>
+<span class="nc" id="L934">            return true;</span>
+        }
+
+<span class="nc bnc" id="L937" title="All 4 branches missed.">        if( m_ignoreAuthenticated &amp;&amp; context.getWikiSession().isAuthenticated() ) {</span>
+<span class="nc" id="L938">            return true;</span>
+        }
+
+<span class="nc bnc" id="L941" title="All 2 branches missed.">        if( context.getVariable( &quot;captcha&quot; ) != null ) {</span>
+<span class="nc" id="L942">            return true;</span>
+        }
+
+<span class="nc" id="L945">        return false;</span>
+    }
+
+    /**
+     *  Returns a random string of six uppercase characters.
+     *
+     *  @return A random string
+     */
+    private static String getUniqueID() {
+<span class="nc" id="L954">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L955">        Random rand = new Random();</span>
+
+<span class="nc bnc" id="L957" title="All 2 branches missed.">        for( int i = 0; i &lt; 6; i++ ) {</span>
+<span class="nc" id="L958">            char x = ( char )( 'A' + rand.nextInt( 26 ) );</span>
+<span class="nc" id="L959">            sb.append( x );</span>
+        }
+
+<span class="nc" id="L962">        return sb.toString();</span>
+    }
+
+    /**
+     *  Returns a page to which we shall redirect, based on the current value of the &quot;captcha&quot; parameter.
+     *
+     *  @param ctx WikiContext
+     *  @return An URL to redirect to
+     */
+    private String getRedirectPage( WikiContext ctx ) {
+<span class="nc bnc" id="L972" title="All 2 branches missed.">        if( m_useCaptcha ) {</span>
+<span class="nc" id="L973">            return ctx.getURL( WikiContext.NONE, &quot;Captcha.jsp&quot;, &quot;page=&quot;+ctx.getEngine().encodeName( ctx.getPage().getName() ) );</span>
+        }
+
+<span class="nc" id="L976">        return ctx.getURL( WikiContext.VIEW, m_errorPage );</span>
+    }
+
+    /**
+     *  Checks whether the UserProfile matches certain checks.
+     *
+     *  @param profile The profile to check
+     *  @param context The WikiContext
+     *  @return False, if this userprofile is suspect and should not be allowed to be added.
+     *  @since 2.6.1
+     */
+    public boolean isValidUserProfile( WikiContext context, UserProfile profile ) {
+        try {
+<span class="nc" id="L989">            checkPatternList( context, profile.getEmail(), profile.getEmail() );</span>
+<span class="nc" id="L990">            checkPatternList( context, profile.getFullname(), profile.getFullname() );</span>
+<span class="nc" id="L991">            checkPatternList( context, profile.getLoginName(), profile.getLoginName() );</span>
+<span class="nc" id="L992">        } catch( RedirectException e ) {</span>
+<span class="nc" id="L993">            log.info(&quot;Detected attempt to create a spammer user account (see above for rejection reason)&quot;);</span>
+<span class="nc" id="L994">            return false;</span>
+<span class="nc" id="L995">        }</span>
+
+<span class="nc" id="L997">        return true;</span>
+    }
+
+    /**
+     *  This method is used to calculate an unique code when submitting the page to detect edit conflicts.  
+     *  It currently incorporates the last-modified date of the page, and the IP address of the submitter.
+     *
+     *  @param page The WikiPage under edit
+     *  @param request The HTTP Request
+     *  @since 2.6
+     *  @return A hash value for this page and session
+     */
+    public static final String getSpamHash( WikiPage page, HttpServletRequest request ) {
+<span class="nc" id="L1010">        long lastModified = 0;</span>
+
+<span class="nc bnc" id="L1012" title="All 2 branches missed.">        if( page.getLastModified() != null ) {</span>
+<span class="nc" id="L1013">            lastModified = page.getLastModified().getTime();</span>
+        }
+<span class="nc" id="L1015">        long remote = HttpUtil.getRemoteAddress( request ).hashCode();</span>
+
+<span class="nc" id="L1017">        return Long.toString( lastModified ^ remote );</span>
+    }
+
+    /**
+     *  Returns the name of the hash field to be used in this request. The value is unique per session, and once 
+     *  the session has expired, you cannot edit anymore.
+     *
+     *  @param request The page request
+     *  @return The name to be used in the hash field
+     *  @since  2.6
+     */
+    public static final String getHashFieldName( HttpServletRequest request ) {
+<span class="nc" id="L1029">        String hash = null;</span>
+
+<span class="nc bnc" id="L1031" title="All 2 branches missed.">        if( request.getSession() != null ) {</span>
+<span class="nc" id="L1032">            hash = ( String )request.getSession().getAttribute( &quot;_hash&quot; );</span>
+
+<span class="nc bnc" id="L1034" title="All 2 branches missed.">            if( hash == null ) {</span>
+<span class="nc" id="L1035">                hash = c_hashName;</span>
+<span class="nc" id="L1036">                request.getSession().setAttribute( &quot;_hash&quot;, hash );</span>
+            }
+        }
+
+<span class="nc bnc" id="L1040" title="All 4 branches missed.">        if( c_hashName == null || c_lastUpdate &lt; ( System.currentTimeMillis() - HASH_DELAY * 60 * 60 * 1000 ) ) {</span>
+<span class="nc" id="L1041">            c_hashName = getUniqueID().toLowerCase();</span>
+<span class="nc" id="L1042">            c_lastUpdate = System.currentTimeMillis();</span>
+        }
+
+<span class="nc bnc" id="L1045" title="All 2 branches missed.">        return hash != null ? hash : c_hashName;</span>
+    }
+
+
+    /**
+     *  This method checks if the hash value is still valid, i.e. if it exists at all. This can occur in two cases: 
+     *  either this is a spam bot which is not adaptive, or it is someone who has been editing one page for too long, 
+     *  and their session has expired.
+     *  &lt;p&gt;
+     *  This method puts a redirect to the http response field to page &quot;SessionExpired&quot; and logs the incident in 
+     *  the spam log (it may or may not be spam, but it's rather likely that it is).
+     *
+     *  @param context The WikiContext
+     *  @param pageContext The JSP PageContext.
+     *  @return True, if hash is okay.  False, if hash is not okay, and you need to redirect.
+     *  @throws IOException If redirection fails
+     *  @since 2.6
+     */
+    public static final boolean checkHash( WikiContext context, PageContext pageContext ) throws IOException {
+<span class="nc" id="L1064">        String hashName = getHashFieldName( (HttpServletRequest)pageContext.getRequest() );</span>
+
+<span class="nc bnc" id="L1066" title="All 2 branches missed.">        if( pageContext.getRequest().getParameter(hashName) == null ) {</span>
+<span class="nc bnc" id="L1067" title="All 2 branches missed.">            if( pageContext.getAttribute( hashName ) == null ) {</span>
+<span class="nc" id="L1068">                Change change = getChange( context, EditorManager.getEditedText( pageContext ) );</span>
+<span class="nc" id="L1069">                log( context, REJECT, &quot;MissingHash&quot;, change.m_change );</span>
+
+<span class="nc" id="L1071">                String redirect = context.getURL( WikiContext.VIEW,&quot;SessionExpired&quot; );</span>
+<span class="nc" id="L1072">                ( ( HttpServletResponse )pageContext.getResponse() ).sendRedirect( redirect );</span>
+<span class="nc" id="L1073">                return false;</span>
+            }
+        }
+
+<span class="nc" id="L1077">        return true;</span>
+    }
+
+    /**
+     * This helper method adds all the input fields to your editor that the SpamFilter requires
+     * to check for spam.  This &lt;i&gt;must&lt;/i&gt; be in your editor form if you intend to use the SpamFilter.
+     *  
+     * @param pageContext The PageContext
+     * @return A HTML string which contains input fields for the SpamFilter.
+     */
+    public static final String insertInputFields( PageContext pageContext ) {
+<span class="nc" id="L1088">        WikiContext ctx = WikiContext.findContext( pageContext );</span>
+<span class="nc" id="L1089">        WikiEngine engine = ctx.getEngine();</span>
+
+<span class="nc" id="L1091">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L1092" title="All 2 branches missed.">        if( engine.getContentEncoding().equals( &quot;UTF-8&quot; ) ) {</span>
+<span class="nc" id="L1093">            sb.append( &quot;&lt;input name='encodingcheck' type='hidden' value='\u3041' /&gt;\n&quot; );</span>
+        }
+
+<span class="nc" id="L1096">        return sb.toString();</span>
+    }
+    
+    /**
+     *  A local class for storing host information.
+     *
+     *  @since
+     */
+    private class Host {
+    	
+<span class="nc" id="L1106">        private long   m_addedTime = System.currentTimeMillis();</span>
+        private long   m_releaseTime;
+        private String m_address;
+        private Change m_change;
+
+        public String getAddress() {
+<span class="nc" id="L1112">            return m_address;</span>
+        }
+
+        public long getReleaseTime() {
+<span class="nc" id="L1116">            return m_releaseTime;</span>
+        }
+
+        public long getAddedTime() {
+<span class="nc" id="L1120">            return m_addedTime;</span>
+        }
+
+        public Change getChange() {
+<span class="nc" id="L1124">            return m_change;</span>
+        }
+
+<span class="nc" id="L1127">        public Host( String ipaddress, Change change ) {</span>
+<span class="nc" id="L1128">            m_address = ipaddress;</span>
+<span class="nc" id="L1129">            m_change  = change;</span>
+<span class="nc" id="L1130">            m_releaseTime = System.currentTimeMillis() + m_banTime * 60 * 1000L;</span>
+<span class="nc" id="L1131">        }</span>
+        
+    }
+    
+    private static class Change {
+    	
+        public String m_change;
+        public int    m_adds;
+        public int    m_removals;
+        
+        public String toString() {
+<span class="nc" id="L1142">            return m_change;</span>
+        }
+        
+        public boolean equals( Object o ) {
+<span class="nc bnc" id="L1146" title="All 2 branches missed.">            if( o instanceof Change ) {</span>
+<span class="nc" id="L1147">                return m_change.equals( ( ( Change )o ).m_change );</span>
+            }
+<span class="nc" id="L1149">            return false;</span>
+        }
+        
+        public int hashCode() {
+<span class="nc" id="L1153">            return m_change.hashCode() + 17;</span>
+        }
+        
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

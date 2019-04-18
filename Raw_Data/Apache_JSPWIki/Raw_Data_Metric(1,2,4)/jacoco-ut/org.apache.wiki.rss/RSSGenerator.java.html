@@ -1,0 +1,646 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RSSGenerator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.rss</a> &gt; <span class="el_source">RSSGenerator.java</span></div><h1>RSSGenerator.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.rss;
+
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.pages.PageTimeComparator;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  The master class for generating different kinds of Feeds (including RSS1.0, 2.0 and Atom).
+ *  &lt;p&gt;
+ *  This class can produce quite a few different styles of feeds.  The following modes are
+ *  available:
+ *  
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;wiki&lt;/b&gt; - All the changes to the given page are enumerated and announced as diffs.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;full&lt;/b&gt; - Each page is only considered once.  This produces a very RecentChanges-style feed,
+ *                   where each page is only listed once, even if it has changed multiple times.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;blog&lt;/b&gt; - Each page change is assumed to be a blog entry, so no diffs are produced, but
+ *                    the page content is always completely in the entry in rendered HTML.&lt;/li&gt;
+ *
+ *  @since  1.7.5.
+ */
+// FIXME: Limit diff and page content size.
+// FIXME3.0: This class would need a bit of refactoring.  Method names, e.g. are confusing.
+public class RSSGenerator
+{
+<span class="fc" id="L59">    static Logger              log = Logger.getLogger( RSSGenerator.class );</span>
+    private WikiEngine         m_engine;
+
+<span class="fc" id="L62">    private String             m_channelDescription = &quot;&quot;;</span>
+<span class="fc" id="L63">    private String             m_channelLanguage    = &quot;en-us&quot;;</span>
+<span class="fc" id="L64">    private boolean            m_enabled = true;</span>
+
+    /**
+     *  Parameter value to represent RSS 1.0 feeds.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. 
+     */
+    public static final String RSS10 = &quot;rss10&quot;;
+
+    /**
+     *  Parameter value to represent RSS 2.0 feeds.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. 
+     */
+    public static final String RSS20 = &quot;rss20&quot;;
+    
+    /**
+     *  Parameter value to represent Atom feeds.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. 
+     */
+    public static final String ATOM  = &quot;atom&quot;;
+
+    /**
+     *  Parameter value to represent a 'blog' style feed. Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String MODE_BLOG = &quot;blog&quot;;
+    
+    /**
+     *  Parameter value to represent a 'wiki' style feed. Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String MODE_WIKI = &quot;wiki&quot;;
+
+    /**
+     *  Parameter value to represent a 'full' style feed. Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String MODE_FULL = &quot;full&quot;;
+
+    /**
+     *  Defines the property name for the RSS channel description.  Default value for the
+     *  channel description is an empty string.
+     *  @since 1.7.6.
+     */
+    public static final String PROP_CHANNEL_DESCRIPTION = &quot;jspwiki.rss.channelDescription&quot;;
+
+    /**
+     *  Defines the property name for the RSS channel language.  Default value for the
+     *  language is &quot;en-us&quot;.
+     *  @since 1.7.6.
+     */
+    public static final String PROP_CHANNEL_LANGUAGE    = &quot;jspwiki.rss.channelLanguage&quot;;
+
+    /**
+     *  Defins the property name for the RSS channel title.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_CHANNEL_TITLE       = &quot;jspwiki.rss.channelTitle&quot;;
+
+    /**
+     *  Defines the property name for the RSS generator main switch.
+     *  @since 1.7.6.
+     */
+    public static final String PROP_GENERATE_RSS        = &quot;jspwiki.rss.generate&quot;;
+
+    /**
+     *  Defines the property name for the RSS file that the wiki should generate.
+     *  @since 1.7.6.
+     */
+    public static final String PROP_RSSFILE             = &quot;jspwiki.rss.fileName&quot;;
+
+    /**
+     *  Defines the property name for the RSS generation interval in seconds.
+     *  @since 1.7.6.
+     */
+    public static final String PROP_INTERVAL            = &quot;jspwiki.rss.interval&quot;;
+
+    /**
+     *  Defines the property name for the RSS author.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_RSS_AUTHOR          = &quot;jspwiki.rss.author&quot;;
+
+    /**
+     *  Defines the property name for the RSS author email.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_RSS_AUTHOREMAIL     = &quot;jspwiki.rss.author.email&quot;;
+
+    /**
+     *  Property name for the RSS copyright info.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_RSS_COPYRIGHT       = &quot;jspwiki.rss.copyright&quot;;
+
+    /** Just for compatibilty.  @deprecated */
+    public static final String PROP_RSSAUTHOR           = PROP_RSS_AUTHOR;
+
+    /** Just for compatibilty.  @deprecated */
+    public static final String PROP_RSSAUTHOREMAIL      = PROP_RSS_AUTHOREMAIL;
+
+
+    private static final int MAX_CHARACTERS             = Integer.MAX_VALUE-1;
+
+    /**
+     *  Initialize the RSS generator for a given WikiEngine.
+     *
+     *  @param engine The WikiEngine.
+     *  @param properties The properties.
+     *  @throws NoRequiredPropertyException If something is missing from the given property set.
+     */
+    public RSSGenerator( WikiEngine engine, Properties properties )
+        throws NoRequiredPropertyException
+<span class="fc" id="L166">    {</span>
+<span class="fc" id="L167">        m_engine = engine;</span>
+
+<span class="fc" id="L169">        m_channelDescription = properties.getProperty( PROP_CHANNEL_DESCRIPTION,</span>
+                                                       m_channelDescription );
+<span class="fc" id="L171">        m_channelLanguage    = properties.getProperty( PROP_CHANNEL_LANGUAGE,</span>
+                                                       m_channelLanguage );
+<span class="fc" id="L173">    }</span>
+
+    /**
+     *  Does the required formatting and entity replacement for XML.
+     *  
+     *  @param s String to format.
+     *  @return A formatted string.
+     */
+    // FIXME: Replicates Feed.format().
+    public static String format( String s )
+    {
+<span class="nc" id="L184">        s = TextUtil.replaceString( s, &quot;&amp;&quot;, &quot;&amp;amp;&quot; );</span>
+<span class="nc" id="L185">        s = TextUtil.replaceString( s, &quot;&lt;&quot;, &quot;&amp;lt;&quot; );</span>
+<span class="nc" id="L186">        s = TextUtil.replaceString( s, &quot;]]&gt;&quot;, &quot;]]&amp;gt;&quot; );</span>
+
+<span class="nc" id="L188">        return s.trim();</span>
+    }
+
+    private String getAuthor( WikiPage page )
+    {
+<span class="fc" id="L193">        String author = page.getAuthor();</span>
+
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        if( author == null ) author = &quot;An unknown author&quot;;</span>
+
+<span class="fc" id="L197">        return author;</span>
+    }
+
+    private String getAttachmentDescription( Attachment att )
+    {
+<span class="nc" id="L202">        String author = getAuthor(att);</span>
+<span class="nc" id="L203">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if( att.getVersion() != 1 )</span>
+        {
+<span class="nc" id="L207">            sb.append(author+&quot; uploaded a new version of this attachment on &quot;+att.getLastModified() );</span>
+        }
+        else
+        {
+<span class="nc" id="L211">            sb.append(author+&quot; created this attachment on &quot;+att.getLastModified() );</span>
+        }
+
+<span class="nc" id="L214">        sb.append(&quot;&lt;br /&gt;&lt;hr /&gt;&lt;br /&gt;&quot;);</span>
+<span class="nc" id="L215">        sb.append( &quot;Parent page: &lt;a href=\&quot;&quot;+</span>
+<span class="nc" id="L216">                   m_engine.getURL( WikiContext.VIEW, att.getParentName(), null, true ) +</span>
+<span class="nc" id="L217">                   &quot;\&quot;&gt;&quot;+att.getParentName()+&quot;&lt;/a&gt;&lt;br /&gt;&quot; );</span>
+<span class="nc" id="L218">        sb.append( &quot;Info page: &lt;a href=\&quot;&quot;+</span>
+<span class="nc" id="L219">                   m_engine.getURL( WikiContext.INFO, att.getName(), null, true ) +</span>
+<span class="nc" id="L220">                   &quot;\&quot;&gt;&quot;+att.getName()+&quot;&lt;/a&gt;&quot; );</span>
+
+<span class="nc" id="L222">        return sb.toString();</span>
+    }
+
+    private String getPageDescription( WikiPage page )
+    {
+<span class="fc" id="L227">    	StringBuilder buf = new StringBuilder();</span>
+<span class="fc" id="L228">        String author = getAuthor(page);</span>
+
+<span class="fc" id="L230">        WikiContext ctx = new WikiContext( m_engine, page );</span>
+<span class="pc bpc" id="L231" title="1 of 2 branches missed.">        if( page.getVersion() &gt; 1 )</span>
+        {
+<span class="nc" id="L233">            String diff = m_engine.getDiff( ctx,</span>
+<span class="nc" id="L234">                                            page.getVersion()-1, // FIXME: Will fail when non-contiguous versions</span>
+<span class="nc" id="L235">                                            page.getVersion() );</span>
+
+<span class="nc" id="L237">            buf.append(author+&quot; changed this page on &quot;+page.getLastModified()+&quot;:&lt;br /&gt;&lt;hr /&gt;&lt;br /&gt;&quot; );</span>
+<span class="nc" id="L238">            buf.append(diff);</span>
+<span class="nc" id="L239">        }</span>
+        else
+        {
+<span class="fc" id="L242">            buf.append(author+&quot; created this page on &quot;+page.getLastModified()+&quot;:&lt;br /&gt;&lt;hr /&gt;&lt;br /&gt;&quot; );</span>
+<span class="fc" id="L243">            buf.append(m_engine.getHTML( page.getName() ));</span>
+        }
+
+<span class="fc" id="L246">        return buf.toString();</span>
+    }
+
+    private String getEntryDescription( WikiPage page )
+    {
+        String res;
+
+<span class="pc bpc" id="L253" title="1 of 2 branches missed.">        if( page instanceof Attachment )</span>
+        {
+<span class="nc" id="L255">            res = getAttachmentDescription( (Attachment)page );</span>
+        }
+        else
+        {
+<span class="fc" id="L259">            res = getPageDescription( page );</span>
+        }
+
+<span class="fc" id="L262">        return res;</span>
+    }
+
+    // FIXME: This should probably return something more intelligent
+    private String getEntryTitle( WikiPage page )
+    {
+<span class="nc" id="L268">        return page.getName()+&quot;, version &quot;+page.getVersion();</span>
+    }
+
+    /**
+     *  Generates the RSS resource.  You probably want to output this
+     *  result into a file or something, or serve as output from a servlet.
+     *  
+     *  @return A RSS 1.0 feed in the &quot;full&quot; mode.
+     */
+    public String generate()
+    {
+<span class="fc" id="L279">        WikiContext context = new WikiContext( m_engine,new WikiPage( m_engine, &quot;__DUMMY&quot; ) );</span>
+<span class="fc" id="L280">        context.setRequestContext( WikiContext.RSS );</span>
+<span class="fc" id="L281">        Feed feed = new RSS10Feed( context );</span>
+
+<span class="fc" id="L283">        String result = generateFullWikiRSS( context, feed );</span>
+
+<span class="fc" id="L285">        result = &quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n&quot; + result;</span>
+
+<span class="fc" id="L287">        return result;</span>
+    }
+
+    /**
+     * Returns the content type of this RSS feed.
+     *  @since 2.3.15
+     * @param mode the RSS mode: {@link #RSS10}, {@link #RSS20} or {@link #ATOM}.
+     * @return the content type
+     */
+    public static String getContentType( String mode )
+    {
+<span class="nc bnc" id="L298" title="All 4 branches missed.">        if( mode.equals( RSS10 )||mode.equals(RSS20) )</span>
+        {
+<span class="nc" id="L300">            return &quot;application/rss+xml&quot;;</span>
+        }
+<span class="nc bnc" id="L302" title="All 2 branches missed.">        else if( mode.equals(ATOM) )</span>
+        {
+<span class="nc" id="L304">            return &quot;application/atom+xml&quot;;</span>
+        }
+
+<span class="nc" id="L307">        return &quot;application/octet-stream&quot;; // Unknown type</span>
+    }
+
+    /**
+     *  Generates a feed based on a context and list of changes.
+     * @param wikiContext The WikiContext
+     * @param changed A list of Entry objects
+     * @param mode The mode (wiki/blog)
+     * @param type The type (RSS10, RSS20, ATOM).  Default is RSS 1.0
+     * @return Fully formed XML.
+     *
+     * @throws ProviderException If the underlying provider failed.
+     * @throws IllegalArgumentException If an illegal mode is given.
+     */
+    public String generateFeed( WikiContext wikiContext, List&lt; WikiPage &gt; changed, String mode, String type )
+        throws ProviderException, IllegalArgumentException
+    {
+<span class="nc" id="L324">        Feed feed = null;</span>
+<span class="nc" id="L325">        String res = null;</span>
+
+<span class="nc bnc" id="L327" title="All 2 branches missed.">        if( ATOM.equals(type) )</span>
+        {
+<span class="nc" id="L329">            feed = new AtomFeed( wikiContext );</span>
+        }
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        else if( RSS20.equals( type ) )</span>
+        {
+<span class="nc" id="L333">            feed = new RSS20Feed( wikiContext );</span>
+        }
+        else
+        {
+<span class="nc" id="L337">            feed = new RSS10Feed( wikiContext );</span>
+        }
+
+<span class="nc" id="L340">        feed.setMode( mode );</span>
+
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if( MODE_BLOG.equals( mode ) )</span>
+        {
+<span class="nc" id="L344">            res = generateBlogRSS( wikiContext, changed, feed );</span>
+        }
+<span class="nc bnc" id="L346" title="All 2 branches missed.">        else if( MODE_FULL.equals(mode) )</span>
+        {
+<span class="nc" id="L348">            res = generateFullWikiRSS( wikiContext, feed );</span>
+        }
+<span class="nc bnc" id="L350" title="All 2 branches missed.">        else if( MODE_WIKI.equals(mode) )</span>
+        {
+<span class="nc" id="L352">            res = generateWikiPageRSS( wikiContext, changed, feed );</span>
+        }
+        else
+        {
+<span class="nc" id="L356">            throw new IllegalArgumentException( &quot;Invalid value for feed mode: &quot;+mode );</span>
+        }
+
+<span class="nc" id="L359">        return res;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if RSS generation is enabled.
+     * @return whether RSS generation is currently enabled
+     */
+    public boolean isEnabled()
+    {
+<span class="fc" id="L368">        return m_enabled;</span>
+    }
+
+    /**
+     * Turns RSS generation on or off. This setting is used to set
+     * the &quot;enabled&quot; flag only for use by callers, and does not
+     * actually affect whether the {@link #generate()} or
+     * {@link #generateFeed(WikiContext, List, String, String)}
+     * methods output anything.
+     * @param enabled whether RSS generation is considered enabled.
+     */
+    public synchronized void setEnabled( boolean enabled )
+    {
+<span class="nc" id="L381">        m_enabled = enabled;</span>
+<span class="nc" id="L382">    }</span>
+
+    /**
+     *  Generates an RSS feed for the entire wiki.  Each item should be an instance of the RSSItem class.
+     *  
+     *  @param wikiContext A WikiContext
+     *  @param feed A Feed to generate the feed to.
+     *  @return feed.getString().
+     */
+    protected String generateFullWikiRSS( WikiContext wikiContext, Feed feed )
+    {
+<span class="fc" id="L393">        feed.setChannelTitle( m_engine.getApplicationName() );</span>
+<span class="fc" id="L394">        feed.setFeedURL( m_engine.getBaseURL() );</span>
+<span class="fc" id="L395">        feed.setChannelLanguage( m_channelLanguage );</span>
+<span class="fc" id="L396">        feed.setChannelDescription( m_channelDescription );</span>
+
+<span class="fc" id="L398">        Set&lt; WikiPage &gt; changed = m_engine.getRecentChanges();</span>
+
+<span class="fc" id="L400">        WikiSession session = WikiSession.guestSession( m_engine );</span>
+<span class="fc" id="L401">        int items = 0;</span>
+<span class="pc bpc" id="L402" title="1 of 4 branches missed.">        for( Iterator&lt; WikiPage &gt; i = changed.iterator(); i.hasNext() &amp;&amp; items &lt; 15; items++ )</span>
+        {
+<span class="fc" id="L404">            WikiPage page = i.next();</span>
+
+            //
+            //  Check if the anonymous user has view access to this page.
+            //
+
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">            if( !m_engine.getAuthorizationManager().checkPermission(session, new PagePermission(page,PagePermission.VIEW_ACTION) ) )</span>
+            {
+                // No permission, skip to the next one.
+<span class="nc" id="L413">                continue;</span>
+            }
+
+<span class="fc" id="L416">            Entry e = new Entry();</span>
+
+<span class="fc" id="L418">            e.setPage( page );</span>
+
+            String url;
+
+<span class="pc bpc" id="L422" title="1 of 2 branches missed.">            if( page instanceof Attachment )</span>
+            {
+<span class="nc" id="L424">                url = m_engine.getURL( WikiContext.ATTACH,</span>
+<span class="nc" id="L425">                                       page.getName(),</span>
+                                       null,
+                                       true );
+            }
+            else
+            {
+<span class="fc" id="L431">                url = m_engine.getURL( WikiContext.VIEW,</span>
+<span class="fc" id="L432">                                       page.getName(),</span>
+                                       null,
+                                       true );
+            }
+
+<span class="fc" id="L437">            e.setURL( url );</span>
+<span class="fc" id="L438">            e.setTitle( page.getName() );</span>
+<span class="fc" id="L439">            e.setContent( getEntryDescription(page) );</span>
+<span class="fc" id="L440">            e.setAuthor( getAuthor(page) );</span>
+
+<span class="fc" id="L442">            feed.addEntry( e );</span>
+        }
+
+<span class="fc" id="L445">        return feed.getString();</span>
+    }
+
+    /**
+     *  Create RSS/Atom as if this page was a wikipage (in contrast to Blog mode).
+     *
+     * @param wikiContext The WikiContext
+     * @param changed A List of changed WikiPages.
+     * @param feed A Feed object to fill.
+     * @return the RSS representation of the wiki context
+     */
+    protected String generateWikiPageRSS( WikiContext wikiContext, List&lt; WikiPage &gt; changed, Feed feed )
+    {
+<span class="nc" id="L458">        feed.setChannelTitle( m_engine.getApplicationName()+&quot;: &quot;+wikiContext.getPage().getName() );</span>
+<span class="nc" id="L459">        feed.setFeedURL( wikiContext.getViewURL( wikiContext.getPage().getName() ) );</span>
+<span class="nc" id="L460">        String language = m_engine.getVariable( wikiContext, PROP_CHANNEL_LANGUAGE );</span>
+
+<span class="nc bnc" id="L462" title="All 2 branches missed.">        if( language != null )</span>
+<span class="nc" id="L463">            feed.setChannelLanguage( language );</span>
+        else
+<span class="nc" id="L465">            feed.setChannelLanguage( m_channelLanguage );</span>
+
+<span class="nc" id="L467">        String channelDescription = m_engine.getVariable( wikiContext, PROP_CHANNEL_DESCRIPTION );</span>
+
+<span class="nc bnc" id="L469" title="All 2 branches missed.">        if( channelDescription != null )</span>
+        {
+<span class="nc" id="L471">            feed.setChannelDescription( channelDescription );</span>
+        }
+
+<span class="nc" id="L474">        Collections.sort( changed, new PageTimeComparator() );</span>
+
+<span class="nc" id="L476">        int items = 0;</span>
+<span class="nc bnc" id="L477" title="All 4 branches missed.">        for( Iterator&lt; WikiPage &gt; i = changed.iterator(); i.hasNext() &amp;&amp; items &lt; 15; items++ )</span>
+        {
+<span class="nc" id="L479">            WikiPage page = i.next();</span>
+
+<span class="nc" id="L481">            Entry e = new Entry();</span>
+
+<span class="nc" id="L483">            e.setPage( page );</span>
+
+            String url;
+
+<span class="nc bnc" id="L487" title="All 2 branches missed.">            if( page instanceof Attachment )</span>
+            {
+<span class="nc" id="L489">                url = m_engine.getURL( WikiContext.ATTACH,</span>
+<span class="nc" id="L490">                                       page.getName(),</span>
+<span class="nc" id="L491">                                       &quot;version=&quot;+page.getVersion(),</span>
+                                       true );
+            }
+            else
+            {
+<span class="nc" id="L496">                url = m_engine.getURL( WikiContext.VIEW,</span>
+<span class="nc" id="L497">                                       page.getName(),</span>
+<span class="nc" id="L498">                                       &quot;version=&quot;+page.getVersion(),</span>
+                                       true );
+            }
+
+            // Unfortunately, this is needed because the code will again go through
+            // replacement conversion
+
+<span class="nc" id="L505">            url = TextUtil.replaceString( url, &quot;&amp;amp;&quot;, &quot;&amp;&quot; );</span>
+
+<span class="nc" id="L507">            e.setURL( url );</span>
+<span class="nc" id="L508">            e.setTitle( getEntryTitle(page) );</span>
+<span class="nc" id="L509">            e.setContent( getEntryDescription(page) );</span>
+<span class="nc" id="L510">            e.setAuthor( getAuthor(page) );</span>
+
+<span class="nc" id="L512">            feed.addEntry( e );</span>
+        }
+
+<span class="nc" id="L515">        return feed.getString();</span>
+    }
+
+
+    /**
+     *  Creates RSS from modifications as if this page was a blog (using the WeblogPlugin).
+     *
+     *  @param wikiContext The WikiContext, as usual.
+     *  @param changed A list of the changed pages.
+     *  @param feed A valid Feed object.  The feed will be used to create the RSS/Atom, depending
+     *              on which kind of an object you want to put in it.
+     *  @return A String of valid RSS or Atom.
+     *  @throws ProviderException If reading of pages was not possible.
+     */
+    protected String generateBlogRSS( WikiContext wikiContext, List&lt; WikiPage &gt; changed, Feed feed )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L532" title="1 of 2 branches missed.">        if( log.isDebugEnabled() ) log.debug(&quot;Generating RSS for blog, size=&quot;+changed.size());</span>
+
+<span class="fc" id="L534">        String ctitle = m_engine.getVariable( wikiContext, PROP_CHANNEL_TITLE );</span>
+
+<span class="pc bpc" id="L536" title="1 of 2 branches missed.">        if( ctitle != null )</span>
+<span class="nc" id="L537">            feed.setChannelTitle( ctitle );</span>
+        else
+<span class="fc" id="L539">            feed.setChannelTitle( m_engine.getApplicationName()+&quot;:&quot;+wikiContext.getPage().getName() );</span>
+
+<span class="fc" id="L541">        feed.setFeedURL( wikiContext.getViewURL( wikiContext.getPage().getName() ) );</span>
+
+<span class="fc" id="L543">        String language = m_engine.getVariable( wikiContext, PROP_CHANNEL_LANGUAGE );</span>
+
+<span class="pc bpc" id="L545" title="1 of 2 branches missed.">        if( language != null )</span>
+<span class="fc" id="L546">            feed.setChannelLanguage( language );</span>
+        else
+<span class="nc" id="L548">            feed.setChannelLanguage( m_channelLanguage );</span>
+
+<span class="fc" id="L550">        String channelDescription = m_engine.getVariable( wikiContext, PROP_CHANNEL_DESCRIPTION );</span>
+
+<span class="pc bpc" id="L552" title="1 of 2 branches missed.">        if( channelDescription != null )</span>
+        {
+<span class="fc" id="L554">            feed.setChannelDescription( channelDescription );</span>
+        }
+
+<span class="fc" id="L557">        Collections.sort( changed, new PageTimeComparator() );</span>
+
+<span class="fc" id="L559">        int items = 0;</span>
+<span class="pc bpc" id="L560" title="1 of 4 branches missed.">        for( Iterator&lt; WikiPage &gt; i = changed.iterator(); i.hasNext() &amp;&amp; items &lt; 15; items++ )</span>
+        {
+<span class="fc" id="L562">            WikiPage page = i.next();</span>
+
+<span class="fc" id="L564">            Entry e = new Entry();</span>
+
+<span class="fc" id="L566">            e.setPage( page );</span>
+
+            String url;
+
+<span class="pc bpc" id="L570" title="1 of 2 branches missed.">            if( page instanceof Attachment )</span>
+            {
+<span class="nc" id="L572">                url = m_engine.getURL( WikiContext.ATTACH,</span>
+<span class="nc" id="L573">                                       page.getName(),</span>
+                                       null,
+                                       true );
+            }
+            else
+            {
+<span class="fc" id="L579">                url = m_engine.getURL( WikiContext.VIEW,</span>
+<span class="fc" id="L580">                                       page.getName(),</span>
+                                       null,
+                                       true );
+            }
+
+<span class="fc" id="L585">            e.setURL( url );</span>
+
+            //
+            //  Title
+            //
+
+<span class="fc" id="L591">            String pageText = m_engine.getPureText(page.getName(), WikiProvider.LATEST_VERSION );</span>
+
+<span class="fc" id="L593">            String title = &quot;&quot;;</span>
+<span class="fc" id="L594">            int firstLine = pageText.indexOf('\n');</span>
+
+<span class="pc bpc" id="L596" title="1 of 2 branches missed.">            if( firstLine &gt; 0 )</span>
+            {
+<span class="fc" id="L598">                title = pageText.substring( 0, firstLine ).trim();</span>
+            }
+
+<span class="pc bpc" id="L601" title="1 of 2 branches missed.">            if( title.length() == 0 ) title = page.getName();</span>
+
+            // Remove wiki formatting
+<span class="fc bfc" id="L604" title="All 2 branches covered.">            while( title.startsWith(&quot;!&quot;) ) title = title.substring(1);</span>
+
+<span class="fc" id="L606">            e.setTitle( title );</span>
+
+            //
+            //  Description
+            //
+
+<span class="pc bpc" id="L612" title="1 of 2 branches missed.">            if( firstLine &gt; 0 )</span>
+            {
+<span class="fc" id="L614">                int maxlen = pageText.length();</span>
+<span class="pc bpc" id="L615" title="1 of 2 branches missed.">                if( maxlen &gt; MAX_CHARACTERS ) maxlen = MAX_CHARACTERS;</span>
+
+<span class="pc bpc" id="L617" title="1 of 2 branches missed.">                if( maxlen &gt; 0 )</span>
+                {
+<span class="fc" id="L619">                    pageText = m_engine.textToHTML( wikiContext,</span>
+<span class="fc" id="L620">                                                    pageText.substring( firstLine+1,</span>
+<span class="fc" id="L621">                                                                        maxlen ).trim() );</span>
+
+<span class="pc bpc" id="L623" title="1 of 2 branches missed.">                    if( maxlen == MAX_CHARACTERS ) pageText += &quot;...&quot;;</span>
+
+<span class="fc" id="L625">                    e.setContent( pageText );</span>
+                }
+                else
+                {
+<span class="nc" id="L629">                    e.setContent( title );</span>
+                }
+<span class="fc" id="L631">            }</span>
+            else
+            {
+<span class="nc" id="L634">                e.setContent( title );</span>
+            }
+
+<span class="fc" id="L637">            e.setAuthor( getAuthor(page) );</span>
+
+<span class="fc" id="L639">            feed.addEntry( e );</span>
+        }
+
+<span class="fc" id="L642">        return feed.getString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

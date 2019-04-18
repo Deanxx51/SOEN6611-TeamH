@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultUserProfile.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.user</a> &gt; <span class="el_source">DefaultUserProfile.java</span></div><h1>DefaultUserProfile.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.user;
+
+import java.io.Serializable;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.WikiSession;
+
+/**
+ * Default implementation for representing wiki user information, such as the
+ * login name, full name, wiki name, and e-mail address.
+ * @since 2.3
+ */
+
+public final class DefaultUserProfile implements UserProfile
+{
+    private static final long serialVersionUID = -5600466893735300647L;
+
+    private static final String EMPTY_STRING = &quot;&quot;;
+
+    private static final String WHITESPACE = &quot;\\s&quot;;
+    
+<span class="fc" id="L45">    private Map&lt;String,Serializable&gt; attributes = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L47">    private Date     created   = null;</span>
+
+<span class="fc" id="L49">    private String   email     = null;</span>
+
+<span class="fc" id="L51">    private String   fullname  = null;</span>
+    
+<span class="fc" id="L53">    private Date lockExpiry = null;</span>
+
+<span class="fc" id="L55">    private String   loginName = null;</span>
+
+<span class="fc" id="L57">    private Date     modified  = null;</span>
+
+<span class="fc" id="L59">    private String   password  = null;</span>
+    
+<span class="fc" id="L61">    private String uid = null;</span>
+
+<span class="fc" id="L63">    private String   wikiname  = null;</span>
+
+    /**
+     * Private constructor to prevent direct instantiation.
+     */
+<span class="fc" id="L68">    private DefaultUserProfile() {}</span>
+
+    /**
+     * Static factory method that creates a new DefaultUserProfile
+     * and sets a unique identifier (uid) for the supplied UserDatabase.
+     * @param db the UserDatabase for which the uid should be
+     * created
+     * @return the new profile
+     */
+    protected static UserProfile newProfile( UserDatabase db )
+    {
+<span class="fc" id="L79">        UserProfile profile = new DefaultUserProfile();</span>
+<span class="fc" id="L80">        profile.setUid( AbstractUserDatabase.generateUid( db ) );</span>
+<span class="fc" id="L81">        return profile;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean equals( Object o )
+    {
+<span class="pc bpc" id="L90" title="2 of 4 branches missed.">        if ( ( o != null ) &amp;&amp; ( o instanceof UserProfile ) )</span>
+        {
+<span class="fc" id="L92">            DefaultUserProfile u = (DefaultUserProfile) o;</span>
+<span class="pc bpc" id="L93" title="1 of 4 branches missed.">            return  same( fullname, u.fullname ) &amp;&amp; same( password, u.password )</span>
+<span class="pc bpc" id="L94" title="3 of 6 branches missed.">                    &amp;&amp; same( loginName, u.loginName ) &amp;&amp; same(StringUtils.lowerCase( email ), StringUtils.lowerCase( u.email ) ) &amp;&amp; same( wikiname,</span>
+                    u.wikiname );
+        }
+
+<span class="nc" id="L98">        return false;</span>
+    }
+
+    @Override
+    public int hashCode()
+    {
+<span class="nc bnc" id="L104" title="All 4 branches missed.">        return (fullname  != null ? fullname.hashCode()  : 0) ^</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">               (password  != null ? password.hashCode()  : 0) ^</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">               (loginName != null ? loginName.hashCode() : 0) ^</span>
+<span class="nc bnc" id="L107" title="All 2 branches missed.">               (wikiname  != null ? wikiname.hashCode()  : 0) ^</span>
+<span class="nc" id="L108">               (email     != null ? StringUtils.lowerCase( email ).hashCode()     : 0);</span>
+    }
+
+    /**
+     * Returns the creation date
+     * @return the creation date
+     * @see org.apache.wiki.auth.user.UserProfile#getCreated()
+     */
+    @Override
+    public Date getCreated()
+    {
+<span class="fc" id="L119">        return created;</span>
+    }
+
+    /**
+     * Returns the user's e-mail address.
+     * @return the e-mail address
+     */
+    @Override
+    public String getEmail()
+    {
+<span class="fc" id="L129">        return email;</span>
+    }
+
+    /**
+     * Returns the user's full name.
+     * @return the full name
+     */
+    @Override
+    public String getFullname()
+    {
+<span class="fc" id="L139">        return fullname;</span>
+    }
+
+    /**
+     * Returns the last-modified date.
+     * @return the last-modified date
+     * @see org.apache.wiki.auth.user.UserProfile#getLastModified()
+     */
+    @Override
+    public Date getLastModified()
+    {
+<span class="fc" id="L150">        return modified;</span>
+    }
+
+    /**
+     * Returns the user's login name.
+     * @return the login name
+     */
+    @Override
+    public String getLoginName()
+    {
+<span class="fc" id="L160">        return loginName;</span>
+    }
+
+    /**
+     * Returns the user password for use with custom authentication. Note that
+     * the password field is not meaningful for container authentication; the
+     * user's private credentials are generally stored elsewhere. While it
+     * depends on the {@link UserDatabase}implementation, in most cases the
+     * value returned by this method will be a password hash, not the password
+     * itself.
+     * @return the password
+     */
+    @Override
+    public String getPassword()
+    {
+<span class="fc" id="L175">        return password;</span>
+    }
+
+    /**
+     * Returns the user's wiki name.
+     * @return the wiki name.
+     */
+    @Override
+    public String getWikiName()
+    {
+<span class="fc" id="L185">        return wikiname;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the user profile is
+     * new. This implementation checks whether
+     * {@link #getLastModified()} returns &lt;code&gt;null&lt;/code&gt;
+     * to determine the status.
+     * @see org.apache.wiki.auth.user.UserProfile#isNew()
+     */
+    @Override
+    public boolean isNew()
+    {
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        return  modified == null;</span>
+    }
+
+    /**
+     * @param date the creation date
+     * @see org.apache.wiki.auth.user.UserProfile#setCreated(java.util.Date)
+     */
+    @Override
+    public void setCreated(Date date)
+    {
+<span class="fc" id="L208">        created = date;</span>
+<span class="fc" id="L209">    }</span>
+
+    /**
+     * Sets the user's e-mail address.
+     * @param email the e-mail address
+     */
+    @Override
+    public void setEmail( String email )
+    {
+<span class="fc" id="L218">    	this.email = email;</span>
+<span class="fc" id="L219">    }</span>
+
+    /**
+     * Sets the user's full name. For example, &quot;Janne Jalkanen.&quot;
+     * @param arg the full name
+     */
+    @Override
+    public void setFullname( String arg )
+    {
+<span class="fc" id="L228">        fullname = arg;</span>
+
+        // Compute wiki name
+<span class="fc bfc" id="L231" title="All 2 branches covered.">        if ( fullname != null )</span>
+        {
+<span class="fc" id="L233">            wikiname = fullname.replaceAll(WHITESPACE, EMPTY_STRING);</span>
+        }
+<span class="fc" id="L235">    }</span>
+
+    /**
+     * Sets the last-modified date.
+     * @param date the last-modified date
+     * @see org.apache.wiki.auth.user.UserProfile#setLastModified(java.util.Date)
+     */
+    @Override
+    public void setLastModified( Date date )
+    {
+<span class="fc" id="L245">        modified = date;</span>
+<span class="fc" id="L246">    }</span>
+
+    /**
+     * Sets the name by which the user logs in. The login name is used as the
+     * username for custom authentication (see
+     * {@link org.apache.wiki.auth.AuthenticationManager#login(WikiSession,HttpServletRequest, String, String)}).
+     * The login name is typically a short name (&quot;jannej&quot;). In contrast, the
+     * wiki name is typically of type FirstnameLastName (&quot;JanneJalkanen&quot;).
+     * @param name the login name
+     */
+    @Override
+    public void setLoginName( String name )
+    {
+<span class="fc" id="L259">        loginName = name;</span>
+<span class="fc" id="L260">    }</span>
+
+    /**
+     * Sets the user's password for use with custom authentication. It is
+     * &lt;em&gt;not&lt;/em&gt; the responsibility of implementing classes to hash the
+     * password; that responsibility is borne by the UserDatabase implementation
+     * during save operations (see {@link UserDatabase#save(UserProfile)}).
+     * Note that the password field is not meaningful for container
+     * authentication; the user's private credentials are generally stored
+     * elsewhere.
+     * @param arg the password
+     */
+    @Override
+    public void setPassword( String arg )
+    {
+<span class="fc" id="L275">        password = arg;</span>
+<span class="fc" id="L276">    }</span>
+
+    /**
+     * No-op method. In previous versions of JSPWiki, the method
+     * set the user's wiki name directly. Now, the wiki name is automatically
+     * calculated based on the full name.
+     * @param name the wiki name
+     * @deprecated This method will be removed in a future release.
+     */
+    @Deprecated
+    @Override
+    public void setWikiName( String name )
+    {
+<span class="nc" id="L289">    }</span>
+
+    /**
+     * Returns a string representation of this user profile.
+     * @return the string
+     */
+    @Override
+    public String toString()
+    {
+<span class="nc" id="L298">        return &quot;[DefaultUserProfile: '&quot; + getFullname() + &quot;']&quot;;</span>
+    }
+
+    /**
+     * Private method that compares two objects and determines whether they are
+     * equal. Two nulls are considered equal.
+     * @param arg1 the first object
+     * @param arg2 the second object
+     * @return the result of the comparison
+     */
+    private boolean same( Object arg1, Object arg2 )
+    {
+<span class="pc bpc" id="L310" title="1 of 4 branches missed.">        if ( arg1 == null &amp;&amp; arg2 == null )</span>
+        {
+<span class="fc" id="L312">            return true;</span>
+        }
+<span class="pc bpc" id="L314" title="1 of 4 branches missed.">        if ( arg1 == null || arg2 == null )</span>
+        {
+<span class="fc" id="L316">            return false;</span>
+        }
+<span class="fc" id="L318">        return arg1.equals( arg2 );</span>
+    }
+
+    //--------------------------- Attribute and lock interface implementations ---------------------------
+    
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Map&lt;String,Serializable&gt; getAttributes()
+    {
+<span class="fc" id="L329">        return attributes;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Date getLockExpiry()
+    {
+<span class="fc bfc" id="L338" title="All 2 branches covered.">        return isLocked() ? lockExpiry : null;</span>
+    }
+    
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getUid()
+    {
+<span class="fc" id="L347">        return uid;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isLocked()
+    {
+<span class="fc bfc" id="L356" title="All 4 branches covered.">        boolean locked =  lockExpiry != null &amp;&amp; System.currentTimeMillis() &lt; lockExpiry.getTime();</span>
+
+        // Clear the lock if it's expired already
+<span class="fc bfc" id="L359" title="All 4 branches covered.">        if ( !locked &amp;&amp; lockExpiry != null )</span>
+        {
+<span class="fc" id="L361">            lockExpiry = null;</span>
+        }
+<span class="fc" id="L363">        return locked;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setLockExpiry( Date expiry )
+    {
+<span class="fc" id="L372">    	this.lockExpiry = expiry;</span>
+<span class="fc" id="L373">    }</span>
+    
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void setUid( String uid )
+    {
+<span class="fc" id="L381">        this.uid = uid;</span>
+<span class="fc" id="L382">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

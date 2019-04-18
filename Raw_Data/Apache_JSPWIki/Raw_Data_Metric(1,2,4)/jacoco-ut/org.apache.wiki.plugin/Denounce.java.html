@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Denounce.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">Denounce.java</span></div><h1>Denounce.java</h1><pre class="source lang-java linenums">/*
+    Copyright (C) 2003 Janne Jalkanen (Janne.Jalkanen@iki.fi)
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.plugin;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+import org.apache.oro.text.GlobCompiler;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+
+/**
+ *  Denounces a link by removing it from any search engine.
+ *  &lt;br&gt; The bots are listed in org/apache/wiki/plugin/denounce.properties.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;link&lt;/b&gt; - The link to be denounced, this parameter is required&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;text&lt;/b&gt; - The text to use, defaults to the link&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 2.1.40.
+ */
+<span class="nc" id="L57">public class Denounce implements WikiPlugin</span>
+{
+<span class="nc" id="L59">    private static Logger     log = Logger.getLogger(Denounce.class);</span>
+
+    /** Parameter name for setting the link.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_LINK = &quot;link&quot;;
+    /** Parameter name for setting the text.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_TEXT = &quot;text&quot;;
+
+    private static final String PROPERTYFILE = &quot;org/apache/wiki/plugin/denounce.properties&quot;;
+    private static final String PROP_AGENTPATTERN   = &quot;denounce.agentpattern.&quot;;
+    private static final String PROP_HOSTPATTERN    = &quot;denounce.hostpattern.&quot;;
+    private static final String PROP_REFERERPATTERN = &quot;denounce.refererpattern.&quot;;
+
+    private static final String PROP_DENOUNCETEXT   = &quot;denounce.denouncetext&quot;;
+
+<span class="nc" id="L73">    private static ArrayList&lt;Pattern&gt; c_refererPatterns = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L74">    private static ArrayList&lt;Pattern&gt; c_agentPatterns   = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L75">    private static ArrayList&lt;Pattern&gt; c_hostPatterns    = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L77">    private static String    c_denounceText    = &quot;&quot;;</span>
+
+    /**
+     *  Prepares the different patterns for later use.  Compiling is
+     *  (probably) expensive, so we do it statically at class load time.
+     */
+    static
+    {
+        try
+        {
+<span class="nc" id="L87">            PatternCompiler compiler = new GlobCompiler();</span>
+<span class="nc" id="L88">            ClassLoader loader = Denounce.class.getClassLoader();</span>
+
+<span class="nc" id="L90">            InputStream in = loader.getResourceAsStream( PROPERTYFILE );</span>
+
+<span class="nc bnc" id="L92" title="All 2 branches missed.">            if( in == null )</span>
+            {
+<span class="nc" id="L94">                throw new IOException(&quot;No property file found! (Check the installation, it should be there.)&quot;);</span>
+            }
+
+<span class="nc" id="L97">            Properties props = new Properties();</span>
+<span class="nc" id="L98">            props.load( in );</span>
+
+<span class="nc" id="L100">            c_denounceText = props.getProperty( PROP_DENOUNCETEXT, c_denounceText );</span>
+
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            for( Enumeration&lt; ? &gt; e = props.propertyNames(); e.hasMoreElements(); )</span>
+            {
+<span class="nc" id="L104">                String name = (String) e.nextElement();</span>
+
+                try
+                {
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                    if( name.startsWith( PROP_REFERERPATTERN ) )</span>
+                    {
+<span class="nc" id="L110">                        c_refererPatterns.add( compiler.compile( props.getProperty(name) ) );</span>
+                    }
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                    else if( name.startsWith( PROP_AGENTPATTERN ) )</span>
+                    {
+<span class="nc" id="L114">                        c_agentPatterns.add( compiler.compile( props.getProperty(name) ) );</span>
+                    }
+<span class="nc bnc" id="L116" title="All 2 branches missed.">                    else if( name.startsWith( PROP_HOSTPATTERN ) )</span>
+                    {
+<span class="nc" id="L118">                        c_hostPatterns.add( compiler.compile( props.getProperty(name) ) );</span>
+                    }
+                }
+<span class="nc" id="L121">                catch( MalformedPatternException ex )</span>
+                {
+<span class="nc" id="L123">                    log.error( &quot;Malformed URL pattern in &quot;+PROPERTYFILE+&quot;: &quot;+props.getProperty(name), ex );</span>
+<span class="nc" id="L124">                }</span>
+<span class="nc" id="L125">            }</span>
+
+<span class="nc" id="L127">            log.debug(&quot;Added &quot;+c_refererPatterns.size()+c_agentPatterns.size()+c_hostPatterns.size()+&quot; crawlers to denounce list.&quot;);</span>
+        }
+<span class="nc" id="L129">        catch( IOException e )</span>
+        {
+<span class="nc" id="L131">            log.error( &quot;Unable to load URL patterns from &quot;+PROPERTYFILE, e );</span>
+        }
+<span class="nc" id="L133">        catch( Exception e )</span>
+        {
+<span class="nc" id="L135">            log.error( &quot;Unable to initialize Denounce plugin&quot;, e );</span>
+<span class="nc" id="L136">        }</span>
+<span class="nc" id="L137">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L146">        String link = params.get( PARAM_LINK );</span>
+<span class="nc" id="L147">        String text = params.get( PARAM_TEXT );</span>
+<span class="nc" id="L148">        boolean linkAllowed = true;</span>
+
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if( link == null )</span>
+        {
+<span class="nc" id="L152">            throw new PluginException(&quot;Denounce: No parameter &quot;+PARAM_LINK+&quot; defined!&quot;);</span>
+        }
+
+<span class="nc" id="L155">        HttpServletRequest request = context.getHttpRequest();</span>
+
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if( request != null )</span>
+        {
+<span class="nc bnc" id="L159" title="All 2 branches missed.">            linkAllowed = !matchHeaders( request );</span>
+        }
+
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        if( text == null ) text = link;</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if( linkAllowed )</span>
+        {
+            // FIXME: Should really call TranslatorReader
+<span class="nc" id="L167">            return &quot;&lt;a href=\&quot;&quot;+link+&quot;\&quot;&gt;&quot;+text+&quot;&lt;/a&gt;&quot;;</span>
+        }
+
+<span class="nc" id="L170">        return c_denounceText;</span>
+    }
+
+    /**
+     *  Returns true, if the path is found among the referers.
+     */
+    private boolean matchPattern( List&lt; Pattern &gt; list, String path )
+    {
+<span class="nc" id="L178">        PatternMatcher matcher = new Perl5Matcher();</span>
+
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        for( Iterator&lt; Pattern &gt; i = list.iterator(); i.hasNext(); )</span>
+        {
+<span class="nc bnc" id="L182" title="All 2 branches missed.">            if( matcher.matches( path, i.next() ) )</span>
+            {
+<span class="nc" id="L184">                return true;</span>
+            }
+        }
+
+<span class="nc" id="L188">        return false;</span>
+    }
+
+    // FIXME: Should really return immediately when a match is found.
+
+    private boolean matchHeaders( HttpServletRequest request )
+    {
+        //
+        //  User Agent
+        //
+
+<span class="nc" id="L199">        String userAgent = request.getHeader(&quot;User-Agent&quot;);</span>
+
+<span class="nc bnc" id="L201" title="All 4 branches missed.">        if( userAgent != null &amp;&amp; matchPattern( c_agentPatterns, userAgent ) )</span>
+        {
+<span class="nc" id="L203">            log.debug(&quot;Matched user agent &quot;+userAgent+&quot; for denounce.&quot;);</span>
+<span class="nc" id="L204">            return true;</span>
+        }
+
+        //
+        //  Referrer header
+        //
+
+<span class="nc" id="L211">        String refererPath = request.getHeader(&quot;Referer&quot;);</span>
+
+<span class="nc bnc" id="L213" title="All 4 branches missed.">        if( refererPath != null &amp;&amp; matchPattern( c_refererPatterns, refererPath ) )</span>
+        {
+<span class="nc" id="L215">            log.debug(&quot;Matched referer &quot;+refererPath+&quot; for denounce.&quot;);</span>
+<span class="nc" id="L216">            return true;</span>
+        }
+
+        //
+        //  Host
+        //
+
+<span class="nc" id="L223">        String host = request.getRemoteHost();</span>
+
+<span class="nc bnc" id="L225" title="All 4 branches missed.">        if( host != null &amp;&amp; matchPattern( c_hostPatterns, host ) )</span>
+        {
+<span class="nc" id="L227">            log.debug(&quot;Matched host &quot;+host+&quot; for denounce.&quot;);</span>
+<span class="nc" id="L228">            return true;</span>
+        }
+
+<span class="nc" id="L231">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

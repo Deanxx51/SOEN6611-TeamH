@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IncludeTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">IncludeTag.java</span></div><h1>IncludeTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.ServletException;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Includes an another JSP page, making sure that we actually pass
+ *  the WikiContext correctly.
+ *
+ *  @since 2.0
+ */
+// FIXME: Perhaps unnecessary?
+<span class="nc" id="L37">public class IncludeTag extends WikiTagBase {</span>
+
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L40">    private static final Logger log = Logger.getLogger( IncludeTag.class );</span>
+    
+    protected String m_page;
+
+    public void initTag()
+    {
+<span class="nc" id="L46">        super.initTag();</span>
+<span class="nc" id="L47">        m_page = null;</span>
+<span class="nc" id="L48">    }</span>
+
+    public void setPage( String page )
+    {
+<span class="nc" id="L52">        m_page = page;</span>
+<span class="nc" id="L53">    }</span>
+
+    public String getPage()
+    {
+<span class="nc" id="L57">        return m_page;</span>
+    }
+
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+        // WikiEngine engine = m_wikiContext.getEngine();
+
+<span class="nc" id="L66">        return SKIP_BODY;</span>
+    }
+
+    public final int doEndTag()
+        throws JspException
+    {
+        try
+        {
+<span class="nc" id="L74">            String page = m_wikiContext.getEngine().getTemplateManager().findJSP( pageContext,</span>
+<span class="nc" id="L75">                                                                                  m_wikiContext.getTemplate(),</span>
+                                                                                  m_page );
+            
+<span class="nc bnc" id="L78" title="All 2 branches missed.">            if( page == null )</span>
+            {
+<span class="nc" id="L80">                pageContext.getOut().println(&quot;No template file called '&quot;+TextUtil.replaceEntities(m_page)+&quot;'&quot;);</span>
+            }
+            else
+            {
+<span class="nc" id="L84">                pageContext.include( page );</span>
+            }
+        }
+<span class="nc" id="L87">        catch( ServletException e )</span>
+        {
+<span class="nc" id="L89">            log.warn( &quot;Including failed, got a servlet exception from sub-page. &quot;+</span>
+                      &quot;Rethrowing the exception to the JSP engine.&quot;, e );
+<span class="nc" id="L91">            throw new JspException( e.getMessage() );</span>
+        }
+<span class="nc" id="L93">        catch( IOException e )</span>
+        {
+<span class="nc" id="L95">            log.warn( &quot;I/O exception - probably the connection was broken. &quot;+</span>
+                      &quot;Rethrowing the exception to the JSP engine.&quot;, e );
+<span class="nc" id="L97">            throw new JspException( e.getMessage() );</span>
+<span class="nc" id="L98">        }</span>
+
+<span class="nc" id="L100">        return EVAL_PAGE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RSSImageLinkTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">RSSImageLinkTag.java</span></div><h1>RSSImageLinkTag.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.text.MessageFormat;
+import java.util.ResourceBundle;
+
+import javax.servlet.jsp.JspWriter;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.rss.RSSGenerator;
+
+/**
+ *  Writes an image link to a JSPWiki RSS file.  If RSS generation has
+ *  been turned off in jspwiki.properties, returns an empty string.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L39">public class RSSImageLinkTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 0L;
+
+    protected String m_title;
+    private   String m_mode;
+    private   String m_pageName;
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L54">        super.initTag();</span>
+<span class="nc" id="L55">        m_title = null;</span>
+<span class="nc" id="L56">        m_mode  = RSSGenerator.MODE_FULL;</span>
+<span class="nc" id="L57">        m_pageName = null;</span>
+<span class="nc" id="L58">    }</span>
+
+    /**
+     *  Sets the title for the link.  If not defined, no title is shown.
+     *
+     *  @param title A string for the title.
+     */
+    public void setTitle( String title )
+    {
+<span class="nc" id="L67">        m_title = title;</span>
+<span class="nc" id="L68">    }</span>
+
+    public void setMode( String mode )
+    {
+<span class="nc" id="L72">        m_mode = mode;</span>
+<span class="nc" id="L73">    }</span>
+
+
+    /**
+     *  Returns the title.
+     *
+     *  @return The title.
+     */
+    public String getTitle()
+    {
+<span class="nc" id="L83">        return m_title;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc" id="L93">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L94">        JspWriter out = pageContext.getOut();</span>
+<span class="nc" id="L95">        ResourceBundle rb = Preferences.getBundle( m_wikiContext, InternationalizationManager.CORE_BUNDLE );</span>
+
+<span class="nc bnc" id="L97" title="All 4 branches missed.">        if( engine.getRSSGenerator() != null &amp;&amp; engine.getRSSGenerator().isEnabled() )</span>
+        {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            if( RSSGenerator.MODE_FULL.equals(m_mode) )</span>
+            {
+<span class="nc" id="L101">                String rssURL = engine.getGlobalRSSURL();</span>
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if( rssURL != null )</span>
+                {
+<span class="nc" id="L105">                    out.print(&quot;&lt;a class=\&quot;feed\&quot; href=\&quot;&quot;+rssURL+&quot;\&quot;&gt;&amp;nbsp;&lt;/a&gt;&quot;);</span>
+                }
+<span class="nc" id="L107">            }</span>
+            else
+            {
+<span class="nc bnc" id="L110" title="All 2 branches missed.">                String page = m_pageName != null ? m_pageName : m_wikiContext.getPage().getName();</span>
+
+<span class="nc" id="L112">                String params = &quot;page=&quot;+page+&quot;&amp;mode=&quot;+m_mode;</span>
+<span class="nc" id="L113">                out.print( &quot;&lt;a href='&quot;+m_wikiContext.getURL( WikiContext.NONE, &quot;rss.jsp&quot;, params ));</span>
+<span class="nc" id="L114">                out.print( &quot;' class='feed'&quot; );</span>
+<span class="nc" id="L115">                out.print( &quot; title='&quot;+MessageFormat.format( rb.getString( &quot;rss.title&quot; ), page )+&quot;'&gt;&quot; );</span>
+<span class="nc" id="L116">                out.print( &quot;&amp;nbsp;&lt;/a&gt; &quot;);</span>
+            }
+        }
+
+<span class="nc" id="L120">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

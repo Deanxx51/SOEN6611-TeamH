@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PageSorter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.pages</a> &gt; <span class="el_source">PageSorter.java</span></div><h1>PageSorter.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.pages;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.comparators.JavaNaturalComparator;
+
+/**
+ * Wrapper class for managing and using the PageNameComparator.
+ * &lt;p&gt;
+ * &lt;b&gt;Note&lt;/b&gt; - this class is deliberately not null safe. Never call any of the methods with a null argument!
+ */
+public class PageSorter implements Comparator&lt; String &gt; {
+    
+<span class="fc" id="L39">    private static final Logger LOG = Logger.getLogger( PageSorter.class );</span>
+
+    // The name of the property that specifies the desired page name comparator
+    protected static final String PROP_PAGE_NAME_COMPARATOR = &quot;jspwiki.pageNameComparator.class&quot;;
+
+    private Comparator&lt; String &gt; m_comparator;
+
+    /** Default constructor uses Java &quot;natural&quot; ordering. */
+<span class="fc" id="L47">    public PageSorter() {</span>
+<span class="fc" id="L48">        m_comparator = JavaNaturalComparator.DEFAULT_JAVA_COMPARATOR;</span>
+<span class="fc" id="L49">    }</span>
+
+    /**
+     * Construct with a particular comparator.
+     * 
+     * @param comparator the Comparator to use
+     */
+<span class="nc" id="L56">    public PageSorter( Comparator&lt;String&gt; comparator ) {</span>
+<span class="nc" id="L57">        m_comparator = comparator;</span>
+<span class="nc" id="L58">    }</span>
+
+    /**
+     * Compare two page names (String version).
+     * 
+     * @param pageName1 the first page name
+     * @param pageName2 the second page name
+     * @return see java.util.Comparator
+     * @see java.util.Comparator#compare(java.lang.Object, java.lang.Object)
+     */
+    @Override
+    public int compare( String pageName1, String pageName2 ) {
+<span class="fc" id="L70">        return m_comparator.compare( pageName1, pageName2 );</span>
+    }
+
+    @Override
+    public boolean equals( Object o ) {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">        if( !(o instanceof PageSorter) ) {</span>
+<span class="nc" id="L76">            return false; // Definitely not equal</span>
+        }
+<span class="nc" id="L78">        PageSorter that = (PageSorter) o;</span>
+<span class="nc bnc" id="L79" title="All 4 branches missed.">        if( this == that || m_comparator == that.m_comparator ) {</span>
+<span class="nc" id="L80">            return true; // Essentially the same object</span>
+        }
+<span class="nc" id="L82">        return m_comparator.equals( that.m_comparator );</span>
+    }
+
+    /**
+     * Called by WikiEngine to initialise this instance. Tries to use class
+     * given by the PROP_PAGE_NAME_COMPARATOR property as the page name
+     * comparator. Uses a default comparator if this property is not set or
+     * there is any problem loading the specified class.
+     * 
+     * @param props this WikiEngine's properties.
+     */
+    @SuppressWarnings( &quot;unchecked&quot; )
+    public void initialize( Properties props ) {
+        // Default is Java natural order
+<span class="fc" id="L96">        m_comparator = JavaNaturalComparator.DEFAULT_JAVA_COMPARATOR;</span>
+<span class="fc" id="L97">        String className = props.getProperty( PROP_PAGE_NAME_COMPARATOR );</span>
+<span class="pc bpc" id="L98" title="1 of 4 branches missed.">        if( className != null &amp;&amp; className.length() &gt; 0 ) {</span>
+            try {
+<span class="fc" id="L100">                m_comparator = (Comparator&lt;String&gt;) ClassUtil.findClass( &quot;org.apache.wiki.util.comparators&quot;, className ).newInstance();</span>
+<span class="fc" id="L101">            } catch( Exception e ) {</span>
+<span class="fc" id="L102">                LOG.error( &quot;Falling back to default \&quot;natural\&quot; comparator&quot;, e );</span>
+<span class="fc" id="L103">            }</span>
+        }
+<span class="fc" id="L105">    }</span>
+
+    /**
+     * Sorts the specified list into ascending order based on the
+     * PageNameComparator. The actual sort is done using
+     * &lt;code&gt;Collections.sort()&lt;/code&gt;.
+     * 
+     * @param nameList the page names to be sorted
+     */
+    public void sort( List&lt; String &gt; nameList ) {
+<span class="nc" id="L115">        Collections.sort( nameList, m_comparator );</span>
+<span class="nc" id="L116">    }</span>
+
+    /**
+     * Sorts the specified array into ascending order based on the
+     * PageNameComparator. The actual sort is done using
+     * &lt;code&gt;Arrays.sort()&lt;/code&gt;.
+     * 
+     * @param nameArray the page names to be sorted
+     */
+    public void sort( String[] nameArray ) {
+<span class="nc" id="L126">        Arrays.sort( nameArray, m_comparator );</span>
+<span class="nc" id="L127">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

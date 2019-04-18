@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiCommand.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">WikiCommand.java</span></div><h1>WikiCommand.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui;
+
+import java.security.Permission;
+
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.permissions.WikiPermission;
+
+/**
+ * &lt;p&gt;Defines Commands for wiki-wide operations such as creating groups, editing
+ * preferences and profiles, and logging in/out. WikiCommands can be combined 
+ * with Strings (representing the name of a wiki instance) to produce
+ * targeted Commands.&lt;/p&gt;
+ * &lt;p&gt;This class is not &lt;code&gt;final&lt;/code&gt;; it may be extended in
+ * the future.&lt;/p&gt;
+ * @see org.apache.wiki.WikiEngine#getApplicationName()
+ * @since 2.4.22
+ */
+public final class WikiCommand extends AbstractCommand
+{
+
+<span class="fc" id="L39">    public static final Command CREATE_GROUP</span>
+        = new WikiCommand( &quot;createGroup&quot;, &quot;%uNewGroup.jsp&quot;, &quot;NewGroupContent.jsp&quot;, null, WikiPermission.CREATE_GROUPS_ACTION );
+
+<span class="fc" id="L42">    public static final Command ERROR</span>
+        = new WikiCommand( &quot;error&quot;, &quot;%uError.jsp&quot;, &quot;DisplayMessage.jsp&quot;, null, null );
+
+<span class="fc" id="L45">    public static final Command FIND</span>
+        = new WikiCommand( &quot;find&quot;, &quot;%uSearch.jsp&quot;, &quot;FindContent.jsp&quot;, null, null );
+
+<span class="fc" id="L48">    public static final Command INSTALL</span>
+        = new WikiCommand( &quot;install&quot;, &quot;%uInstall.jsp&quot;, null, null, null );
+
+<span class="fc" id="L51">    public static final Command LOGIN</span>
+        = new WikiCommand( &quot;login&quot;, &quot;%uLogin.jsp?redirect=%n&quot;, &quot;LoginContent.jsp&quot;, null, WikiPermission.LOGIN_ACTION );
+
+<span class="fc" id="L54">    public static final Command LOGOUT</span>
+        = new WikiCommand( &quot;logout&quot;, &quot;%uLogout.jsp&quot;, null, null, WikiPermission.LOGIN_ACTION );
+
+<span class="fc" id="L57">    public static final Command MESSAGE</span>
+        = new WikiCommand( &quot;message&quot;, &quot;%uMessage.jsp&quot;, &quot;DisplayMessage.jsp&quot;, null, null );
+    
+<span class="fc" id="L60">    public static final Command PREFS</span>
+        = new WikiCommand( &quot;prefs&quot;, &quot;%uUserPreferences.jsp&quot;, &quot;PreferencesContent.jsp&quot;, null, WikiPermission.EDIT_PROFILE_ACTION );
+
+<span class="fc" id="L63">    public static final Command WORKFLOW</span>
+        = new WikiCommand( &quot;workflow&quot;, &quot;%uWorkflow.jsp&quot;, &quot;WorkflowContent.jsp&quot;, null, null );
+
+<span class="fc" id="L66">    public static final Command ADMIN</span>
+        = new WikiCommand( &quot;admin&quot;, &quot;%uadmin/Admin.jsp&quot;, &quot;AdminContent.jsp&quot;, null );
+
+    private final String m_action;
+    
+    private final Permission m_permission;
+    
+    /**
+     * Constructs a new Command with a specified wiki context, URL pattern,
+     * type, and content template. The WikiPage for this action is initialized
+     * to &lt;code&gt;null&lt;/code&gt;.
+     * @param requestContext the request context
+     * @param urlPattern the URL pattern
+     * @param type the type
+     * @param contentTemplate the content template; may be &lt;code&gt;null&lt;/code&gt;
+     * @param action The action
+     * @throws IllegalArgumentException if the request content, URL pattern, or
+     *         type is &lt;code&gt;null&lt;/code&gt;
+     */
+    private WikiCommand( String requestContext, 
+                         String urlPattern, 
+                         String contentTemplate, 
+                         String target, 
+                         String action )
+    {
+<span class="fc" id="L91">        super( requestContext, urlPattern, contentTemplate, target );</span>
+<span class="fc" id="L92">        m_action = action;</span>
+<span class="fc bfc" id="L93" title="All 4 branches covered.">        if ( target == null || m_action == null )</span>
+        {
+<span class="fc" id="L95">            m_permission = null;</span>
+        }
+        else
+        {
+<span class="fc" id="L99">            m_permission = new WikiPermission( target, action );</span>
+        }
+<span class="fc" id="L101">    }</span>
+
+    /**
+     *  Constructs an admin command.
+     *  
+     *  @param requestContext
+     *  @param urlPattern
+     *  @param contentTemplate
+     */
+    private WikiCommand( String requestContext, 
+                         String urlPattern, 
+                         String contentTemplate,
+                         String target )
+    {
+<span class="fc" id="L115">        super( requestContext, urlPattern, contentTemplate, target );</span>
+<span class="fc" id="L116">        m_action = null;</span>
+
+<span class="fc" id="L118">        m_permission = new AllPermission( target );</span>
+<span class="fc" id="L119">    }</span>
+    /**
+     * Creates and returns a targeted Command by combining a wiki
+     * (a String) with this Command. The supplied &lt;code&gt;target&lt;/code&gt;
+     * object must be non-&lt;code&gt;null&lt;/code&gt; and of type String.
+     * @param target the name of the wiki to combine into the current Command
+     * @return the new targeted command
+     * @throws IllegalArgumentException if the target is not of the correct type
+     */
+    public Command targetedCommand( Object target )
+    {
+<span class="pc bpc" id="L130" title="2 of 4 branches missed.">        if ( !( target != null &amp;&amp; target instanceof String ) )</span>
+        {
+<span class="nc" id="L132">            throw new IllegalArgumentException( &quot;Target must non-null and of type String.&quot; );</span>
+        }
+<span class="fc" id="L134">        return new WikiCommand( getRequestContext(), getURLPattern(), getContentTemplate(), (String)target, m_action );</span>
+    }
+    
+    /**
+     * Always returns the &quot;friendly&quot; JSP name.
+     * @see org.apache.wiki.ui.Command#getName()
+     */
+    public String getName()
+    {
+<span class="nc" id="L143">        return getJSPFriendlyName();</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#requiredPermission()
+     */
+    public Permission requiredPermission()
+    {
+<span class="fc" id="L151">        return m_permission;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

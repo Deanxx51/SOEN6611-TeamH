@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Note.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">Note.java</span></div><h1>Note.java</h1><pre class="source lang-java linenums">/* 
+    Copyright (C) 2007 JSPWiki Developer Group
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * Outputs an image with the supplied text as the &lt;tt&gt;title&lt;/tt&gt; which is shown as a tooltip by
+ * most browsers. This is intended for short one line comments.
+ * &lt;p&gt;
+ * See http://www.456bereastreet.com/archive/200412/the_alt_and_title_attributes/ for discussion on
+ * alt and title attributes.
+ * &lt;p&gt;
+ * Adaption of the CommentPlugin written by Scott Hulbert, cleaned up and generalized, but basically
+ * his concept.
+ * &lt;p&gt;
+ * 
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;_cmdline&lt;/b&gt; - the commentText&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *  
+ */
+<span class="fc" id="L48">public class Note implements WikiPlugin</span>
+{
+    /**
+     *  Property name for setting the image for the note.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_NOTE_IMAGE    = &quot;notePlugin.imageName&quot;;
+    
+    /**
+     *  The default name for the note.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String DEFAULT_NOTE_IMAGE = &quot;note.png&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute(WikiContext context, Map&lt;String, String&gt; params) throws PluginException
+    {
+<span class="nc" id="L65">        String commandline = params.get(DefaultPluginManager.PARAM_CMDLINE);</span>
+<span class="nc bnc" id="L66" title="All 4 branches missed.">        if (commandline == null || commandline.length() == 0)</span>
+        {
+<span class="nc" id="L68">            return &quot;Unable to obtain plugin command line from parameter'&quot; + DefaultPluginManager.PARAM_CMDLINE + &quot;'&quot;; // I18N</span>
+        }
+
+<span class="nc" id="L71">        String commentImage = imageUrl(context);</span>
+
+<span class="nc" id="L73">        String commentText = clean(commandline);</span>
+
+<span class="nc" id="L75">        return &quot;&lt;img src='&quot; + commentImage + &quot;' alt=\&quot;Comment: &quot; + </span>
+               commentText + &quot;\&quot; title=\&quot;&quot; + commentText + &quot;\&quot;/&gt;&quot;;
+    }
+
+    private String imageUrl( WikiContext ctx )
+    {
+<span class="nc" id="L81">        WikiEngine engine = ctx.getEngine();</span>
+<span class="nc" id="L82">        String commentImage = engine.getWikiProperties().getProperty(PROP_NOTE_IMAGE,</span>
+                                                                     DEFAULT_NOTE_IMAGE);
+
+<span class="nc" id="L85">        commentImage = &quot;images/&quot;+commentImage;</span>
+        
+<span class="nc" id="L87">        String resource = engine.getTemplateManager().findResource( ctx, </span>
+<span class="nc" id="L88">                                                                    engine.getTemplateDir(), </span>
+                                                                    commentImage );
+        
+        // JSPWIKI-876 Fixed error with Note Plugin. Only one preceding &quot;/&quot; is needed.
+<span class="nc bnc" id="L92" title="All 4 branches missed.">        if (resource != null &amp;&amp; resource.startsWith(&quot;/&quot;)) {</span>
+<span class="nc" id="L93">        	resource = resource.substring(1);</span>
+        }
+<span class="nc" id="L95">        return ctx.getURL( WikiContext.NONE, resource );</span>
+    }
+
+
+    /**
+     *  Cleans the side.
+     * 
+     * @param commandline
+     */
+    private String clean(String commandline)
+    {
+<span class="nc" id="L106">        return TextUtil.replaceEntities( commandline );</span>
+    }
+
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

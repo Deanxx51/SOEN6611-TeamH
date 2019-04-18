@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractFileProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.providers</a> &gt; <span class="el_source">AbstractFileProvider.java</span></div><h1>AbstractFileProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.providers;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeSet;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.search.QueryItem;
+import org.apache.wiki.search.SearchMatcher;
+import org.apache.wiki.search.SearchResult;
+import org.apache.wiki.search.SearchResultComparator;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  Provides a simple directory based repository for Wiki pages.
+ *  &lt;P&gt;
+ *  All files have &quot;.txt&quot; appended to make life easier for those
+ *  who insist on using Windows or other software which makes assumptions
+ *  on the files contents based on its name.
+ *  &lt;p&gt;
+ *  This class functions as a superclass to all file based providers.
+ *
+ *  @since 2.1.21.
+ *
+ */
+<span class="fc" id="L68">public abstract class AbstractFileProvider</span>
+    implements WikiPageProvider
+{
+<span class="fc" id="L71">    private static final Logger   log = Logger.getLogger(AbstractFileProvider.class);</span>
+<span class="fc" id="L72">    private String m_pageDirectory = &quot;/tmp/&quot;;</span>
+
+    protected String m_encoding;
+
+    protected WikiEngine m_engine;
+
+    public static final String PROP_CUSTOMPROP_MAXLIMIT = &quot;custom.pageproperty.max.allowed&quot;;
+    public static final String PROP_CUSTOMPROP_MAXKEYLENGTH = &quot;custom.pageproperty.key.length&quot;;
+    public static final String PROP_CUSTOMPROP_MAXVALUELENGTH = &quot;custom.pageproperty.value.length&quot;;
+
+    public static final int DEFAULT_MAX_PROPLIMIT = 200;
+    public static final int DEFAULT_MAX_PROPKEYLENGTH = 255;
+    public static final int DEFAULT_MAX_PROPVALUELENGTH = 4096;
+
+    /**
+     * This parameter limits the number of custom page properties allowed on a page
+     */
+<span class="fc" id="L89">    public static int MAX_PROPLIMIT = DEFAULT_MAX_PROPLIMIT;</span>
+    /**
+     * This number limits the length of a custom page property key length
+     * The default value here designed with future JDBC providers in mind.
+     */
+<span class="fc" id="L94">    public static int MAX_PROPKEYLENGTH = DEFAULT_MAX_PROPKEYLENGTH;</span>
+    /**
+     * This number limits the length of a custom page property value length
+     * The default value here designed with future JDBC providers in mind.
+     */
+<span class="fc" id="L99">    public static int MAX_PROPVALUELENGTH = DEFAULT_MAX_PROPVALUELENGTH;</span>
+
+    /**
+     *  Name of the property that defines where page directories are.
+     */
+    public static final String PROP_PAGEDIR = &quot;jspwiki.fileSystemProvider.pageDir&quot;;
+
+    /**
+     *  All files should have this extension to be recognized as JSPWiki files.
+     *  We default to .txt, because that is probably easiest for Windows users,
+     *  and guarantees correct handling.
+     */
+    public static final String FILE_EXT = &quot;.txt&quot;;
+
+    /** The default encoding. */
+<span class="fc" id="L114">    public static final String DEFAULT_ENCODING = StandardCharsets.ISO_8859_1.toString();</span>
+
+<span class="fc" id="L116">    private boolean m_windowsHackNeeded = false;</span>
+
+    /**
+     *  {@inheritDoc}
+     *  @throws FileNotFoundException If the specified page directory does not exist.
+     *  @throws IOException In case the specified page directory is a file, not a directory.
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties properties ) throws NoRequiredPropertyException, IOException, FileNotFoundException
+    {
+<span class="fc" id="L126">        log.debug(&quot;Initing FileSystemProvider&quot;);</span>
+<span class="fc" id="L127">        m_pageDirectory = TextUtil.getCanonicalFilePathProperty(properties, PROP_PAGEDIR,</span>
+<span class="fc" id="L128">                System.getProperty(&quot;user.home&quot;) + File.separator + &quot;jspwiki-files&quot;);</span>
+
+<span class="fc" id="L130">        File f = new File(m_pageDirectory);</span>
+
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        if( !f.exists() )</span>
+        {
+<span class="pc bpc" id="L134" title="1 of 2 branches missed.">            if( !f.mkdirs() )</span>
+            {
+<span class="nc" id="L136">                throw new IOException( &quot;Failed to create page directory &quot; + f.getAbsolutePath() + &quot; , please check property &quot;</span>
+                                       + PROP_PAGEDIR );
+            }
+        }
+        else
+        {
+<span class="fc bfc" id="L142" title="All 2 branches covered.">            if( !f.isDirectory() )</span>
+            {
+<span class="fc" id="L144">                throw new IOException( &quot;Page directory is not a directory: &quot; + f.getAbsolutePath() );</span>
+            }
+<span class="pc bpc" id="L146" title="1 of 2 branches missed.">            if( !f.canWrite() )</span>
+            {
+<span class="nc" id="L148">                throw new IOException( &quot;Page directory is not writable: &quot; + f.getAbsolutePath() );</span>
+            }
+        }
+
+<span class="fc" id="L152">        m_engine = engine;</span>
+
+<span class="fc" id="L154">        m_encoding = properties.getProperty( WikiEngine.PROP_ENCODING, DEFAULT_ENCODING );</span>
+
+<span class="fc" id="L156">        String os = System.getProperty( &quot;os.name&quot; ).toLowerCase();</span>
+
+<span class="pc bpc" id="L158" title="2 of 4 branches missed.">        if( os.startsWith(&quot;windows&quot;) || os.equals(&quot;nt&quot;) )</span>
+        {
+<span class="nc" id="L160">            m_windowsHackNeeded = true;</span>
+        }
+
+<span class="pc bpc" id="L163" title="1 of 2 branches missed.">    	if (properties != null) {</span>
+<span class="fc" id="L164">            MAX_PROPLIMIT = TextUtil.getIntegerProperty(properties,PROP_CUSTOMPROP_MAXLIMIT,DEFAULT_MAX_PROPLIMIT);</span>
+<span class="fc" id="L165">            MAX_PROPKEYLENGTH = TextUtil.getIntegerProperty(properties,PROP_CUSTOMPROP_MAXKEYLENGTH,DEFAULT_MAX_PROPKEYLENGTH);</span>
+<span class="fc" id="L166">            MAX_PROPVALUELENGTH = TextUtil.getIntegerProperty(properties,PROP_CUSTOMPROP_MAXVALUELENGTH,DEFAULT_MAX_PROPVALUELENGTH);</span>
+    	}
+
+<span class="fc" id="L169">        log.info( &quot;Wikipages are read from '&quot; + m_pageDirectory + &quot;'&quot; );</span>
+<span class="fc" id="L170">    }</span>
+
+
+    String getPageDirectory()
+    {
+<span class="fc" id="L175">        return m_pageDirectory;</span>
+    }
+
+<span class="fc" id="L178">    private static final String[] WINDOWS_DEVICE_NAMES =</span>
+    {
+        &quot;con&quot;, &quot;prn&quot;, &quot;nul&quot;, &quot;aux&quot;, &quot;lpt1&quot;, &quot;lpt2&quot;, &quot;lpt3&quot;, &quot;lpt4&quot;, &quot;lpt5&quot;, &quot;lpt6&quot;, &quot;lpt7&quot;, &quot;lpt8&quot;, &quot;lpt9&quot;,
+        &quot;com1&quot;, &quot;com2&quot;, &quot;com3&quot;, &quot;com4&quot;, &quot;com5&quot;, &quot;com6&quot;, &quot;com7&quot;, &quot;com8&quot;, &quot;com9&quot;
+    };
+
+    /**
+     *  This makes sure that the queried page name
+     *  is still readable by the file system.  For example, all XML entities
+     *  and slashes are encoded with the percent notation.
+     *
+     *  @param pagename The name to mangle
+     *  @return The mangled name.
+     */
+    protected String mangleName( String pagename )
+    {
+<span class="fc" id="L194">        pagename = TextUtil.urlEncode( pagename, m_encoding );</span>
+
+<span class="fc" id="L196">        pagename = TextUtil.replaceString( pagename, &quot;/&quot;, &quot;%2F&quot; );</span>
+
+        //
+        //  Names which start with a dot must be escaped to prevent problems.
+        //  Since we use URL encoding, this is invisible in our unescaping.
+        //
+<span class="fc bfc" id="L202" title="All 2 branches covered.">        if( pagename.startsWith( &quot;.&quot; ) )</span>
+        {
+<span class="fc" id="L204">            pagename = &quot;%2E&quot; + pagename.substring( 1 );</span>
+        }
+
+<span class="pc bpc" id="L207" title="1 of 2 branches missed.">        if( m_windowsHackNeeded )</span>
+        {
+<span class="nc" id="L209">            String pn = pagename.toLowerCase();</span>
+<span class="nc bnc" id="L210" title="All 2 branches missed.">            for( int i = 0; i &lt; WINDOWS_DEVICE_NAMES.length; i++ )</span>
+            {
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                if( WINDOWS_DEVICE_NAMES[i].equals(pn) )</span>
+                {
+<span class="nc" id="L214">                    pagename = &quot;$$$&quot; + pagename;</span>
+                }
+            }
+        }
+
+<span class="fc" id="L219">        return pagename;</span>
+    }
+
+    /**
+     *  This makes the reverse of mangleName.
+     *
+     *  @param filename The filename to unmangle
+     *  @return The unmangled name.
+     */
+    protected String unmangleName( String filename )
+    {
+        // The exception should never happen.
+<span class="nc bnc" id="L231" title="All 6 branches missed.">        if( m_windowsHackNeeded &amp;&amp; filename.startsWith( &quot;$$$&quot;) &amp;&amp; filename.length() &gt; 3 )</span>
+        {
+<span class="nc" id="L233">            filename = filename.substring(3);</span>
+        }
+
+<span class="nc" id="L236">        return TextUtil.urlDecode( filename, m_encoding );</span>
+    }
+
+    /**
+     *  Finds a Wiki page from the page repository.
+     *
+     *  @param page The name of the page.
+     *  @return A File to the page.  May be null.
+     */
+    protected File findPage( String page )
+    {
+<span class="fc" id="L247">        return new File( m_pageDirectory, mangleName(page)+FILE_EXT );</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public boolean pageExists( String page )
+    {
+<span class="fc" id="L256">        File pagefile = findPage( page );</span>
+
+<span class="fc" id="L258">        return pagefile.exists();</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public boolean pageExists( String page, int version )
+    {
+<span class="nc" id="L267">        return pageExists (page);</span>
+    }
+
+    /**
+     *  This implementation just returns the current version, as filesystem
+     *  does not provide versioning information for now.
+     *
+     *  @param page {@inheritDoc}
+     *  @param version {@inheritDoc}
+     *  @throws {@inheritDoc}
+     */
+    @Override
+    public String getPageText( String page, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L282">        return getPageText( page );</span>
+    }
+
+    /**
+     *  Read the text directly from the correct file.
+     */
+    private String getPageText( String page )
+    {
+<span class="fc" id="L290">        String result  = null;</span>
+
+<span class="fc" id="L292">        File pagedata = findPage( page );</span>
+
+<span class="fc bfc" id="L294" title="All 2 branches covered.">        if( pagedata.exists() ) {</span>
+<span class="pc bpc" id="L295" title="1 of 2 branches missed.">            if( pagedata.canRead() ) {</span>
+<span class="fc" id="L296">                try( InputStream in = new FileInputStream( pagedata ) ) {</span>
+<span class="fc" id="L297">                    result = FileUtil.readContents( in, m_encoding );</span>
+<span class="nc" id="L298">                } catch( IOException e ) {</span>
+<span class="nc" id="L299">                    log.error(&quot;Failed to read&quot;, e);</span>
+<span class="pc" id="L300">                }</span>
+            }
+            else
+            {
+<span class="nc" id="L304">                log.warn(&quot;Failed to read page '&quot;+page+&quot;' from '&quot;+pagedata.getAbsolutePath()+&quot;', possibly a permissions problem&quot;);</span>
+            }
+        }
+        else
+        {
+            // This is okay.
+<span class="fc" id="L310">            log.info(&quot;New page '&quot;+page+&quot;'&quot;);</span>
+        }
+
+<span class="fc" id="L313">        return result;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void putPageText( WikiPage page, String text ) throws ProviderException {
+<span class="fc" id="L321">        File file = findPage( page.getName() );</span>
+
+<span class="fc" id="L323">        try( PrintWriter out = new PrintWriter( new OutputStreamWriter( new FileOutputStream( file ), m_encoding ) ) ) {</span>
+<span class="fc" id="L324">            out.print( text );</span>
+<span class="nc" id="L325">        } catch( IOException e ) {</span>
+<span class="nc" id="L326">            log.error( &quot;Saving failed&quot;, e );</span>
+<span class="fc" id="L327">        }</span>
+<span class="fc" id="L328">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiPage &gt; getAllPages()
+        throws ProviderException
+    {
+<span class="fc" id="L337">        log.debug(&quot;Getting all pages...&quot;);</span>
+
+<span class="fc" id="L339">        ArrayList&lt;WikiPage&gt; set = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L341">        File wikipagedir = new File( m_pageDirectory );</span>
+
+<span class="fc" id="L343">        File[] wikipages = wikipagedir.listFiles( new WikiFileFilter() );</span>
+
+<span class="pc bpc" id="L345" title="1 of 2 branches missed.">        if( wikipages == null )</span>
+        {
+<span class="nc" id="L347">            log.error(&quot;Wikipages directory '&quot; + m_pageDirectory + &quot;' does not exist! Please check &quot; + PROP_PAGEDIR + &quot; in jspwiki.properties.&quot;);</span>
+<span class="nc" id="L348">            throw new InternalWikiException(&quot;Page directory does not exist&quot;);</span>
+        }
+
+<span class="pc bpc" id="L351" title="1 of 2 branches missed.">        for( int i = 0; i &lt; wikipages.length; i++ )</span>
+        {
+<span class="nc" id="L353">            String wikiname = wikipages[i].getName();</span>
+<span class="nc" id="L354">            int cutpoint = wikiname.lastIndexOf( FILE_EXT );</span>
+
+<span class="nc" id="L356">            WikiPage page = getPageInfo( unmangleName(wikiname.substring(0,cutpoint)),</span>
+                                         WikiPageProvider.LATEST_VERSION );
+<span class="nc bnc" id="L358" title="All 2 branches missed.">            if( page == null )</span>
+            {
+                // This should not really happen.
+                // FIXME: Should we throw an exception here?
+<span class="nc" id="L362">                log.error(&quot;Page &quot;+wikiname+&quot; was found in directory listing, but could not be located individually.&quot;);</span>
+<span class="nc" id="L363">                continue;</span>
+            }
+
+<span class="nc" id="L366">            set.add( page );</span>
+        }
+
+<span class="fc" id="L369">        return set;</span>
+    }
+
+    /**
+     *  Does not work.
+     *
+     *  @param date {@inheritDoc}
+     *  @return {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiPage &gt; getAllChangedSince( Date date )
+    {
+<span class="nc" id="L381">        return new ArrayList&lt;&gt;(); // FIXME</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int getPageCount()
+    {
+<span class="nc" id="L390">        File wikipagedir = new File( m_pageDirectory );</span>
+
+<span class="nc" id="L392">        File[] wikipages = wikipagedir.listFiles( new WikiFileFilter() );</span>
+
+<span class="nc" id="L394">        return wikipages.length;</span>
+    }
+
+    /**
+     * Iterates through all WikiPages, matches them against the given query,
+     * and returns a Collection of SearchResult objects.
+     *
+     * @param query {@inheritDoc}
+     * @return {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; SearchResult &gt; findPages( QueryItem[] query )
+    {
+<span class="nc" id="L407">        File wikipagedir = new File( m_pageDirectory );</span>
+<span class="nc" id="L408">        TreeSet&lt;SearchResult&gt; res = new TreeSet&lt;&gt;( new SearchResultComparator() );</span>
+<span class="nc" id="L409">        SearchMatcher matcher = new SearchMatcher( m_engine, query );</span>
+
+<span class="nc" id="L411">        File[] wikipages = wikipagedir.listFiles( new WikiFileFilter() );</span>
+
+<span class="nc bnc" id="L413" title="All 2 branches missed.">        for( int i = 0; i &lt; wikipages.length; i++ )</span>
+        {
+            // log.debug(&quot;Searching page &quot;+wikipages[i].getPath() );
+
+<span class="nc" id="L417">            String filename = wikipages[i].getName();</span>
+<span class="nc" id="L418">            int cutpoint    = filename.lastIndexOf( FILE_EXT );</span>
+<span class="nc" id="L419">            String wikiname = filename.substring( 0, cutpoint );</span>
+
+<span class="nc" id="L421">            wikiname = unmangleName( wikiname );</span>
+
+<span class="nc" id="L423">            try( FileInputStream input = new FileInputStream( wikipages[i] ) ) {</span>
+<span class="nc" id="L424">                String pagetext = FileUtil.readContents( input, m_encoding );</span>
+<span class="nc" id="L425">                SearchResult comparison = matcher.matchPageContent( wikiname, pagetext );</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">                if( comparison != null ) {</span>
+<span class="nc" id="L427">                    res.add( comparison );</span>
+                }
+<span class="nc" id="L429">            } catch( IOException e ) {</span>
+<span class="nc" id="L430">                log.error( &quot;Failed to read &quot; + filename, e );</span>
+<span class="nc" id="L431">            }</span>
+        }
+
+<span class="nc" id="L434">        return res;</span>
+    }
+
+    /**
+     *  Always returns the latest version, since FileSystemProvider
+     *  does not support versioning.
+     *
+     *  @param page {@inheritDoc}
+     *  @param version {@inheritDoc}
+     *  @return {@inheritDoc}
+     *  @throws {@inheritDoc}
+     */
+    @Override
+    public WikiPage getPageInfo( String page, int version ) throws ProviderException {
+<span class="fc" id="L448">        File file = findPage( page );</span>
+
+<span class="fc bfc" id="L450" title="All 2 branches covered.">        if( !file.exists() )</span>
+        {
+<span class="fc" id="L452">            return null;</span>
+        }
+
+<span class="fc" id="L455">        WikiPage p = new WikiPage( m_engine, page );</span>
+<span class="fc" id="L456">        p.setLastModified( new Date(file.lastModified()) );</span>
+
+<span class="fc" id="L458">        return p;</span>
+    }
+
+    /**
+     *  The FileSystemProvider provides only one version.
+     *
+     *  @param page {@inheritDoc}
+     *  @throws {@inheritDoc}
+     *  @return {@inheritDoc}
+     */
+    @Override
+    public List&lt;WikiPage&gt; getVersionHistory( String page ) throws ProviderException
+    {
+<span class="nc" id="L471">        ArrayList&lt;WikiPage&gt; list = new ArrayList&lt;&gt;();</span>
+
+<span class="nc" id="L473">        list.add( getPageInfo( page, WikiPageProvider.LATEST_VERSION ) );</span>
+
+<span class="nc" id="L475">        return list;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String getProviderInfo()
+    {
+<span class="nc" id="L484">        return &quot;&quot;;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void deleteVersion( String pageName, int version )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L494" title="1 of 2 branches missed.">        if( version == WikiProvider.LATEST_VERSION )</span>
+        {
+<span class="fc" id="L496">            File f = findPage( pageName );</span>
+
+<span class="fc" id="L498">            f.delete();</span>
+        }
+<span class="fc" id="L500">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void deletePage( String pageName )
+        throws ProviderException
+    {
+<span class="fc" id="L509">        File f = findPage( pageName );</span>
+
+<span class="fc" id="L511">        f.delete();</span>
+<span class="fc" id="L512">    }</span>
+
+    /**
+     * Set the custom properties provided into the given page.
+     *
+     * @since 2.10.2
+     */
+    protected void setCustomProperties(WikiPage page, Properties properties) {
+<span class="fc" id="L520">        Enumeration&lt; ? &gt; propertyNames = properties.propertyNames();</span>
+<span class="fc bfc" id="L521" title="All 2 branches covered.">    	while (propertyNames.hasMoreElements()) {</span>
+<span class="fc" id="L522">    		String key = (String) propertyNames.nextElement();</span>
+<span class="pc bpc" id="L523" title="1 of 6 branches missed.">    		if (!key.equals(WikiPage.AUTHOR) &amp;&amp; !key.equals(WikiPage.CHANGENOTE) &amp;&amp; !key.equals(WikiPage.VIEWCOUNT)) {</span>
+<span class="fc" id="L524">    			page.setAttribute(key, properties.get(key));</span>
+    		}
+<span class="fc" id="L526">    	}</span>
+<span class="fc" id="L527">    }</span>
+
+    /**
+     * Get custom properties using {@link #addCustomProperties(WikiPage, Properties)}, validate them using {@link #validateCustomPageProperties(Properties)}
+     * and add them to default properties provided
+     *
+     * @since 2.10.2
+     */
+    protected void getCustomProperties(WikiPage page, Properties defaultProperties) throws IOException {
+<span class="fc" id="L536">        Properties customPageProperties = addCustomProperties(page,defaultProperties);</span>
+<span class="fc" id="L537">    	validateCustomPageProperties(customPageProperties);</span>
+<span class="fc" id="L538">    	defaultProperties.putAll(customPageProperties);</span>
+<span class="fc" id="L539">    }</span>
+
+    /**
+     * By default all page attributes that start with &quot;@&quot; are returned as custom properties.
+     * This can be overwritten by custom FileSystemProviders to save additional properties.
+     * CustomPageProperties are validated by {@link #validateCustomPageProperties(Properties)}
+     *
+     * @since 2.10.2
+     * @param page the current page
+     * @param props the default properties of this page
+     * @return default implementation returns empty Properties.
+     */
+    protected Properties addCustomProperties(WikiPage page, Properties props) {
+<span class="fc" id="L552">    	Properties customProperties = new Properties();</span>
+<span class="pc bpc" id="L553" title="1 of 2 branches missed.">    	if (page != null) {</span>
+<span class="fc" id="L554">    		Map&lt;String,Object&gt; atts = page.getAttributes();</span>
+<span class="fc bfc" id="L555" title="All 2 branches covered.">    		for (String key : atts.keySet()) {</span>
+<span class="fc" id="L556">    			Object value = atts.get(key);</span>
+<span class="pc bpc" id="L557" title="1 of 4 branches missed.">    			if (key.startsWith(&quot;@&quot;) &amp;&amp; value != null) {</span>
+<span class="fc" id="L558">    				customProperties.put(key,value.toString());</span>
+    			}
+<span class="fc" id="L560">    		}</span>
+
+    	}
+<span class="fc" id="L563">    	return customProperties;</span>
+    }
+
+    /**
+     * Default validation, validates that key and value is ASCII &lt;code&gt;StringUtils.isAsciiPrintable()&lt;/code&gt; and within lengths set up in jspwiki-custom.properties.
+     * This can be overwritten by custom FileSystemProviders to validate additional properties
+     * See https://issues.apache.org/jira/browse/JSPWIKI-856
+     * @since 2.10.2
+     * @param customProperties the custom page properties being added
+     */
+    protected void validateCustomPageProperties(Properties customProperties) throws IOException {
+    	// Default validation rules
+<span class="pc bpc" id="L575" title="1 of 4 branches missed.">    	if (customProperties != null &amp;&amp; !customProperties.isEmpty()) {</span>
+<span class="pc bpc" id="L576" title="1 of 2 branches missed.">    		if (customProperties.size()&gt;MAX_PROPLIMIT) {</span>
+<span class="nc" id="L577">    			throw new IOException(&quot;Too many custom properties. You are adding &quot;+customProperties.size()+&quot;, but max limit is &quot;+MAX_PROPLIMIT);</span>
+    		}
+<span class="fc" id="L579">            Enumeration&lt; ? &gt; propertyNames = customProperties.propertyNames();</span>
+<span class="fc bfc" id="L580" title="All 2 branches covered.">        	while (propertyNames.hasMoreElements()) {</span>
+<span class="fc" id="L581">        		String key = (String) propertyNames.nextElement();</span>
+<span class="fc" id="L582">        		String value = (String)customProperties.get(key);</span>
+<span class="pc bpc" id="L583" title="1 of 2 branches missed.">    			if (key != null) {</span>
+<span class="pc bpc" id="L584" title="1 of 2 branches missed.">    				if (key.length()&gt;MAX_PROPKEYLENGTH) {</span>
+<span class="nc" id="L585">    					throw new IOException(&quot;Custom property key &quot;+key+&quot; is too long. Max allowed length is &quot;+MAX_PROPKEYLENGTH);</span>
+    				}
+<span class="pc bpc" id="L587" title="1 of 2 branches missed.">    				if (!StringUtils.isAsciiPrintable(key)) {</span>
+<span class="nc" id="L588">    					throw new IOException(&quot;Custom property key &quot;+key+&quot; is not simple ASCII!&quot;);</span>
+    				}
+    			}
+<span class="pc bpc" id="L591" title="1 of 2 branches missed.">    			if (value != null) {</span>
+<span class="pc bpc" id="L592" title="1 of 2 branches missed.">    				if (value.length()&gt;MAX_PROPVALUELENGTH) {</span>
+<span class="nc" id="L593">						throw new IOException(&quot;Custom property key &quot;+key+&quot; has value that is too long. Value=&quot;+value+&quot;. Max allowed length is &quot;+MAX_PROPVALUELENGTH);</span>
+					}
+<span class="pc bpc" id="L595" title="1 of 2 branches missed.">    				if (!StringUtils.isAsciiPrintable(value)) {</span>
+<span class="nc" id="L596">    					throw new IOException(&quot;Custom property key &quot;+key+&quot; has value that is not simple ASCII! Value=&quot;+value);</span>
+    				}
+    			}
+<span class="fc" id="L599">        	}</span>
+    	}
+<span class="fc" id="L601">    }</span>
+
+    /**
+     *  A simple filter which filters only those filenames which correspond to the
+     *  file extension used.
+     */
+<span class="fc" id="L607">    public static class WikiFileFilter implements FilenameFilter {</span>
+        /**
+         *  {@inheritDoc}
+         */
+        @Override
+        public boolean accept( File dir, String name ) {
+<span class="fc" id="L613">            return name.endsWith( FILE_EXT );</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

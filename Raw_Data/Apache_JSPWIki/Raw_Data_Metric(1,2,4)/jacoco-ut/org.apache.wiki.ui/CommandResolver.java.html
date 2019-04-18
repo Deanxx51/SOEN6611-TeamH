@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CommandResolver.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">CommandResolver.java</span></div><h1>CommandResolver.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.auth.GroupPrincipal;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * &lt;p&gt;Resolves special pages, JSPs and Commands on behalf of a
+ * WikiEngine. CommandResolver will automatically resolve page names
+ * with singular/plural variants. It can also detect the correct Command
+ * based on parameters supplied in an HTTP request, or due to the
+ * JSP being accessed.&lt;/p&gt;
+ * &lt;p&gt;
+ * &lt;p&gt;CommandResolver's static {@link #findCommand(String)} method is
+ * the simplest method; it looks up and returns the Command matching
+ * a supplied wiki context. For example, looking up the request context
+ * &lt;code&gt;view&lt;/code&gt; returns {@link PageCommand#VIEW}. Use this method
+ * to obtain static Command instances that aren't targeted at a particular
+ * page or group.&lt;/p&gt;
+ * &lt;p&gt;For more complex lookups in which the caller supplies an HTTP
+ * request, {@link #findCommand(HttpServletRequest, String)} will
+ * look up and return the correct Command. The String parameter
+ * &lt;code&gt;defaultContext&lt;/code&gt; supplies the request context to use
+ * if it cannot be detected. However, note that the default wiki
+ * context may be over-ridden if the request was for a &quot;special page.&quot;&lt;/p&gt;
+ * &lt;p&gt;For example, suppose the WikiEngine's properties specify a
+ * special page called &lt;code&gt;UserPrefs&lt;/code&gt;
+ * that redirects to &lt;code&gt;UserPreferences.jsp&lt;/code&gt;. The ordinary
+ * lookup method {@linkplain #findCommand(String)} using a supplied
+ * context &lt;code&gt;view&lt;/code&gt; would return {@link PageCommand#VIEW}. But
+ * the {@linkplain #findCommand(HttpServletRequest, String)} method,
+ * when passed the same context (&lt;code&gt;view&lt;/code&gt;) and an HTTP request
+ * containing the page parameter value &lt;code&gt;UserPrefs&lt;/code&gt;,
+ * will instead return {@link WikiCommand#PREFS}.&lt;/p&gt;
+ * @since 2.4.22
+ */
+public final class CommandResolver
+{
+    /** Prefix in jspwiki.properties signifying special page keys. */
+    private static final String PROP_SPECIALPAGE = &quot;jspwiki.specialPage.&quot;;
+
+    /** Private map with request contexts as keys, Commands as values */
+    private static final Map&lt;String, Command&gt;    CONTEXTS;
+
+    /** Private map with JSPs as keys, Commands as values */
+    private static final Map&lt;String, Command&gt;    JSPS;
+
+    /** Store the JSP-to-Command and context-to-Command mappings */
+    static
+    {
+<span class="fc" id="L83">        CONTEXTS = new HashMap&lt;String, Command&gt;();</span>
+<span class="fc" id="L84">        JSPS = new HashMap&lt;String, Command&gt;();</span>
+<span class="fc" id="L85">        Command[] commands = AbstractCommand.allCommands();</span>
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        for( int i = 0; i &lt; commands.length; i++ )</span>
+        {
+<span class="fc" id="L88">            JSPS.put( commands[i].getJSP(), commands[i] );</span>
+<span class="fc" id="L89">            CONTEXTS.put( commands[i].getRequestContext(), commands[i] );</span>
+        }
+<span class="fc" id="L91">    }</span>
+
+<span class="fc" id="L93">    private final Logger        m_log = Logger.getLogger( CommandResolver.class );</span>
+
+    private final WikiEngine    m_engine;
+
+    /** If true, we'll also consider english plurals (+s) a match. */
+    private final boolean       m_matchEnglishPlurals;
+
+    /** Stores special page names as keys, and Commands as values. */
+    private final Map&lt;String, Command&gt; m_specialPages;
+
+    /**
+     * Constructs a CommandResolver for a given WikiEngine. This constructor
+     * will extract the special page references for this wiki and store them in
+     * a cache used for resolution.
+     * @param engine the wiki engine
+     * @param properties the properties used to initialize the wiki
+     */
+    public CommandResolver( WikiEngine engine, Properties properties )
+<span class="fc" id="L111">    {</span>
+<span class="fc" id="L112">        m_engine = engine;</span>
+<span class="fc" id="L113">        m_specialPages = new HashMap&lt;String, Command&gt;();</span>
+
+        // Skim through the properties and look for anything with
+        // the &quot;special page&quot; prefix. Create maps that allow us
+        // look up the correct Command based on special page name.
+        // If a matching command isn't found, create a RedirectCommand.
+<span class="fc bfc" id="L119" title="All 2 branches covered.">        for(String key : properties.stringPropertyNames())</span>
+        {
+<span class="fc bfc" id="L121" title="All 2 branches covered.">            if ( key.startsWith( PROP_SPECIALPAGE ) )</span>
+            {
+<span class="fc" id="L123">                String specialPage = key.substring( PROP_SPECIALPAGE.length() );</span>
+<span class="fc" id="L124">                String jsp = (String) properties.getProperty(key);</span>
+<span class="pc bpc" id="L125" title="2 of 4 branches missed.">                if ( specialPage != null &amp;&amp; jsp != null )</span>
+                {
+<span class="fc" id="L127">                    specialPage = specialPage.trim();</span>
+<span class="fc" id="L128">                    jsp = jsp.trim();</span>
+<span class="fc" id="L129">                    Command command = JSPS.get( jsp );</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                    if ( command == null )</span>
+                    {
+<span class="fc" id="L132">                        Command redirect = RedirectCommand.REDIRECT;</span>
+<span class="fc" id="L133">                        command = redirect.targetedCommand( jsp );</span>
+                    }
+<span class="fc" id="L135">                    m_specialPages.put( specialPage, command );</span>
+                }
+            }
+<span class="fc" id="L138">        }</span>
+
+        // Do we match plurals?
+<span class="fc" id="L141">        m_matchEnglishPlurals = TextUtil.getBooleanProperty( properties, WikiEngine.PROP_MATCHPLURALS, true );</span>
+<span class="fc" id="L142">    }</span>
+
+    /**
+     * Attempts to locate a wiki command for a supplied request context.
+     * The resolution technique is simple: we examine the list of
+     * Commands returned by {@link AbstractCommand#allCommands()} and
+     * return the one whose &lt;code&gt;requestContext&lt;/code&gt; matches the
+     * supplied context. If the supplied context does not resolve to a known
+     * Command, this method throws an {@link IllegalArgumentException}.
+     * @param context the request context
+     * @return the resolved context
+     */
+    public static Command findCommand( String context )
+    {
+<span class="fc" id="L156">        Command command = CONTEXTS.get( context );</span>
+<span class="fc bfc" id="L157" title="All 2 branches covered.">        if ( command == null )</span>
+        {
+<span class="fc" id="L159">            throw new IllegalArgumentException( &quot;Unsupported wiki context: &quot; + context + &quot;.&quot; );</span>
+        }
+<span class="fc" id="L161">        return command;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Attempts to locate a Command for a supplied wiki context and HTTP
+     * request, incorporating the correct WikiPage into the command if reqiured.
+     * This method will first determine what page the user requested by
+     * delegating to {@link #extractPageFromParameter(String, HttpServletRequest)}. If
+     * this page equates to a special page, we return the Command
+     * corresponding to that page. Otherwise, this method simply returns the
+     * Command for the supplied request context.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * The reason this method attempts to resolve against special pages is
+     * because some of them resolve to contexts that may be different from the
+     * one supplied. For example, a VIEW request context for the special page
+     * &quot;UserPreferences&quot; should return a PREFS context instead.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * When the caller supplies a request context and HTTP request that
+     * specifies an actual wiki page (rather than a special page), this method
+     * will return a &quot;targeted&quot; Command that includes the resolved WikiPage
+     * as the target. (See {@link #resolvePage(HttpServletRequest, String)}
+     * for the resolution algorithm). Specifically, the Command will
+     * return a non-&lt;code&gt;null&lt;/code&gt; value for its {@link AbstractCommand#getTarget()} method.
+     * &lt;/p&gt;
+     * &lt;p&gt;&lt;em&gt;Note: if this method determines that the Command is the VIEW PageCommand,
+     * then the Command returned will always be targeted to the front page.&lt;/em&gt;&lt;/p&gt;
+     * @param request the HTTP request; if &lt;code&gt;null&lt;/code&gt;, delegates
+     * to {@link #findCommand(String)}
+     * @param defaultContext the request context to use by default
+     * @return the resolved wiki command
+     */
+    public Command findCommand( HttpServletRequest request, String defaultContext )
+    {
+        // Corner case if request is null
+<span class="fc bfc" id="L198" title="All 2 branches covered.">        if ( request == null )</span>
+        {
+<span class="fc" id="L200">            return findCommand( defaultContext );</span>
+        }
+
+<span class="fc" id="L203">        Command command = null;</span>
+
+        // Determine the name of the page (which may be null)
+<span class="fc" id="L206">        String pageName = extractPageFromParameter( defaultContext, request );</span>
+
+        // Can we find a special-page command matching the extracted page?
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        if ( pageName != null )</span>
+        {
+<span class="fc" id="L211">            command = m_specialPages.get( pageName );</span>
+        }
+
+        // If we haven't found a matching command yet, extract the JSP path
+        // and compare to our list of special pages
+<span class="fc bfc" id="L216" title="All 2 branches covered.">        if ( command == null )</span>
+        {
+<span class="fc" id="L218">            command = extractCommandFromPath( request );</span>
+
+            // Otherwise: use the default context
+<span class="fc bfc" id="L221" title="All 2 branches covered.">            if ( command == null )</span>
+            {
+<span class="fc" id="L223">                command = CONTEXTS.get( defaultContext );</span>
+<span class="fc bfc" id="L224" title="All 2 branches covered.">                if ( command == null )</span>
+                {
+<span class="fc" id="L226">                    throw new IllegalArgumentException( &quot;Wiki context &quot; + defaultContext + &quot; is illegal.&quot; );</span>
+                }
+            }
+        }
+
+        // For PageCommand.VIEW, default to front page if a page wasn't supplied
+<span class="fc bfc" id="L232" title="All 4 branches covered.">        if( PageCommand.VIEW.equals( command ) &amp;&amp; pageName == null )</span>
+        {
+<span class="fc" id="L234">            pageName = m_engine.getFrontPage();</span>
+        }
+
+        // These next blocks handle targeting requirements
+
+        // If we were passed a page parameter, try to resolve it
+<span class="fc bfc" id="L240" title="All 4 branches covered.">        if ( command instanceof PageCommand &amp;&amp; pageName != null )</span>
+        {
+            // If there's a matching WikiPage, &quot;wrap&quot; the command
+<span class="fc" id="L243">            WikiPage page = resolvePage( request, pageName );</span>
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">            if ( page != null )</span>
+            {
+<span class="fc" id="L246">                return command.targetedCommand( page );</span>
+            }
+        }
+
+        // If &quot;create group&quot; command, target this wiki
+<span class="fc" id="L251">        String wiki = m_engine.getApplicationName();</span>
+<span class="fc bfc" id="L252" title="All 2 branches covered.">        if ( WikiCommand.CREATE_GROUP.equals( command ) )</span>
+        {
+<span class="fc" id="L254">            return WikiCommand.CREATE_GROUP.targetedCommand( wiki );</span>
+        }
+
+        // If group command, see if we were passed a group name
+<span class="fc bfc" id="L258" title="All 2 branches covered.">        if ( command instanceof GroupCommand )</span>
+        {
+<span class="fc" id="L260">            String groupName = request.getParameter( &quot;group&quot; );</span>
+<span class="fc" id="L261">            groupName = TextUtil.replaceEntities( groupName );</span>
+<span class="pc bpc" id="L262" title="1 of 4 branches missed.">            if ( groupName != null &amp;&amp; groupName.length() &gt; 0 )</span>
+            {
+<span class="fc" id="L264">                GroupPrincipal group = new GroupPrincipal( groupName );</span>
+<span class="fc" id="L265">                return command.targetedCommand( group );</span>
+            }
+        }
+
+        // No page provided; return an &quot;ordinary&quot; command
+<span class="fc" id="L270">        return command;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the correct page name, or &lt;code&gt;null&lt;/code&gt;, if no such page can be found.
+     * Aliases are considered.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * In some cases, page names can refer to other pages. For example, when you
+     * have matchEnglishPlurals set, then a page name &quot;Foobars&quot; will be
+     * transformed into &quot;Foobar&quot;, should a page &quot;Foobars&quot; not exist, but the
+     * page &quot;Foobar&quot; would. This method gives you the correct page name to refer
+     * to.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This facility can also be used to rewrite any page name, for example, by
+     * using aliases. It can also be used to check the existence of any page.
+     * &lt;/p&gt;
+     * @since 2.4.20
+     * @param page the page name.
+     * @return The rewritten page name, or &lt;code&gt;null&lt;/code&gt;, if the page does not exist.
+     * @throws ProviderException if the underlyng page provider that locates pages
+     * throws an exception
+     */
+    public String getFinalPageName( String page ) throws ProviderException
+    {
+<span class="fc" id="L297">        boolean isThere = simplePageExists( page );</span>
+<span class="fc" id="L298">        String  finalName = page;</span>
+
+<span class="pc bpc" id="L300" title="1 of 4 branches missed.">        if ( !isThere &amp;&amp; m_matchEnglishPlurals )</span>
+        {
+<span class="fc bfc" id="L302" title="All 2 branches covered.">            if ( page.endsWith( &quot;s&quot; ) )</span>
+            {
+<span class="fc" id="L304">                finalName = page.substring( 0, page.length() - 1 );</span>
+            }
+            else
+            {
+<span class="fc" id="L308">                finalName += &quot;s&quot;;</span>
+            }
+
+<span class="fc" id="L311">            isThere = simplePageExists( finalName );</span>
+        }
+
+<span class="fc bfc" id="L314" title="All 2 branches covered.">        if( !isThere )</span>
+        {
+<span class="fc" id="L316">            finalName = MarkupParser.wikifyLink( page );</span>
+<span class="fc" id="L317">            isThere = simplePageExists(finalName);</span>
+
+<span class="pc bpc" id="L319" title="1 of 4 branches missed.">            if( !isThere &amp;&amp; m_matchEnglishPlurals )</span>
+            {
+<span class="fc bfc" id="L321" title="All 2 branches covered.">                if( finalName.endsWith( &quot;s&quot; ) )</span>
+                {
+<span class="fc" id="L323">                    finalName = finalName.substring( 0, finalName.length() - 1 );</span>
+                }
+                else
+                {
+<span class="fc" id="L327">                    finalName += &quot;s&quot;;</span>
+                }
+
+<span class="fc" id="L330">                isThere = simplePageExists( finalName );</span>
+            }
+        }
+
+<span class="fc bfc" id="L334" title="All 2 branches covered.">        return isThere ? finalName : null;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * If the page is a special page, this method returns a direct URL to that
+     * page; otherwise, it returns &lt;code&gt;null&lt;/code&gt;.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Special pages are non-existant references to other pages. For example,
+     * you could define a special page reference &quot;RecentChanges&quot; which would
+     * always be redirected to &quot;RecentChanges.jsp&quot; instead of trying to find a
+     * Wiki page called &quot;RecentChanges&quot;.
+     * &lt;/p&gt;
+     * @param page the page name ro search for
+     * @return the URL of the special page, if the supplied page is one, or &lt;code&gt;null&lt;/code&gt;
+     */
+    public String getSpecialPageReference( String page )
+    {
+<span class="fc" id="L353">        Command command = m_specialPages.get( page );</span>
+
+<span class="fc bfc" id="L355" title="All 2 branches covered.">        if ( command != null )</span>
+        {
+<span class="fc" id="L357">            return m_engine.getURLConstructor()</span>
+<span class="fc" id="L358">                    .makeURL( command.getRequestContext(), command.getURLPattern(), true, null );</span>
+        }
+
+<span class="fc" id="L361">        return null;</span>
+    }
+
+    /**
+     * Extracts a Command based on the JSP path of an HTTP request.
+     * If the JSP requested matches a Command's &lt;code&gt;getJSP()&lt;/code&gt;
+     * value, that Command is returned.
+     * @param request the HTTP request
+     * @return the resolved Command, or &lt;code&gt;null&lt;/code&gt; if not found
+     */
+    protected Command extractCommandFromPath( HttpServletRequest request )
+    {
+<span class="fc" id="L373">        String jsp = request.getServletPath();</span>
+
+        // Take everything to right of initial / and left of # or ?
+<span class="fc" id="L376">        int hashMark = jsp.indexOf( '#' );</span>
+<span class="pc bpc" id="L377" title="1 of 2 branches missed.">        if ( hashMark != -1 )</span>
+        {
+<span class="nc" id="L379">            jsp = jsp.substring( 0, hashMark );</span>
+        }
+<span class="fc" id="L381">        int questionMark = jsp.indexOf( '?' );</span>
+<span class="fc bfc" id="L382" title="All 2 branches covered.">        if ( questionMark != -1 )</span>
+        {
+<span class="fc" id="L384">            jsp = jsp.substring( 0, questionMark );</span>
+        }
+<span class="fc bfc" id="L386" title="All 2 branches covered.">        if ( jsp.startsWith( &quot;/&quot; ) )</span>
+        {
+<span class="fc" id="L388">            jsp = jsp.substring( 1 );</span>
+        }
+
+        // Find special page reference?
+<span class="fc bfc" id="L392" title="All 2 branches covered.">        for( Iterator&lt; Map.Entry&lt; String, Command &gt; &gt; i = m_specialPages.entrySet().iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L394">            Map.Entry&lt; String, Command &gt; entry = i.next();</span>
+<span class="fc" id="L395">            Command specialCommand = entry.getValue();</span>
+<span class="fc bfc" id="L396" title="All 2 branches covered.">            if ( specialCommand.getJSP().equals( jsp ) )</span>
+            {
+<span class="fc" id="L398">                return specialCommand;</span>
+            }
+<span class="fc" id="L400">        }</span>
+
+        // Still haven't found a matching command?
+        // Ok, see if we match against our standard list of JSPs
+<span class="fc bfc" id="L404" title="All 4 branches covered.">        if ( jsp.length() &gt; 0 &amp;&amp; JSPS.containsKey( jsp ) )</span>
+        {
+<span class="fc" id="L406">            return JSPS.get( jsp );</span>
+        }
+
+<span class="fc" id="L409">        return null;</span>
+    }
+
+    /**
+     * Determines the correct wiki page based on a supplied request context and
+     * HTTP request. This method attempts to determine the page requested by a
+     * user, taking into acccount special pages. The resolution algorithm will:
+     * &lt;ul&gt;
+     * &lt;li&gt;Extract the page name from the URL according to the rules for the
+     * current {@link org.apache.wiki.url.URLConstructor}. If a page name was
+     * passed in the request, return the correct name after taking into account
+     * potential plural matches.&lt;/li&gt;
+     * &lt;li&gt;If the extracted page name is &lt;code&gt;null&lt;/code&gt;, attempt to see
+     * if a &quot;special page&quot; was intended by examining the servlet path. For
+     * example, the request path &quot;/UserPreferences.jsp&quot; will resolve to
+     * &quot;UserPreferences.&quot;&lt;/li&gt;
+     * &lt;li&gt;If neither of these methods work, this method returns
+     * &lt;code&gt;null&lt;/code&gt;&lt;/li&gt;
+     * &lt;/ul&gt;
+     * @param requestContext the request context
+     * @param request the HTTP request
+     * @return the resolved page name
+     */
+    protected String extractPageFromParameter( String requestContext, HttpServletRequest request )
+    {
+        String page;
+
+        // Extract the page name from the URL directly
+        try
+        {
+<span class="fc" id="L439">            page = m_engine.getURLConstructor().parsePage( requestContext, request, m_engine.getContentEncoding() );</span>
+<span class="fc bfc" id="L440" title="All 2 branches covered.">            if ( page != null )</span>
+            {
+                try
+                {
+                    // Look for singular/plural variants; if one
+                    // not found, take the one the user supplied
+<span class="fc" id="L446">                    String finalPage = getFinalPageName( page );</span>
+<span class="fc bfc" id="L447" title="All 2 branches covered.">                    if ( finalPage != null )</span>
+                    {
+<span class="fc" id="L449">                        page = finalPage;</span>
+                    }
+                }
+<span class="nc" id="L452">                catch( ProviderException e )</span>
+                {
+                    // FIXME: Should not ignore!
+<span class="fc" id="L455">                }</span>
+<span class="fc" id="L456">                return page;</span>
+            }
+        }
+<span class="nc" id="L459">        catch( IOException e )</span>
+        {
+<span class="nc" id="L461">            m_log.error( &quot;Unable to create context&quot;, e );</span>
+<span class="nc" id="L462">            throw new InternalWikiException( &quot;Big internal booboo, please check logs.&quot; , e);</span>
+<span class="fc" id="L463">        }</span>
+
+        // Didn't resolve; return null
+<span class="fc" id="L466">        return null;</span>
+    }
+
+    /**
+     * Looks up and returns the correct, versioned WikiPage based on a supplied
+     * page name and optional &lt;code&gt;version&lt;/code&gt; parameter passed in an HTTP
+     * request. If the &lt;code&gt;version&lt;/code&gt; parameter does not exist in the
+     * request, the latest version is returned.
+     * @param request the HTTP request
+     * @param page the name of the page to look up; this page &lt;em&gt;must&lt;/em&gt; exist
+     * @return the wiki page
+     */
+    protected WikiPage resolvePage( HttpServletRequest request, String page )
+    {
+        // See if the user included a version parameter
+        WikiPage wikipage;
+<span class="fc" id="L482">        int version = WikiProvider.LATEST_VERSION;</span>
+<span class="fc" id="L483">        String rev = request.getParameter( &quot;version&quot; );</span>
+
+<span class="pc bpc" id="L485" title="1 of 2 branches missed.">        if ( rev != null )</span>
+        {
+            try
+            {
+<span class="nc" id="L489">                version = Integer.parseInt( rev );</span>
+            }
+<span class="nc" id="L491">            catch( NumberFormatException e )</span>
+            {
+                // This happens a lot with bots or other guys who are trying
+                // to test if we are vulnerable to e.g. XSS attacks.  We catch
+                // it here so that the admin does not get tons of mail.
+<span class="nc" id="L496">            }</span>
+        }
+
+<span class="fc" id="L499">        wikipage = m_engine.getPage( page, version );</span>
+
+<span class="fc bfc" id="L501" title="All 2 branches covered.">        if ( wikipage == null )</span>
+        {
+<span class="fc" id="L503">            page = MarkupParser.cleanLink( page );</span>
+<span class="fc" id="L504">            wikipage = new WikiPage( m_engine, page );</span>
+        }
+<span class="fc" id="L506">        return wikipage;</span>
+    }
+
+    /**
+     * Determines whether a &quot;page&quot; exists by examining the list of special pages
+     * and querying the page manager.
+     * @param page the page to seek
+     * @return &lt;code&gt;true&lt;/code&gt; if the page exists, &lt;code&gt;false&lt;/code&gt;
+     *         otherwise
+     * @throws ProviderException if the underlyng page provider that locates pages
+     * throws an exception
+     */
+    protected boolean simplePageExists( String page ) throws ProviderException
+    {
+<span class="fc bfc" id="L520" title="All 2 branches covered.">        if ( m_specialPages.containsKey( page ) )</span>
+        {
+<span class="fc" id="L522">            return true;</span>
+        }
+<span class="fc" id="L524">        return m_engine.getPageManager().pageExists( page );</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

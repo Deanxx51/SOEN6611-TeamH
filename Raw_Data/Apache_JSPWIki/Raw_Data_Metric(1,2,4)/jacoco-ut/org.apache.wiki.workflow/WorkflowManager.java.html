@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WorkflowManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">WorkflowManager.java</span></div><h1>WorkflowManager.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.acl.UnresolvedPrincipal;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WorkflowEvent;
+
+
+/**
+ * &lt;p&gt;
+ * Monitor class that tracks running Workflows. The WorkflowManager also keeps track of the names of
+ * users or groups expected to approve particular Workflows.
+ * &lt;/p&gt;
+ */
+public class WorkflowManager implements WikiEventListener {
+
+    /** The workflow attribute which stores the wikiContext. */
+    public static final String WF_WP_SAVE_ATTR_PRESAVE_WIKI_CONTEXT = &quot;wikiContext&quot;;
+    /** The name of the key from jspwiki.properties which defines who shall approve the workflow of storing a wikipage.  Value is &lt;tt&gt;{@value}&lt;/tt&gt; */
+    public static final String WF_WP_SAVE_APPROVER = &quot;workflow.saveWikiPage&quot;;
+    /** The message key for storing the Decision text for saving a page.  Value is {@value}. */
+    public static final String WF_WP_SAVE_DECISION_MESSAGE_KEY = &quot;decision.saveWikiPage&quot;;
+    /** The message key for rejecting the decision to save the page.  Value is {@value}. */
+    public static final String WF_WP_SAVE_REJECT_MESSAGE_KEY = &quot;notification.saveWikiPage.reject&quot;;
+    /** Fact name for storing the page name.  Value is {@value}. */
+    public static final String WF_WP_SAVE_FACT_PAGE_NAME = &quot;fact.pageName&quot;;
+    /** Fact name for storing a diff text. Value is {@value}. */
+    public static final String WF_WP_SAVE_FACT_DIFF_TEXT = &quot;fact.diffText&quot;;
+    /** Fact name for storing the current text.  Value is {@value}. */
+    public static final String WF_WP_SAVE_FACT_CURRENT_TEXT = &quot;fact.currentText&quot;;
+    /** Fact name for storing the proposed (edited) text.  Value is {@value}. */
+    public static final String WF_WP_SAVE_FACT_PROPOSED_TEXT = &quot;fact.proposedText&quot;;
+    /** Fact name for storing whether the user is authenticated or not.  Value is {@value}. */
+    public static final String WF_WP_SAVE_FACT_IS_AUTHENTICATED = &quot;fact.isAuthenticated&quot;;
+
+    /** The workflow attribute which stores the user profile. */
+    public static final String WF_UP_CREATE_SAVE_ATTR_SAVED_PROFILE = &quot;userProfile&quot;;
+    /** The name of the key from jspwiki.properties which defines who shall approve the workflow of creating a user profile.  Value is &lt;tt&gt;{@value}&lt;/tt&gt; */
+    public static final String WF_UP_CREATE_SAVE_APPROVER = &quot;workflow.createUserProfile&quot;;
+    /** The message key for storing the Decision text for saving a user profile.  Value is {@value}. */
+    public static final String WF_UP_CREATE_SAVE_DECISION_MESSAGE_KEY = &quot;decision.createUserProfile&quot;;
+    /** Fact name for storing a the submitter name. Value is {@value}. */
+    public static final String WF_UP_CREATE_SAVE_FACT_SUBMITTER = &quot;fact.submitter&quot;;
+    /** Fact name for storing the preferences' login name. Value is {@value}. */
+    public static final String WF_UP_CREATE_SAVE_FACT_PREFS_LOGIN_NAME = &quot;prefs.loginname&quot;;
+    /** Fact name for storing the preferences' full name. Value is {@value}. */
+    public static final String WF_UP_CREATE_SAVE_FACT_PREFS_FULL_NAME = &quot;prefs.fullname&quot;;
+    /** Fact name for storing the preferences' email. Value is {@value}. */
+    public static final String WF_UP_CREATE_SAVE_FACT_PREFS_EMAIL = &quot;prefs.email&quot;;
+
+<span class="fc" id="L83">    private final DecisionQueue m_queue = new DecisionQueue();</span>
+
+    private final Set&lt;Workflow&gt; m_workflows;
+
+    private final Map&lt;String, Principal&gt; m_approvers;
+
+    private final List&lt;Workflow&gt; m_completed;
+
+    /** The prefix to use for looking up &lt;code&gt;jspwiki.properties&lt;/code&gt; approval roles. */
+    protected static final String PROPERTY_APPROVER_PREFIX = &quot;jspwiki.approver.&quot;;
+
+    /**
+     * Constructs a new WorkflowManager, with an empty workflow cache. New
+     * Workflows are automatically assigned unique identifiers, starting with 1.
+     */
+    public WorkflowManager()
+<span class="fc" id="L99">    {</span>
+<span class="fc" id="L100">        m_next = 1;</span>
+<span class="fc" id="L101">        m_workflows = ConcurrentHashMap.newKeySet();</span>
+<span class="fc" id="L102">        m_approvers = new ConcurrentHashMap&lt;&gt;();</span>
+<span class="fc" id="L103">        m_completed = new CopyOnWriteArrayList&lt;&gt;();</span>
+<span class="fc" id="L104">    }</span>
+
+    /**
+     * Adds a new workflow to the set of workflows and starts it. The new
+     * workflow is automatically assigned a unique ID. If another workflow with
+     * the same ID already exists, this method throws a WikIException.
+     * @param workflow the workflow to start
+     * @throws WikiException if a workflow the automatically assigned
+     * ID already exist; this should not happen normally
+     */
+    public void start( Workflow workflow ) throws WikiException
+    {
+<span class="fc" id="L116">        m_workflows.add( workflow );</span>
+<span class="fc" id="L117">        workflow.setWorkflowManager( this );</span>
+<span class="fc" id="L118">        workflow.setId( nextId() );</span>
+<span class="fc" id="L119">        workflow.start();</span>
+<span class="fc" id="L120">    }</span>
+
+    /**
+     * Returns a collection of the currently active workflows.
+     *
+     * @return the current workflows
+     */
+    public Collection&lt; Workflow &gt; getWorkflows() {
+<span class="fc" id="L128">        Set&lt; Workflow &gt; workflows = ConcurrentHashMap.newKeySet();</span>
+<span class="fc" id="L129">        workflows.addAll( m_workflows );</span>
+<span class="fc" id="L130">        return workflows;</span>
+    }
+
+    /**
+     * Returns a collection of finished workflows; that is, those that have aborted or completed.
+     * @return the finished workflows
+     */
+    public List&lt; Workflow &gt; getCompletedWorkflows() {
+<span class="fc" id="L138">        return new CopyOnWriteArrayList&lt; &gt;( m_completed );</span>
+    }
+
+<span class="fc" id="L141">    private WikiEngine m_engine = null;</span>
+
+    /**
+     * Initializes the WorkflowManager using a specfied WikiEngine and
+     * properties. Any properties that begin with
+     * {@link #PROPERTY_APPROVER_PREFIX} will be assumed to be
+     * Decisions that require approval. For a given property key, everything
+     * after the prefix denotes the Decision's message key. The property
+     * value indicates the Principal (Role, GroupPrincipal, WikiPrincipal) that
+     * must approve the Decision. For example, if the property key/value pair
+     * is &lt;code&gt;jspwiki.approver.workflow.saveWikiPage=Admin&lt;/code&gt;,
+     * the Decision's message key is &lt;code&gt;workflow.saveWikiPage&lt;/code&gt;.
+     * The Principal &lt;code&gt;Admin&lt;/code&gt; will be resolved via
+     * {@link org.apache.wiki.auth.AuthorizationManager#resolvePrincipal(String)}.
+     * @param engine the wiki engine to associate with this WorkflowManager
+     * @param props the wiki engine's properties
+     */
+    public void initialize( WikiEngine engine, Properties props )
+    {
+<span class="fc" id="L160">        m_engine = engine;</span>
+
+        // Identify the workflows requiring approvals
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        for ( Iterator&lt;?&gt; it = props.keySet().iterator(); it.hasNext(); )</span>
+        {
+<span class="fc" id="L165">            String prop = (String) it.next();</span>
+<span class="fc bfc" id="L166" title="All 2 branches covered.">            if ( prop.startsWith( PROPERTY_APPROVER_PREFIX ) )</span>
+            {
+
+                // For the key, everything after the prefix is the workflow name
+<span class="fc" id="L170">                String key = prop.substring( PROPERTY_APPROVER_PREFIX.length() );</span>
+<span class="pc bpc" id="L171" title="2 of 4 branches missed.">                if ( key != null &amp;&amp; key.length() &gt; 0 )</span>
+                {
+
+                    // Only use non-null/non-blank approvers
+<span class="fc" id="L175">                    String approver = props.getProperty( prop );</span>
+<span class="pc bpc" id="L176" title="1 of 4 branches missed.">                    if ( approver != null &amp;&amp; approver.length() &gt; 0 )</span>
+                    {
+<span class="fc" id="L178">                        m_approvers.put( key, new UnresolvedPrincipal( approver ) );</span>
+                    }
+                }
+            }
+<span class="fc" id="L182">        }</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if a workflow matching a particular key
+     * contains an approval step.
+     *
+     * @param messageKey
+     *            the name of the workflow; corresponds to the value returned by
+     *            {@link Workflow#getMessageKey()}.
+     * @return the result
+     */
+    public boolean requiresApproval( String messageKey )
+    {
+<span class="fc" id="L196">        return  m_approvers.containsKey( messageKey );</span>
+    }
+
+    /**
+     * Looks up and resolves the actor who approves a Decision for a particular
+     * Workflow, based on the Workflow's message key. If not found, or if
+     * Principal is Unresolved, throws WikiException. This particular
+     * implementation always returns the GroupPrincipal &lt;code&gt;Admin&lt;/code&gt;
+     *
+     * @param messageKey the Decision's message key
+     * @return the actor who approves Decisions
+     * @throws WikiException if the message key was not found, or the
+     * Principal value corresponding to the key could not be resolved
+     */
+    public Principal getApprover( String messageKey ) throws WikiException
+    {
+<span class="fc" id="L212">        Principal approver = m_approvers.get( messageKey );</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">        if ( approver == null )</span>
+        {
+<span class="fc" id="L215">            throw new WikiException( &quot;Workflow '&quot; + messageKey + &quot;' does not require approval.&quot; );</span>
+        }
+
+        // Try to resolve UnresolvedPrincipals
+<span class="pc bpc" id="L219" title="1 of 2 branches missed.">        if ( approver instanceof UnresolvedPrincipal )</span>
+        {
+<span class="fc" id="L221">            String name = approver.getName();</span>
+<span class="fc" id="L222">            approver = m_engine.getAuthorizationManager().resolvePrincipal( name );</span>
+
+            // If still unresolved, throw exception; otherwise, freshen our
+            // cache
+<span class="pc bpc" id="L226" title="1 of 2 branches missed.">            if ( approver instanceof UnresolvedPrincipal )</span>
+            {
+<span class="nc" id="L228">                throw new WikiException( &quot;Workflow approver '&quot; + name + &quot;' cannot not be resolved.&quot; );</span>
+            }
+
+<span class="fc" id="L231">            m_approvers.put( messageKey, approver );</span>
+        }
+<span class="fc" id="L233">        return approver;</span>
+    }
+
+    /**
+     * Protected helper method that returns the associated WikiEngine
+     *
+     * @return the wiki engine
+     */
+    protected WikiEngine getEngine()
+    {
+<span class="nc bnc" id="L243" title="All 2 branches missed.">        if ( m_engine == null )</span>
+        {
+<span class="nc" id="L245">            throw new IllegalStateException( &quot;WikiEngine cannot be null; please initialize WorkflowManager first.&quot; );</span>
+        }
+<span class="nc" id="L247">        return m_engine;</span>
+    }
+
+    /**
+     * Returns the DecisionQueue associated with this WorkflowManager
+     *
+     * @return the decision queue
+     */
+    public DecisionQueue getDecisionQueue()
+    {
+<span class="fc" id="L257">        return m_queue;</span>
+    }
+
+    private volatile int m_next;
+
+    /**
+     * Returns the next available unique identifier, which is subsequently
+     * incremented.
+     *
+     * @return the id
+     */
+    private synchronized int nextId()
+    {
+<span class="fc" id="L270">        int current = m_next;</span>
+<span class="fc" id="L271">        m_next++;</span>
+<span class="fc" id="L272">        return current;</span>
+    }
+
+    /**
+     * Returns the current workflows a wiki session owns. These are workflows whose
+     * {@link Workflow#getOwner()} method returns a Principal also possessed by the
+     * wiki session (see {@link org.apache.wiki.WikiSession#getPrincipals()}). If the
+     * wiki session is not authenticated, this method returns an empty Collection.
+     * @param session the wiki session
+     * @return the collection workflows the wiki session owns, which may be empty
+     */
+    public Collection&lt; Workflow &gt; getOwnerWorkflows( WikiSession session ) {
+<span class="nc" id="L284">        List&lt;Workflow&gt; workflows = new ArrayList&lt;&gt;();</span>
+<span class="nc bnc" id="L285" title="All 2 branches missed.">        if ( session.isAuthenticated() ) {</span>
+<span class="nc" id="L286">            Principal[] sessionPrincipals = session.getPrincipals();</span>
+<span class="nc bnc" id="L287" title="All 2 branches missed.">            for ( Workflow w : m_workflows ) {</span>
+<span class="nc" id="L288">                Principal owner = w.getOwner();</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">                for ( Principal sessionPrincipal : sessionPrincipals ) {</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">                    if ( sessionPrincipal.equals( owner ) ) {</span>
+<span class="nc" id="L291">                        workflows.add( w );</span>
+<span class="nc" id="L292">                        break;</span>
+                    }
+                }
+<span class="nc" id="L295">            }</span>
+        }
+<span class="nc" id="L297">        return workflows;</span>
+    }
+
+    /**
+     * Listens for {@link org.apache.wiki.event.WorkflowEvent} objects emitted by Workflows. In particular, this 
+     * method listens for {@link org.apache.wiki.event.WorkflowEvent#CREATED}, 
+     * {@link org.apache.wiki.event.WorkflowEvent#ABORTED} and {@link org.apache.wiki.event.WorkflowEvent#COMPLETED} 
+     * events. If a workflow is created, it is automatically added to the cache. If one is aborted or completed, it 
+     * is automatically removed.
+     * 
+     * @param event the event passed to this listener
+     */
+    @Override
+    public void actionPerformed(WikiEvent event) {
+<span class="pc bpc" id="L311" title="1 of 2 branches missed.">        if (event instanceof WorkflowEvent) {</span>
+<span class="fc" id="L312">            Workflow workflow = event.getSrc();</span>
+<span class="pc bpc" id="L313" title="1 of 4 branches missed.">            switch ( event.getType() ) {</span>
+                case WorkflowEvent.ABORTED:
+                    // Remove from manager
+<span class="fc" id="L316">                    remove( workflow );</span>
+<span class="fc" id="L317">                    break;</span>
+                case WorkflowEvent.COMPLETED:
+                    // Remove from manager
+<span class="fc" id="L320">                    remove( workflow );</span>
+<span class="fc" id="L321">                    break;</span>
+                case WorkflowEvent.CREATED:
+                    // Add to manager
+<span class="nc" id="L324">                    add( workflow );</span>
+<span class="nc" id="L325">                    break;</span>
+                default:
+                    break;
+            }
+        }
+<span class="fc" id="L330">    }</span>
+
+    /**
+     * Protected helper method that adds a newly created Workflow to the cache, and sets its 
+     * &lt;code&gt;workflowManager&lt;/code&gt; and &lt;code&gt;Id&lt;/code&gt; properties if not set.
+     *
+     * @param workflow the workflow to add
+     */
+    protected void add( Workflow workflow ) {
+<span class="nc bnc" id="L339" title="All 2 branches missed.">        if ( workflow.getWorkflowManager() == null ) {</span>
+<span class="nc" id="L340">            workflow.setWorkflowManager( this );</span>
+        }
+<span class="nc bnc" id="L342" title="All 2 branches missed.">        if ( workflow.getId() == Workflow.ID_NOT_SET ) {</span>
+<span class="nc" id="L343">            workflow.setId( nextId() );</span>
+        }
+<span class="nc" id="L345">        m_workflows.add( workflow );</span>
+<span class="nc" id="L346">    }</span>
+
+    /**
+     * Protected helper method that removes a specified Workflow from the cache,
+     * and moves it to the workflow history list. This method defensively
+     * checks to see if the workflow has not yet been removed.
+     *
+     * @param workflow the workflow to remove
+     */
+    protected void remove(Workflow workflow) {
+<span class="fc bfc" id="L356" title="All 2 branches covered.">        if ( m_workflows.contains( workflow ) ) {</span>
+<span class="fc" id="L357">            m_workflows.remove( workflow );</span>
+<span class="fc" id="L358">            m_completed.add( workflow );</span>
+        }
+<span class="fc" id="L360">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Outcome.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">Outcome.java</span></div><h1>Outcome.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.io.Serializable;
+
+/**
+ * Resolution of a workflow Step, such as &quot;approve,&quot; &quot;deny,&quot; &quot;hold,&quot; &quot;task
+ * error,&quot; or other potential resolutions.
+ *
+ * @since 2.5
+ */
+public final class Outcome implements Serializable
+{
+
+    private static final long serialVersionUID = -338361947886288073L;
+
+    /** Complete workflow step (without errors) */
+<span class="fc" id="L35">    public static final Outcome STEP_COMPLETE = new Outcome( &quot;outcome.step.complete&quot;, true );</span>
+
+    /** Terminate workflow step (without errors) */
+<span class="fc" id="L38">    public static final Outcome STEP_ABORT = new Outcome( &quot;outcome.step.abort&quot;, true );</span>
+
+    /** Continue workflow step (without errors) */
+<span class="fc" id="L41">    public static final Outcome STEP_CONTINUE = new Outcome( &quot;outcome.step.continue&quot;, false );</span>
+
+    /** Acknowlege the Decision. */
+<span class="fc" id="L44">    public static final Outcome DECISION_ACKNOWLEDGE = new Outcome( &quot;outcome.decision.acknowledge&quot;, true );</span>
+
+    /** Approve the Decision (and complete the step). */
+<span class="fc" id="L47">    public static final Outcome DECISION_APPROVE = new Outcome( &quot;outcome.decision.approve&quot;, true );</span>
+
+    /** Deny the Decision (and complete the step). */
+<span class="fc" id="L50">    public static final Outcome DECISION_DENY = new Outcome( &quot;outcome.decision.deny&quot;, true );</span>
+
+    /** Put the Decision on hold (and pause the step). */
+<span class="fc" id="L53">    public static final Outcome DECISION_HOLD = new Outcome( &quot;outcome.decision.hold&quot;, false );</span>
+
+    /** Reassign the Decision to another actor (and pause the step). */
+<span class="fc" id="L56">    public static final Outcome DECISION_REASSIGN = new Outcome( &quot;outcome.decision.reassign&quot;, false );</span>
+
+<span class="fc" id="L58">    private static final Outcome[] OUTCOMES = new Outcome[] { STEP_COMPLETE, STEP_ABORT, STEP_CONTINUE, DECISION_ACKNOWLEDGE,</span>
+                                                               DECISION_APPROVE, DECISION_DENY, DECISION_HOLD, DECISION_REASSIGN };
+
+    private final String m_key;
+
+    private final boolean m_completion;
+
+    /**
+     * Private constructor to prevent direct instantiation.
+     *
+     * @param key
+     *            message key for the Outcome
+     * @param completion
+     *            whether this Outcome should be interpreted as the logical
+     *            completion of a Step.
+     */
+    private Outcome( String key, boolean completion )
+<span class="fc" id="L75">    {</span>
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if ( key == null )</span>
+        {
+<span class="nc" id="L78">            throw new IllegalArgumentException( &quot;Key cannot be null.&quot; );</span>
+        }
+<span class="fc" id="L80">        m_key = key;</span>
+<span class="fc" id="L81">        m_completion = completion;</span>
+<span class="fc" id="L82">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if this Outcome represents a completion
+     * condition for a Step.
+     *
+     * @return the result
+     */
+    public boolean isCompletion()
+    {
+<span class="fc" id="L92">        return m_completion;</span>
+    }
+
+    /**
+     * The i18n key for this outcome, which is prefixed by &lt;code&gt;outcome.&lt;/code&gt;.
+     * If calling classes wish to return a locale-specific name for this task
+     * (such as &quot;approve this request&quot;), they can use this method to obtain the
+     * correct key suffix.
+     *
+     * @return the i18n key for this outcome
+     */
+    public String getMessageKey()
+    {
+<span class="fc" id="L105">        return m_key;</span>
+    }
+
+    /**
+     * The hashcode of an Outcome is identical to the hashcode of its message
+     * key, multiplied by 2 if it is a &quot;completion&quot; Outcome.
+     * @return the hash code
+     */
+    public int hashCode()
+    {
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        return m_key.hashCode() * ( m_completion ? 1 : 2 );</span>
+    }
+
+    /**
+     * Two Outcome objects are equal if their message keys are equal.
+     * @param obj the object to test
+     * @return &lt;code&gt;true&lt;/code&gt; if logically equal, &lt;code&gt;false&lt;/code&gt; if not
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        if (!(obj instanceof Outcome))</span>
+        {
+<span class="nc" id="L127">            return false;</span>
+        }
+<span class="fc" id="L129">        return m_key.equals( ( (Outcome) obj ).getMessageKey() );</span>
+    }
+
+    /**
+     * Returns a named Outcome. If an Outcome matching the supplied key is not
+     * found, this method throws a {@link NoSuchOutcomeException}.
+     *
+     * @param key
+     *            the name of the outcome
+     * @return the Outcome
+     * @throws NoSuchOutcomeException
+     *             if an Outcome matching the key isn't found.
+     */
+    public static Outcome forName( String key ) throws NoSuchOutcomeException
+    {
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">        if ( key != null )</span>
+        {
+<span class="fc bfc" id="L146" title="All 2 branches covered.">            for (int i = 0; i &lt; OUTCOMES.length; i++)</span>
+            {
+<span class="fc bfc" id="L148" title="All 2 branches covered.">                if ( OUTCOMES[i].m_key.equals( key ) )</span>
+                {
+<span class="fc" id="L150">                    return OUTCOMES[i];</span>
+                }
+            }
+        }
+<span class="fc" id="L154">        throw new NoSuchOutcomeException( &quot;Outcome &quot; + key + &quot; not found.&quot; );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String toString()
+    {
+<span class="nc" id="L162">        return &quot;[Outcome:&quot; + m_key + &quot;]&quot;;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

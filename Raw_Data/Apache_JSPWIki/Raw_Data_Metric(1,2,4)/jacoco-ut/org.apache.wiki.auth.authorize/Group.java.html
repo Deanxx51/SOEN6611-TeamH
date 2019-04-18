@@ -1,0 +1,339 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Group.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.authorize</a> &gt; <span class="el_source">Group.java</span></div><h1>Group.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.authorize;
+
+import java.security.Principal;
+import java.util.Date;
+import java.util.Vector;
+
+import org.apache.wiki.auth.GroupPrincipal;
+
+/**
+ * &lt;p&gt;
+ * Groups are a specialized type of ad-hoc role used by the wiki system. Unlike
+ * externally-provided roles (such as those provided by an LDAP server or web
+ * container), JSPWiki groups can be created dynamically by wiki users, without
+ * requiring special container privileges or administrator intervention. They
+ * are designed to provide a lightweight role-based access control system that
+ * complements existing role systems.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Group names are case-insensitive, and have a few naming restrictions, which
+ * are enforced by the {@link GroupManager}:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;Groups cannot have the same name as a built-in Role (e.g., &quot;Admin&quot;,
+ * &quot;Authenticated&quot; etc.)&lt;/li&gt;
+ * &lt;li&gt;Groups cannot have the same name as an existing user&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;
+ * &lt;em&gt;Note: prior to JSPWiki 2.4.19, Group was an interface; it
+ * is now a concrete, final class.&lt;/em&gt;
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Groups are related to {@link GroupPrincipal}s. A GroupPrincipal, when
+ * injected into the Principal set of a WikiSession's Subject, means that the
+ * user is a member of a Group of the same name -- it is, in essence, an
+ * &quot;authorization token.&quot; GroupPrincipals, unlike Groups, are thread-safe,
+ * lightweight and immutable. That's why we use them in Subjects rather than the
+ * Groups themselves.
+ * &lt;/p&gt;
+ *
+ * @since 2.3
+ */
+public class Group
+{
+
+<span class="fc" id="L63">    static final String[]  RESTRICTED_GROUPNAMES = new String[]</span>
+                                                  { &quot;Anonymous&quot;, &quot;All&quot;, &quot;Asserted&quot;, &quot;Authenticated&quot; };
+
+<span class="fc" id="L66">    private final Vector&lt;Principal&gt;    m_members             = new Vector&lt;Principal&gt;();</span>
+
+<span class="fc" id="L68">    private String          m_creator             = null;</span>
+
+<span class="fc" id="L70">    private Date            m_created             = null;</span>
+
+<span class="fc" id="L72">    private String          m_modifier            = null;</span>
+
+<span class="fc" id="L74">    private Date            m_modified            = null;</span>
+
+    private final String    m_name;
+
+    private final Principal m_principal;
+
+    private final String    m_wiki;
+
+    /**
+     * Protected constructor to prevent direct instantiation except by other
+     * package members. Callers should use
+     * {@link GroupManager#parseGroup(String, String, boolean)} or
+     * {@link GroupManager#parseGroup(org.apache.wiki.WikiContext, boolean)}.
+     * instead.
+     * @param name the name of the group
+     * @param wiki the wiki the group belongs to
+     */
+    protected Group( String name, String wiki )
+<span class="fc" id="L92">    {</span>
+<span class="fc" id="L93">        m_name = name;</span>
+<span class="fc" id="L94">        m_wiki = wiki;</span>
+<span class="fc" id="L95">        m_principal = new GroupPrincipal( name );</span>
+<span class="fc" id="L96">    }</span>
+
+    /**
+     * Adds a Principal to the group. 
+     * 
+     * @param user the principal to add
+     * @return &lt;code&gt;true&lt;/code&gt; if the operation was successful
+     */
+    public synchronized boolean add( Principal user )
+    {
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        if ( isMember( user ) )</span>
+        {
+<span class="fc" id="L108">            return false;</span>
+        }
+
+<span class="fc" id="L111">        m_members.add( user );</span>
+<span class="fc" id="L112">        return true;</span>
+    }
+
+    /**
+     * Clears all Principals from the group list. 
+     */
+    public synchronized void clear()
+    {
+<span class="fc" id="L120">        m_members.clear();</span>
+<span class="fc" id="L121">    }</span>
+
+    /**
+     * Two DefaultGroups are equal if they contain identical member Principals
+     * and have the same name.
+     * @param o the object to compare
+     * @return the comparison
+     */
+    public boolean equals( Object o )
+    {
+<span class="pc bpc" id="L131" title="2 of 4 branches missed.">        if ( o == null || !( o instanceof Group ) )</span>
+<span class="nc" id="L132">            return false;</span>
+
+<span class="fc" id="L134">        Group g = (Group) o; // Just a shortcut.</span>
+
+<span class="fc bfc" id="L136" title="All 2 branches covered.">        if ( g.m_members.size() != m_members.size() )</span>
+<span class="fc" id="L137">            return false;</span>
+
+<span class="pc bpc" id="L139" title="1 of 4 branches missed.">        if ( getName() != null &amp;&amp; !getName().equals( g.getName() ) )</span>
+        {
+<span class="fc" id="L141">            return false;</span>
+        }
+<span class="pc bpc" id="L143" title="3 of 4 branches missed.">        else if ( getName() == null &amp;&amp; g.getName() != null )</span>
+        {
+<span class="nc" id="L145">            return false;</span>
+        }
+
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        for( Principal principal : m_members )</span>
+        {
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">            if ( !g.isMember( principal ) )</span>
+            {
+<span class="nc" id="L152">                return false;</span>
+            }
+<span class="fc" id="L154">        }</span>
+
+<span class="fc" id="L156">        return true;</span>
+    }
+
+    /**
+     *  The hashcode is calculated as a XOR sum over all members of
+     *  the Group.
+     *  @return the hash code
+     */
+    public int hashCode()
+    {
+<span class="fc" id="L166">        int hc = 0;</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">        for( Principal member : m_members )</span>
+        {
+<span class="fc" id="L169">            hc ^= member.hashCode();</span>
+<span class="fc" id="L170">        }</span>
+<span class="fc" id="L171">        return hc;</span>
+    }
+    
+    /**
+     * Returns the creation date.
+     * @return the creation date
+     */
+    public synchronized Date getCreated()
+    {
+<span class="fc" id="L180">        return m_created;</span>
+    }
+
+    /**
+     * Returns the creator of this Group.
+     * @return the creator
+     */
+    public final synchronized String getCreator()
+    {
+<span class="fc" id="L189">        return m_creator;</span>
+    }
+
+    /**
+     * Returns the last-modified date.
+     * @return the date and time of last modification
+     */
+    public synchronized Date getLastModified()
+    {
+<span class="fc" id="L198">        return m_modified;</span>
+    }
+
+    /**
+     * Returns the name of the user who last modified this group.
+     * @return the modifier
+     */
+    public final synchronized String getModifier()
+    {
+<span class="fc" id="L207">        return m_modifier;</span>
+    }
+
+    /**
+     * The name of the group. This is set in the class constructor.
+     * @return the name of the Group
+     */
+    public String getName()
+    {
+<span class="fc" id="L216">        return m_name;</span>
+    }
+
+    /**
+     * Returns the GroupPrincipal that represents this Group.
+     * @return the group principal
+     */
+    public Principal getPrincipal()
+    {
+<span class="fc" id="L225">        return m_principal;</span>
+    }
+
+    /**
+     * Returns the wiki name.
+     * @return the wiki name
+     */
+    public String getWiki()
+    {
+<span class="nc" id="L234">        return m_wiki;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if a Principal is a member of the group.
+     * Specifically, the Principal's &lt;code&gt;getName()&lt;/code&gt; method must return
+     * the same value as one of the Principals in the group member list. The
+     * Principal's type does &lt;em&gt;not&lt;/em&gt; need to match.
+     * @param principal the principal about whom membeship status is sought
+     * @return the result of the operation
+     */
+    public boolean isMember( Principal principal )
+    {
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        return findMember( principal.getName() ) != null;</span>
+    }
+
+    /**
+     * Returns the members of the group as an array of Principal objects.
+     * @return the members
+     */
+    public Principal[] members()
+    {
+<span class="fc" id="L256">        return m_members.toArray( new Principal[m_members.size()] );</span>
+    }
+
+    /**
+     * Removes a Principal from the group. 
+     * 
+     * @param user the principal to remove
+     * @return &lt;code&gt;true&lt;/code&gt; if the operation was successful
+     */
+    public synchronized boolean remove( Principal user )
+    {
+<span class="fc" id="L267">        user = findMember( user.getName() );</span>
+
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">        if ( user == null )</span>
+<span class="nc" id="L270">            return false;</span>
+
+<span class="fc" id="L272">        m_members.remove( user );</span>
+        
+<span class="fc" id="L274">        return true;</span>
+    }
+
+    /**
+     * Sets the created date.
+     * @param date the creation date
+     */
+    public synchronized void setCreated( Date date )
+    {
+<span class="fc" id="L283">        m_created = date;</span>
+<span class="fc" id="L284">    }</span>
+
+    /**
+     * Sets the creator of this Group.
+     * @param creator the creator
+     */
+    public final synchronized void setCreator( String creator )
+    {
+<span class="fc" id="L292">        this.m_creator = creator;</span>
+<span class="fc" id="L293">    }</span>
+
+    /**
+     * Sets the last-modified date
+     * @param date the last-modified date
+     */
+    public synchronized void setLastModified( Date date )
+    {
+<span class="fc" id="L301">        m_modified = date;</span>
+<span class="fc" id="L302">    }</span>
+
+    /**
+     * Sets the name of the user who last modified this group.
+     * @param modifier the modifier
+     */
+    public final synchronized void setModifier( String modifier )
+    {
+<span class="fc" id="L310">        this.m_modifier = modifier;</span>
+<span class="fc" id="L311">    }</span>
+
+    /**
+     * Returns a string representation of the Group.
+     * @return the string
+     * @see java.lang.Object#toString()
+     */
+    public String toString()
+    {
+<span class="nc" id="L320">    	StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L321">        sb.append( &quot;(Group &quot; + getName() + &quot;)&quot; );</span>
+<span class="nc" id="L322">        return sb.toString();</span>
+    }
+
+    private Principal findMember( String name )
+    {
+<span class="fc bfc" id="L327" title="All 2 branches covered.">        for( Principal member : m_members )</span>
+        {
+<span class="fc bfc" id="L329" title="All 2 branches covered.">            if ( member.getName().equals( name ) )</span>
+            {
+<span class="fc" id="L331">                return member;</span>
+            }
+<span class="fc" id="L333">        }</span>
+
+<span class="fc" id="L335">        return null;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

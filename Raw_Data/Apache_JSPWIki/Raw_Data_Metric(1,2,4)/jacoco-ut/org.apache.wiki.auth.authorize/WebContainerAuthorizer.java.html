@@ -1,0 +1,469 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WebContainerAuthorizer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.authorize</a> &gt; <span class="el_source">WebContainerAuthorizer.java</span></div><h1>WebContainerAuthorizer.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.authorize;
+
+import java.io.IOException;
+import java.net.URL;
+import java.security.Principal;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.jdom2.Document;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.Namespace;
+import org.jdom2.input.SAXBuilder;
+import org.jdom2.input.sax.XMLReaders;
+import org.jdom2.xpath.XPath;
+import org.xml.sax.EntityResolver;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
+/**
+ * Authorizes users by delegating role membership checks to the servlet
+ * container. In addition to implementing methods for the
+ * &lt;code&gt;Authorizer&lt;/code&gt; interface, this class also provides a convenience
+ * method {@link #isContainerAuthorized()} that queries the web application
+ * descriptor to determine if the container manages authorization.
+ * @since 2.3
+ */
+public class WebContainerAuthorizer implements WebAuthorizer
+{
+    private static final String J2EE_SCHEMA_25_NAMESPACE = &quot;http://java.sun.com/xml/ns/javaee&quot;;
+
+<span class="fc" id="L59">    protected static final Logger log                   = Logger.getLogger( WebContainerAuthorizer.class );</span>
+
+    protected WikiEngine          m_engine;
+
+    /**
+     * A lazily-initialized array of Roles that the container knows about. These
+     * are parsed from JSPWiki's &lt;code&gt;web.xml&lt;/code&gt; web application
+     * deployment descriptor. If this file cannot be read for any reason, the
+     * role list will be empty. This is a hack designed to get around the fact
+     * that we have no direct way of querying the web container about which
+     * roles it manages.
+     */
+<span class="fc" id="L71">    protected Role[]            m_containerRoles      = new Role[0];</span>
+
+    /**
+     * Lazily-initialized boolean flag indicating whether the web container
+     * protects JSPWiki resources.
+     */
+<span class="fc" id="L77">    protected boolean           m_containerAuthorized = false;</span>
+
+<span class="fc" id="L79">    private Document            m_webxml = null;</span>
+
+    /**
+     * Constructs a new instance of the WebContainerAuthorizer class.
+     */
+    public WebContainerAuthorizer()
+    {
+<span class="fc" id="L86">        super();</span>
+<span class="fc" id="L87">    }</span>
+
+    /**
+     * Initializes the authorizer for.
+     * @param engine the current wiki engine
+     * @param props the wiki engine initialization properties
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties props )
+    {
+<span class="fc" id="L97">        m_engine = engine;</span>
+<span class="fc" id="L98">        m_containerAuthorized = false;</span>
+
+        // FIXME: Error handling here is not very verbose
+        try
+        {
+<span class="fc" id="L103">            m_webxml = getWebXml();</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">            if ( m_webxml != null )</span>
+            {
+                // Add the J2EE 2.4 schema namespace
+<span class="fc" id="L107">                m_webxml.getRootElement().setNamespace( Namespace.getNamespace( J2EE_SCHEMA_25_NAMESPACE ) );</span>
+
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">                m_containerAuthorized = isConstrained( &quot;/Delete.jsp&quot;, Role.ALL )</span>
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">                        &amp;&amp; isConstrained( &quot;/Login.jsp&quot;, Role.ALL );</span>
+            }
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">            if ( m_containerAuthorized )</span>
+            {
+<span class="fc" id="L114">                m_containerRoles = getRoles( m_webxml );</span>
+<span class="fc" id="L115">                log.info( &quot;JSPWiki is using container-managed authentication.&quot; );</span>
+            }
+            else
+            {
+<span class="nc" id="L119">                log.info( &quot;JSPWiki is using custom authentication.&quot; );</span>
+            }
+        }
+<span class="nc" id="L122">        catch ( IOException e )</span>
+        {
+<span class="nc" id="L124">            log.error(&quot;Initialization failed: &quot;,e);</span>
+<span class="nc" id="L125">            throw new InternalWikiException( e.getClass().getName()+&quot;: &quot;+e.getMessage() , e);</span>
+        }
+<span class="nc" id="L127">        catch ( JDOMException e )</span>
+        {
+<span class="nc" id="L129">            log.error(&quot;Malformed XML in web.xml&quot;,e);</span>
+<span class="nc" id="L130">            throw new InternalWikiException( e.getClass().getName()+&quot;: &quot;+e.getMessage() , e);</span>
+<span class="fc" id="L131">        }</span>
+
+<span class="pc bpc" id="L133" title="1 of 2 branches missed.">        if ( m_containerRoles.length &gt; 0 )</span>
+        {
+<span class="fc" id="L135">            String roles = &quot;&quot;;</span>
+<span class="fc bfc" id="L136" title="All 2 branches covered.">            for( Role containerRole : m_containerRoles )</span>
+            {
+<span class="fc" id="L138">                roles = roles + containerRole + &quot; &quot;;</span>
+            }
+<span class="fc" id="L140">            log.info( &quot; JSPWiki determined the web container manages these roles: &quot; + roles );</span>
+        }
+<span class="fc" id="L142">        log.info( &quot;Authorizer WebContainerAuthorizer initialized successfully.&quot; );</span>
+<span class="fc" id="L143">    }</span>
+
+    /**
+     * Determines whether a user associated with an HTTP request possesses
+     * a particular role. This method simply delegates to 
+     * {@link javax.servlet.http.HttpServletRequest#isUserInRole(String)}
+     * by converting the Principal's name to a String.
+     * @param request the HTTP request
+     * @param role the role to check
+     * @return &lt;code&gt;true&lt;/code&gt; if the user is considered to be in the role,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    @Override
+    public boolean isUserInRole( HttpServletRequest request, Principal role )
+    {
+<span class="nc" id="L158">        return request.isUserInRole( role.getName() );</span>
+    }
+
+    /**
+     * Determines whether the Subject associated with a WikiSession is in a
+     * particular role. This method takes two parameters: the WikiSession
+     * containing the subject and the desired role ( which may be a Role or a
+     * Group). If either parameter is &lt;code&gt;null&lt;/code&gt;, this method must
+     * return &lt;code&gt;false&lt;/code&gt;.
+     * This method simply examines the WikiSession subject to see if it
+     * possesses the desired Principal. We assume that the method
+     * {@link org.apache.wiki.ui.WikiServletFilter#doFilter(javax.servlet.ServletRequest, javax.servlet.ServletResponse, javax.servlet.FilterChain)}
+     * previously executed, and that it has set the WikiSession
+     * subject correctly by logging in the user with the various login modules,
+     * in particular {@link org.apache.wiki.auth.login.WebContainerLoginModule}}.
+     * This is definitely a hack,
+     * but it eliminates the need for WikiSession to keep dangling
+     * references to the last WikiContext hanging around, just
+     * so we can look up the HttpServletRequest.
+     *
+     * @param session the current WikiSession
+     * @param role the role to check
+     * @return &lt;code&gt;true&lt;/code&gt; if the user is considered to be in the role,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     * @see org.apache.wiki.auth.Authorizer#isUserInRole(org.apache.wiki.WikiSession, java.security.Principal)
+     */
+    @Override
+    public boolean isUserInRole( WikiSession session, Principal role )
+    {
+<span class="nc bnc" id="L187" title="All 4 branches missed.">        if ( session == null || role == null )</span>
+        {
+<span class="nc" id="L189">            return false;</span>
+        }
+<span class="nc" id="L191">        return session.hasPrincipal( role );</span>
+    }
+
+    /**
+     * Looks up and returns a Role Principal matching a given String. If the
+     * Role does not match one of the container Roles identified during
+     * initialization, this method returns &lt;code&gt;null&lt;/code&gt;.
+     * @param role the name of the Role to retrieve
+     * @return a Role Principal, or &lt;code&gt;null&lt;/code&gt;
+     * @see org.apache.wiki.auth.Authorizer#initialize(WikiEngine, Properties)
+     */
+    @Override
+    public Principal findRole( String role )
+    {
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        for( Role containerRole : m_containerRoles )</span>
+        {
+<span class="nc bnc" id="L207" title="All 2 branches missed.">            if ( containerRole.getName().equals( role ) )</span>
+            {
+<span class="nc" id="L209">                return containerRole;</span>
+            }
+        }
+<span class="nc" id="L212">        return null;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Protected method that identifies whether a particular webapp URL is
+     * constrained to a particular Role. The resource is considered constrained
+     * if:
+     * &lt;/p&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;the web application deployment descriptor contains a
+     * &lt;code&gt;security-constraint&lt;/code&gt; with a child
+     * &lt;code&gt;web-resource-collection/url-pattern&lt;/code&gt; element matching the
+     * URL, &lt;em&gt;and&lt;/em&gt;:&lt;/li&gt;
+     * &lt;li&gt;this constraint also contains an
+     * &lt;code&gt;auth-constraint/role-name&lt;/code&gt; element equal to the supplied
+     * Role's &lt;code&gt;getName()&lt;/code&gt; method. If the supplied Role is Role.ALL,
+     * it matches all roles&lt;/li&gt;
+     * &lt;/ul&gt;
+     * @param url the web resource
+     * @param role the role
+     * @return &lt;code&gt;true&lt;/code&gt; if the resource is constrained to the role,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     * @throws JDOMException if elements cannot be parsed correctly
+     */
+    public boolean isConstrained( String url, Role role ) throws JDOMException
+    {
+<span class="fc" id="L239">        Element root = m_webxml.getRootElement();</span>
+        XPath xpath;
+        String selector;
+
+        // Get all constraints that have our URL pattern
+        // (Note the crazy j: prefix to denote the 2.4 j2ee schema)
+<span class="fc" id="L245">        selector = &quot;//j:web-app/j:security-constraint[j:web-resource-collection/j:url-pattern=\&quot;&quot; + url + &quot;\&quot;]&quot;;</span>
+<span class="fc" id="L246">        xpath = XPath.newInstance( selector );</span>
+<span class="fc" id="L247">        xpath.addNamespace( &quot;j&quot;, J2EE_SCHEMA_25_NAMESPACE );</span>
+<span class="fc" id="L248">        List&lt;?&gt; constraints = xpath.selectNodes( root );</span>
+
+        // Get all constraints that match our Role pattern
+<span class="fc" id="L251">        selector = &quot;//j:web-app/j:security-constraint[j:auth-constraint/j:role-name=\&quot;&quot; + role.getName() + &quot;\&quot;]&quot;;</span>
+<span class="fc" id="L252">        xpath = XPath.newInstance( selector );</span>
+<span class="fc" id="L253">        xpath.addNamespace( &quot;j&quot;, J2EE_SCHEMA_25_NAMESPACE );</span>
+<span class="fc" id="L254">        List&lt;?&gt; roles = xpath.selectNodes( root );</span>
+
+        // If we can't find either one, we must not be constrained
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if ( constraints.size() == 0 )</span>
+        {
+<span class="fc" id="L259">            return false;</span>
+        }
+
+        // Shortcut: if the role is ALL, we are constrained
+<span class="fc bfc" id="L263" title="All 2 branches covered.">        if ( role.equals( Role.ALL ) )</span>
+        {
+<span class="fc" id="L265">            return true;</span>
+        }
+
+        // If no roles, we must not be constrained
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">        if ( roles.size() == 0 )</span>
+        {
+<span class="nc" id="L271">            return false;</span>
+        }
+
+        // If a constraint is contained in both lists, we must be constrained
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">        for ( Iterator&lt;?&gt; c = constraints.iterator(); c.hasNext(); )</span>
+        {
+<span class="fc" id="L277">            Element constraint = (Element)c.next();</span>
+<span class="pc bpc" id="L278" title="1 of 2 branches missed.">            for ( Iterator&lt;?&gt; r = roles.iterator(); r.hasNext(); )</span>
+            {
+<span class="fc" id="L280">                Element roleConstraint = (Element)r.next();</span>
+<span class="pc bpc" id="L281" title="1 of 2 branches missed.">                if ( constraint.equals( roleConstraint ) )</span>
+                {
+<span class="fc" id="L283">                    return true;</span>
+                }
+<span class="nc" id="L285">            }</span>
+<span class="nc" id="L286">        }</span>
+<span class="nc" id="L287">        return false;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the web container is configured to protect
+     * certain JSPWiki resources by requiring authentication. Specifically, this
+     * method parses JSPWiki's web application descriptor (&lt;code&gt;web.xml&lt;/code&gt;)
+     * and identifies whether the string representation of
+     * {@link org.apache.wiki.auth.authorize.Role#AUTHENTICATED} is required
+     * to access &lt;code&gt;/Delete.jsp&lt;/code&gt; and &lt;code&gt;LoginRedirect.jsp&lt;/code&gt;.
+     * If the administrator has uncommented the large
+     * &lt;code&gt;&amp;lt;security-constraint&amp;gt;&lt;/code&gt; section of &lt;code&gt;web.xml&lt;/code&gt;,
+     * this will be true. This is admittedly an indirect way to go about it, but
+     * it should be an accurate test for default installations, and also in 99%
+     * of customized installs.
+     * @return &lt;code&gt;true&lt;/code&gt; if the container protects resources,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    public boolean isContainerAuthorized()
+    {
+<span class="fc" id="L307">        return m_containerAuthorized;</span>
+    }
+
+    /**
+     * Returns an array of role Principals this Authorizer knows about.
+     * This method will return an array of Role objects corresponding to
+     * the logical roles enumerated in the &lt;code&gt;web.xml&lt;/code&gt;.
+     * This method actually returns a defensive copy of an internally stored
+     * array.
+     * @return an array of Principals representing the roles
+     */
+    @Override
+    public Principal[] getRoles()
+    {
+<span class="fc" id="L321">        return m_containerRoles.clone();</span>
+    }
+
+    /**
+     * Protected method that extracts the roles from JSPWiki's web application
+     * deployment descriptor. Each Role is constructed by using the String
+     * representation of the Role, for example
+     * &lt;code&gt;new Role(&quot;Administrator&quot;)&lt;/code&gt;.
+     * @param webxml the web application deployment descriptor
+     * @return an array of Role objects
+     * @throws JDOMException if elements cannot be parsed correctly
+     */
+    protected Role[] getRoles( Document webxml ) throws JDOMException
+    {
+<span class="fc" id="L335">        Set&lt;Role&gt; roles = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L336">        Element root = webxml.getRootElement();</span>
+
+        // Get roles referred to by constraints
+<span class="fc" id="L339">        String selector = &quot;//j:web-app/j:security-constraint/j:auth-constraint/j:role-name&quot;;</span>
+<span class="fc" id="L340">        XPath xpath = XPath.newInstance( selector );</span>
+<span class="fc" id="L341">        xpath.addNamespace( &quot;j&quot;, J2EE_SCHEMA_25_NAMESPACE );</span>
+<span class="fc" id="L342">        List&lt;?&gt; nodes = xpath.selectNodes( root );</span>
+<span class="fc bfc" id="L343" title="All 2 branches covered.">        for( Iterator&lt;?&gt; it = nodes.iterator(); it.hasNext(); )</span>
+        {
+<span class="fc" id="L345">            String role = ( (Element) it.next() ).getTextTrim();</span>
+<span class="fc" id="L346">            roles.add( new Role( role ) );</span>
+<span class="fc" id="L347">        }</span>
+
+        // Get all defined roles
+<span class="fc" id="L350">        selector = &quot;//j:web-app/j:security-role/j:role-name&quot;;</span>
+<span class="fc" id="L351">        xpath = XPath.newInstance( selector );</span>
+<span class="fc" id="L352">        xpath.addNamespace( &quot;j&quot;, J2EE_SCHEMA_25_NAMESPACE );</span>
+<span class="fc" id="L353">        nodes = xpath.selectNodes( root );</span>
+<span class="fc bfc" id="L354" title="All 2 branches covered.">        for( Iterator&lt;?&gt; it = nodes.iterator(); it.hasNext(); )</span>
+        {
+<span class="fc" id="L356">            String role = ( (Element) it.next() ).getTextTrim();</span>
+<span class="fc" id="L357">            roles.add( new Role( role ) );</span>
+<span class="fc" id="L358">        }</span>
+
+<span class="fc" id="L360">        return roles.toArray( new Role[roles.size()] );</span>
+    }
+
+    /**
+     * Returns an {@link org.jdom2.Document} representing JSPWiki's web
+     * application deployment descriptor. The document is obtained by calling
+     * the servlet context's &lt;code&gt;getResource()&lt;/code&gt; method and requesting
+     * &lt;code&gt;/WEB-INF/web.xml&lt;/code&gt;. For non-servlet applications, this
+     * method calls this class'
+     * {@link ClassLoader#getResource(java.lang.String)} and requesting
+     * &lt;code&gt;WEB-INF/web.xml&lt;/code&gt;.
+     * @return the descriptor
+     * @throws IOException if the deployment descriptor cannot be found or opened
+     * @throws JDOMException if the deployment descriptor cannot be parsed correctly
+     */
+    protected Document getWebXml() throws JDOMException, IOException
+    {
+        URL url;
+<span class="fc" id="L378">        SAXBuilder builder = new SAXBuilder();</span>
+<span class="fc" id="L379">        builder.setXMLReaderFactory( XMLReaders.NONVALIDATING );</span>
+<span class="fc" id="L380">        builder.setEntityResolver( new LocalEntityResolver() );</span>
+<span class="fc" id="L381">        Document doc = null;</span>
+<span class="pc bpc" id="L382" title="1 of 2 branches missed.">        if ( m_engine.getServletContext() == null )</span>
+        {
+<span class="nc" id="L384">            ClassLoader cl = WebContainerAuthorizer.class.getClassLoader();</span>
+<span class="nc" id="L385">            url = cl.getResource( &quot;WEB-INF/web.xml&quot; );</span>
+<span class="nc bnc" id="L386" title="All 2 branches missed.">            if( url != null )</span>
+<span class="nc" id="L387">                log.info( &quot;Examining &quot; + url.toExternalForm() );</span>
+<span class="nc" id="L388">        }</span>
+        else
+        {
+<span class="fc" id="L391">            url = m_engine.getServletContext().getResource( &quot;/WEB-INF/web.xml&quot; );</span>
+<span class="pc bpc" id="L392" title="1 of 2 branches missed.">            if( url != null )</span>
+<span class="fc" id="L393">                log.info( &quot;Examining &quot; + url.toExternalForm() );</span>
+        }
+<span class="pc bpc" id="L395" title="1 of 2 branches missed.">        if( url == null )</span>
+<span class="nc" id="L396">            throw new IOException(&quot;Unable to find web.xml for processing.&quot;);</span>
+
+<span class="fc" id="L398">        log.debug( &quot;Processing web.xml at &quot; + url.toExternalForm() );</span>
+<span class="fc" id="L399">        doc = builder.build( url );</span>
+<span class="fc" id="L400">        return doc;</span>
+    }
+
+    /**
+     * &lt;p&gt;XML entity resolver that redirects resolution requests by JDOM, JAXP and
+     * other XML parsers to locally-cached copies of the resources. Local
+     * resources are stored in the &lt;code&gt;WEB-INF/dtd&lt;/code&gt; directory.&lt;/p&gt;
+     * &lt;p&gt;For example, Sun Microsystem's DTD for the webapp 2.3 specification is normally
+     * kept at &lt;code&gt;http://java.sun.com/dtd/web-app_2_3.dtd&lt;/code&gt;. The
+     * local copy is stored at &lt;code&gt;WEB-INF/dtd/web-app_2_3.dtd&lt;/code&gt;.&lt;/p&gt;
+     */
+<span class="fc" id="L411">    public class LocalEntityResolver implements EntityResolver</span>
+    {
+        /**
+         * Returns an XML input source for a requested external resource by
+         * reading the resource instead from local storage. The local resource path
+         * is &lt;code&gt;WEB-INF/dtd&lt;/code&gt;, plus the file name of the requested
+         * resource, minus the non-filename path information.
+         * @param publicId the public ID, such as
+         *            &lt;code&gt;-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN&lt;/code&gt;
+         * @param systemId the system ID, such as
+         *            &lt;code&gt;http://java.sun.com/dtd/web-app_2_3.dtd&lt;/code&gt;
+         * @return the InputSource containing the resolved resource
+         * @see org.xml.sax.EntityResolver#resolveEntity(java.lang.String,
+         *      java.lang.String)
+         * @throws SAXException if the resource cannot be resolved locally
+         * @throws IOException if the resource cannot be opened
+         */
+        @Override
+        public InputSource resolveEntity( String publicId, String systemId ) throws SAXException, IOException
+        {
+<span class="nc" id="L431">            String file = systemId.substring( systemId.lastIndexOf( '/' ) + 1 );</span>
+            URL url;
+<span class="nc bnc" id="L433" title="All 2 branches missed.">            if ( m_engine.getServletContext() == null )</span>
+            {
+<span class="nc" id="L435">                ClassLoader cl = WebContainerAuthorizer.class.getClassLoader();</span>
+<span class="nc" id="L436">                url = cl.getResource( &quot;WEB-INF/dtd/&quot; + file );</span>
+<span class="nc" id="L437">            }</span>
+            else
+            {
+<span class="nc" id="L440">                url = m_engine.getServletContext().getResource( &quot;/WEB-INF/dtd/&quot; + file );</span>
+            }
+
+<span class="nc bnc" id="L443" title="All 2 branches missed.">            if( url != null )</span>
+            {
+<span class="nc" id="L445">                InputSource is = new InputSource( url.openStream() );</span>
+<span class="nc" id="L446">                log.debug( &quot;Resolved systemID=&quot; + systemId + &quot; using local file &quot; + url );</span>
+<span class="nc" id="L447">                return is;</span>
+            }
+
+            //
+            //  Let's fall back to default behaviour of the container, and let's
+            //  also let the user know what is going on.  This caught me by surprise
+            //  while running JSPWiki on an unconnected laptop...
+            //
+            //  The DTD needs to be resolved and read because it contains things like
+            //  entity definitions...
+            //
+<span class="nc" id="L458">            log.info(&quot;Please note: There are no local DTD references in /WEB-INF/dtd/&quot;+file+&quot;; falling back to default behaviour.&quot;+</span>
+                     &quot; This may mean that the XML parser will attempt to connect to the internet to find the DTD.&quot;+
+                     &quot; If you are running JSPWiki locally in an unconnected network, you might want to put the DTD files in place to avoid nasty UnknownHostExceptions.&quot;);
+
+
+            // Fall back to default behaviour
+<span class="nc" id="L464">            return null;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

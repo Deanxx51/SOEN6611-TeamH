@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProgressManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.progress</a> &gt; <span class="el_source">ProgressManager.java</span></div><h1>ProgressManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui.progress;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.ajax.WikiAjaxDispatcherServlet;
+import org.apache.wiki.ajax.WikiAjaxServlet;
+
+/**
+ *  Manages progressing items.  In general this class is used whenever JSPWiki
+ *  is doing something which may require a long time.  In addition, this manager
+ *  provides a JSON interface for finding remotely what the progress is.  The
+ *  JSON object name is JSON_PROGRESSTRACKER = &quot;{@value #JSON_PROGRESSTRACKER}&quot;.
+ *
+ *  @since  2.6
+ */
+// FIXME: Needs synchronization, I think
+public class ProgressManager
+{
+<span class="fc" id="L46">    private Map&lt;String,ProgressItem&gt; m_progressingTasks = new HashMap&lt;String,ProgressItem&gt;();</span>
+
+    /**
+     *  The name of the progress tracker JSON object.  The current value is &quot;{@value}&quot;,
+     */
+    public static final String JSON_PROGRESSTRACKER = &quot;progressTracker&quot;;
+
+<span class="fc" id="L53">    private static Logger log = Logger.getLogger( ProgressManager.class );</span>
+
+    /**
+     *  Creates a new ProgressManager.
+     */
+    public ProgressManager()
+<span class="fc" id="L59">    {</span>
+    	//TODO: Replace with custom annotations. See JSPWIKI-566
+<span class="fc" id="L61">        WikiAjaxDispatcherServlet.registerServlet( JSON_PROGRESSTRACKER, new JSONTracker() );</span>
+<span class="fc" id="L62">    }</span>
+
+    /**
+     *  You can use this to get an unique process identifier.
+     *  @return A new random value
+     */
+    public String getNewProgressIdentifier()
+    {
+<span class="nc" id="L70">        return UUID.randomUUID().toString();</span>
+    }
+
+    /**
+     *  Call this method to get your ProgressItem into the ProgressManager queue.
+     *  The ProgressItem will be moved to state STARTED.
+     *
+     *  @param pi ProgressItem to start
+     *  @param id The progress identifier
+     */
+    public void startProgress( ProgressItem pi, String id )
+    {
+<span class="nc" id="L82">        log.debug(&quot;Adding &quot;+id+&quot; to progress queue&quot;);</span>
+<span class="nc" id="L83">        m_progressingTasks.put( id, pi );</span>
+<span class="nc" id="L84">        pi.setState( ProgressItem.STARTED );</span>
+<span class="nc" id="L85">    }</span>
+
+    /**
+     *  Call this method to remove your ProgressItem from the queue (after which
+     *  getProgress() will no longer find it.  The ProgressItem will be moved to state
+     *  STOPPED.
+     *
+     *  @param id The progress identifier
+     */
+    public void stopProgress( String id )
+    {
+<span class="nc" id="L96">        log.debug(&quot;Removed &quot;+id+&quot; from progress queue&quot;);</span>
+<span class="nc" id="L97">        ProgressItem pi = m_progressingTasks.remove( id );</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if( pi != null ) pi.setState( ProgressItem.STOPPED );</span>
+<span class="nc" id="L99">    }</span>
+
+    /**
+     *  Get the progress in percents.
+     *
+     *  @param id The progress identifier.
+     *  @return a value between 0 to 100 indicating the progress
+     *  @throws IllegalArgumentException If no such progress item exists.
+     */
+    public int getProgress( String id )
+        throws IllegalArgumentException
+    {
+<span class="nc" id="L111">        ProgressItem pi = m_progressingTasks.get( id );</span>
+
+<span class="nc bnc" id="L113" title="All 2 branches missed.">        if( pi != null )</span>
+        {
+<span class="nc" id="L115">            return pi.getProgress();</span>
+        }
+
+<span class="nc" id="L118">        throw new IllegalArgumentException(&quot;No such id was found&quot;);</span>
+    }
+
+    /**
+     *  Provides access to a progress indicator, assuming you know the ID.
+     *  Progress of zero (0) means that the progress has just started, and a progress of
+     *  100 means that it is complete.
+     */
+<span class="fc" id="L126">    public class JSONTracker implements WikiAjaxServlet</span>
+    {
+        /**
+         *  Returns upload progress in percents so far.
+         *  @param progressId The string representation of the progress ID that you want to know the
+         *                    progress of.
+         *  @return a value between 0 to 100 indicating the progress
+         */
+        public int getProgress( String progressId )
+        {
+<span class="nc" id="L136">            return ProgressManager.this.getProgress( progressId );</span>
+        }
+        
+        public String getServletMapping() {
+<span class="nc" id="L140">        	return JSON_PROGRESSTRACKER;</span>
+        }
+        
+        public void service(HttpServletRequest req, HttpServletResponse resp, String actionName, List&lt;String&gt; params)
+        		throws ServletException, IOException 
+        {
+<span class="nc" id="L146">        	log.debug(&quot;ProgressManager.doGet() START&quot;);</span>
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        	if (params.size()&lt;1) {</span>
+<span class="nc" id="L148">        		return;</span>
+        	}
+<span class="nc" id="L150">        	String progressId = params.get(0);</span>
+<span class="nc" id="L151">        	log.debug(&quot;progressId=&quot;+progressId);</span>
+<span class="nc" id="L152">        	String progressString = &quot;&quot;;</span>
+        	try {
+<span class="nc" id="L154">        		int progress = getProgress(progressId);</span>
+<span class="nc" id="L155">        		progressString = Integer.toString(progress);</span>
+<span class="nc" id="L156">        	} catch (IllegalArgumentException e) {</span>
+        		// ignore
+<span class="nc" id="L158">        		log.debug(&quot;progressId &quot;+progressId+&quot; is no longer valid&quot;);</span>
+<span class="nc" id="L159">        	}</span>
+<span class="nc" id="L160">        	log.debug(&quot;progressString=&quot;+progressString);</span>
+<span class="nc" id="L161">        	resp.getWriter().write(progressString);</span>
+<span class="nc" id="L162">        	log.debug(&quot;ProgressManager.doGet() DONE&quot;);</span>
+<span class="nc" id="L163">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,2717 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JSPWikiMarkupParser.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.parser</a> &gt; <span class="el_source">JSPWikiMarkupParser.java</span></div><h1>JSPWikiMarkupParser.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.parser;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.EmptyStackException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Stack;
+
+import javax.xml.transform.Result;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.MatchResult;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Compiler;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.StringTransmutator;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.acl.Acl;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.render.CleanTextRenderer;
+import org.apache.wiki.render.RenderingManager;
+import org.apache.wiki.util.TextUtil;
+import org.jdom2.Attribute;
+import org.jdom2.Content;
+import org.jdom2.Element;
+import org.jdom2.IllegalDataException;
+import org.jdom2.ProcessingInstruction;
+import org.jdom2.Verifier;
+
+/**
+ *  Parses JSPWiki-style markup into a WikiDocument DOM tree.  This class is the
+ *  heart and soul of JSPWiki : make sure you test properly anything that is added,
+ *  or else it breaks down horribly.
+ *
+ *  @since  2.4
+ */
+public class JSPWikiMarkupParser extends MarkupParser {
+
+    protected static final int              READ          = 0;
+    protected static final int              EDIT          = 1;
+    protected static final int              EMPTY         = 2;  // Empty message
+    protected static final int              LOCAL         = 3;
+    protected static final int              LOCALREF      = 4;
+    protected static final int              IMAGE         = 5;
+    protected static final int              EXTERNAL      = 6;
+    protected static final int              INTERWIKI     = 7;
+    protected static final int              IMAGELINK     = 8;
+    protected static final int              IMAGEWIKILINK = 9;
+    protected static final int              ATTACHMENT    = 10;
+
+<span class="fc" id="L90">    private static Logger log = Logger.getLogger( JSPWikiMarkupParser.class );</span>
+
+<span class="fc" id="L92">    private boolean        m_isbold       = false;</span>
+<span class="fc" id="L93">    private boolean        m_isitalic     = false;</span>
+<span class="fc" id="L94">    private boolean        m_istable      = false;</span>
+<span class="fc" id="L95">    private boolean        m_isPre        = false;</span>
+<span class="fc" id="L96">    private boolean        m_isEscaping   = false;</span>
+<span class="fc" id="L97">    private boolean        m_isdefinition = false;</span>
+<span class="fc" id="L98">    private boolean        m_isPreBlock   = false;</span>
+
+    /** Contains style information, in multiple forms. */
+<span class="fc" id="L101">    private Stack&lt;Boolean&gt; m_styleStack   = new Stack&lt;&gt;();</span>
+
+     // general list handling
+<span class="fc" id="L104">    private int            m_genlistlevel = 0;</span>
+<span class="fc" id="L105">    private StringBuilder  m_genlistBulletBuffer = new StringBuilder(10);  // stores the # and * pattern</span>
+<span class="fc" id="L106">    private boolean        m_allowPHPWikiStyleLists = true;</span>
+
+<span class="fc" id="L108">    private boolean        m_isOpenParagraph = false;</span>
+
+    /** Parser for extended link functionality. */
+<span class="fc" id="L111">    private LinkParser     m_linkParser = new LinkParser();</span>
+
+    /** Keeps track of any plain text that gets put in the Text nodes */
+<span class="fc" id="L114">    private StringBuilder  m_plainTextBuf = new StringBuilder(20);</span>
+
+    private Element        m_currentElement;
+
+    /** Keep track of duplicate header names.  */
+<span class="fc" id="L119">    private Map&lt;String, Integer&gt;   m_titleSectionCounter = new HashMap&lt;&gt;();</span>
+
+    /** If true, consider CamelCase hyperlinks as well. */
+    public static final String     PROP_CAMELCASELINKS   = &quot;jspwiki.translatorReader.camelCaseLinks&quot;;
+
+    /** If true, all hyperlinks are translated as well, regardless whether they
+        are surrounded by brackets. */
+    public static final String     PROP_PLAINURIS        = &quot;jspwiki.translatorReader.plainUris&quot;;
+
+    /** If true, all outward attachment info links have a small link image appended. */
+    public static final String     PROP_USEATTACHMENTIMAGE = &quot;jspwiki.translatorReader.useAttachmentImage&quot;;
+
+    /** If true, then considers CamelCase links as well. */
+<span class="fc" id="L132">    private boolean                m_camelCaseLinks      = false;</span>
+
+    /** If true, then generate special output for wysiwyg editing in certain cases */
+<span class="fc" id="L135">    private boolean                m_wysiwygEditorMode     = false;</span>
+
+    /** If true, consider URIs that have no brackets as well. */
+    // FIXME: Currently reserved, but not used.
+<span class="fc" id="L139">    private boolean                m_plainUris           = false;</span>
+
+    /** If true, all outward links use a small link image. */
+<span class="fc" id="L142">    private boolean                m_useOutlinkImage     = true;</span>
+
+<span class="fc" id="L144">    private boolean                m_useAttachmentImage  = true;</span>
+
+    /** If true, allows raw HTML. */
+<span class="fc" id="L147">    private boolean                m_allowHTML           = false;</span>
+
+<span class="fc" id="L149">    private boolean                m_useRelNofollow      = false;</span>
+
+<span class="fc" id="L151">    private PatternCompiler        m_compiler = new Perl5Compiler();</span>
+
+    static final String WIKIWORD_REGEX = &quot;(^|[[:^alnum:]]+)([[:upper:]]+[[:lower:]]+[[:upper:]]+[[:alnum:]]*|(http://|https://|mailto:)([A-Za-z0-9_/\\.\\+\\?\\#\\-\\@=&amp;;~%]+))&quot;;
+
+<span class="fc" id="L155">    private PatternMatcher         m_camelCaseMatcher = new Perl5Matcher();</span>
+    private Pattern                m_camelCasePattern;
+
+<span class="fc" id="L158">    private int                    m_rowNum              = 1;</span>
+
+<span class="fc" id="L160">    private Heading                m_lastHeading         = null;</span>
+
+    private static final String CAMELCASE_PATTERN     = &quot;JSPWikiMarkupParser.camelCasePattern&quot;;
+
+    /**
+     *  Creates a markup parser.
+     *
+     *  @param context The WikiContext which controls the parsing
+     *  @param in Where the data is read from.
+     */
+    public JSPWikiMarkupParser( WikiContext context, Reader in )
+    {
+<span class="fc" id="L172">        super( context, in );</span>
+<span class="fc" id="L173">        initialize();</span>
+<span class="fc" id="L174">    }</span>
+
+    // FIXME: parsers should be pooled for better performance.
+    private void initialize()
+    {
+<span class="fc" id="L179">        initInlineImagePatterns();</span>
+
+<span class="fc" id="L181">        m_camelCasePattern = (Pattern) m_engine.getAttribute( CAMELCASE_PATTERN );</span>
+<span class="fc bfc" id="L182" title="All 2 branches covered.">        if( m_camelCasePattern == null )</span>
+        {
+            try
+            {
+<span class="fc" id="L186">                m_camelCasePattern = m_compiler.compile( WIKIWORD_REGEX,</span>
+                                                         Perl5Compiler.DEFAULT_MASK|Perl5Compiler.READ_ONLY_MASK );
+            }
+<span class="nc" id="L189">            catch( MalformedPatternException e )</span>
+            {
+<span class="nc" id="L191">                log.fatal(&quot;Internal error: Someone put in a faulty pattern.&quot;,e);</span>
+<span class="nc" id="L192">                throw new InternalWikiException(&quot;Faulty camelcasepattern in TranslatorReader&quot;, e);</span>
+<span class="fc" id="L193">            }</span>
+<span class="fc" id="L194">            m_engine.setAttribute( CAMELCASE_PATTERN, m_camelCasePattern );</span>
+        }
+        //
+        //  Set the properties.
+        //
+<span class="fc" id="L199">        Properties props      = m_engine.getWikiProperties();</span>
+
+<span class="fc" id="L201">        String cclinks = (String)m_context.getPage().getAttribute( PROP_CAMELCASELINKS );</span>
+
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if( cclinks != null )</span>
+        {
+<span class="nc" id="L205">            m_camelCaseLinks = TextUtil.isPositive( cclinks );</span>
+        }
+        else
+        {
+<span class="fc" id="L209">            m_camelCaseLinks  = TextUtil.getBooleanProperty( props,</span>
+                                                             PROP_CAMELCASELINKS,
+                                                             m_camelCaseLinks );
+        }
+
+<span class="fc" id="L214">        Boolean wysiwygVariable = (Boolean)m_context.getVariable( RenderingManager.WYSIWYG_EDITOR_MODE );</span>
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if( wysiwygVariable != null )</span>
+        {
+<span class="nc" id="L217">            m_wysiwygEditorMode = wysiwygVariable.booleanValue();</span>
+        }
+
+<span class="fc" id="L220">        m_plainUris           = m_context.getBooleanWikiProperty( PROP_PLAINURIS, m_plainUris );</span>
+<span class="fc" id="L221">        m_useOutlinkImage     = m_context.getBooleanWikiProperty( PROP_USEOUTLINKIMAGE, m_useOutlinkImage );</span>
+<span class="fc" id="L222">        m_useAttachmentImage  = m_context.getBooleanWikiProperty( PROP_USEATTACHMENTIMAGE, m_useAttachmentImage );</span>
+<span class="fc" id="L223">        m_allowHTML           = m_context.getBooleanWikiProperty( PROP_ALLOWHTML, m_allowHTML );</span>
+<span class="fc" id="L224">        m_useRelNofollow      = m_context.getBooleanWikiProperty( PROP_USERELNOFOLLOW, m_useRelNofollow );</span>
+
+<span class="pc bpc" id="L226" title="2 of 4 branches missed.">        if( m_engine.getUserManager().getUserDatabase() == null || m_engine.getAuthorizationManager() == null )</span>
+        {
+<span class="nc" id="L228">            disableAccessRules();</span>
+        }
+
+<span class="fc" id="L231">        m_context.getPage().setHasMetadata();</span>
+<span class="fc" id="L232">    }</span>
+
+    /**
+     *  Calls a transmutator chain.
+     *
+     *  @param list Chain to call
+     *  @param text Text that should be passed to the mutate() method of each of the mutators in the chain.
+     *  @return The result of the mutation.
+     */
+    protected String callMutatorChain( Collection&lt; StringTransmutator &gt; list, String text )
+    {
+<span class="pc bpc" id="L243" title="1 of 4 branches missed.">        if( list == null || list.size() == 0 )</span>
+        {
+<span class="fc" id="L245">            return text;</span>
+        }
+
+<span class="fc bfc" id="L248" title="All 2 branches covered.">        for( Iterator&lt; StringTransmutator &gt; i = list.iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L250">            StringTransmutator m = i.next();</span>
+
+<span class="fc" id="L252">            text = m.mutate( m_context, text );</span>
+<span class="fc" id="L253">        }</span>
+
+<span class="fc" id="L255">        return text;</span>
+    }
+
+    /**
+     * Calls the heading listeners.
+     *
+     * @param param A Heading object.
+     */
+    protected void callHeadingListenerChain( Heading param )
+    {
+<span class="fc" id="L265">        List&lt; HeadingListener &gt; list = m_headingListenerChain;</span>
+
+<span class="fc bfc" id="L267" title="All 2 branches covered.">        for( Iterator&lt; HeadingListener &gt; i = list.iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L269">            HeadingListener h = i.next();</span>
+
+<span class="fc" id="L271">            h.headingAdded( m_context, param );</span>
+<span class="fc" id="L272">        }</span>
+<span class="fc" id="L273">    }</span>
+
+    /**
+     *  Creates a JDOM anchor element.  Can be overridden to change the URL creation,
+     *  if you really know what you are doing.
+     *
+     *  @param type One of the types above
+     *  @param link URL to which to link to
+     *  @param text Link text
+     *  @param section If a particular section identifier is required.
+     *  @return An A element.
+     *  @since 2.4.78
+     */
+    protected Element createAnchor(int type, String link, String text, String section)
+    {
+<span class="fc" id="L288">        text = escapeHTMLEntities( text );</span>
+<span class="fc" id="L289">        section = escapeHTMLEntities( section );</span>
+<span class="fc" id="L290">        Element el = new Element(&quot;a&quot;);</span>
+<span class="fc" id="L291">        el.setAttribute(&quot;class&quot;,CLASS_TYPES[type]);</span>
+<span class="fc" id="L292">        el.setAttribute(&quot;href&quot;,link+section);</span>
+<span class="fc" id="L293">        el.addContent(text);</span>
+<span class="fc" id="L294">        return el;</span>
+    }
+
+    private Element makeLink( int type, String link, String text, String section, Iterator&lt; Attribute &gt; attributes )
+    {
+<span class="fc" id="L299">        Element el = null;</span>
+
+<span class="pc bpc" id="L301" title="1 of 2 branches missed.">        if( text == null ) text = link;</span>
+
+<span class="fc" id="L303">        text = callMutatorChain( m_linkMutators, text );</span>
+
+<span class="fc bfc" id="L305" title="All 2 branches covered.">        section = (section != null) ? (&quot;#&quot;+section) : &quot;&quot;;</span>
+
+        // Make sure we make a link name that can be accepted
+        // as a valid URL.
+
+<span class="fc bfc" id="L310" title="All 2 branches covered.">        if( link.length() == 0 )</span>
+        {
+<span class="fc" id="L312">            type = EMPTY;</span>
+        }
+<span class="fc" id="L314">        ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+
+<span class="pc bpc" id="L316" title="1 of 12 branches missed.">        switch(type)</span>
+        {
+            case READ:
+<span class="fc" id="L319">                el = createAnchor( READ, m_context.getURL(WikiContext.VIEW, link), text, section );</span>
+<span class="fc" id="L320">                break;</span>
+
+            case EDIT:
+<span class="fc" id="L323">                el = createAnchor( EDIT, m_context.getURL(WikiContext.EDIT,link), text, &quot;&quot; );</span>
+<span class="fc" id="L324">                el.setAttribute(&quot;title&quot;, MessageFormat.format( rb.getString( &quot;markupparser.link.create&quot; ), link ) );</span>
+
+<span class="fc" id="L326">                break;</span>
+
+            case EMPTY:
+<span class="fc" id="L329">                el = new Element(&quot;u&quot;).addContent(text);</span>
+<span class="fc" id="L330">                break;</span>
+
+                //
+                //  These two are for local references - footnotes and
+                //  references to footnotes.
+                //  We embed the page name (or whatever WikiContext gives us)
+                //  to make sure the links are unique across Wiki.
+                //
+            case LOCALREF:
+<span class="fc" id="L339">                el = createAnchor( LOCALREF, &quot;#ref-&quot;+m_context.getName()+&quot;-&quot;+link, &quot;[&quot;+text+&quot;]&quot;, &quot;&quot; );</span>
+<span class="fc" id="L340">                break;</span>
+
+            case LOCAL:
+<span class="fc" id="L343">                el = new Element(&quot;a&quot;).setAttribute(&quot;class&quot;,CLASS_FOOTNOTE);</span>
+<span class="fc" id="L344">                el.setAttribute(&quot;name&quot;, &quot;ref-&quot;+m_context.getName()+&quot;-&quot;+link.substring(1));</span>
+<span class="fc" id="L345">                el.addContent(&quot;[&quot;+text+&quot;]&quot;);</span>
+<span class="fc" id="L346">                break;</span>
+
+                //
+                //  With the image, external and interwiki types we need to
+                //  make sure nobody can put in Javascript or something else
+                //  annoying into the links themselves.  We do this by preventing
+                //  a haxor from stopping the link name short with quotes in
+                //  fillBuffer().
+                //
+            case IMAGE:
+<span class="fc" id="L356">                el = new Element(&quot;img&quot;).setAttribute(&quot;class&quot;,&quot;inline&quot;);</span>
+<span class="fc" id="L357">                el.setAttribute(&quot;src&quot;,link);</span>
+<span class="fc" id="L358">                el.setAttribute(&quot;alt&quot;,text);</span>
+<span class="fc" id="L359">                break;</span>
+
+            case IMAGELINK:
+<span class="fc" id="L362">                el = new Element(&quot;img&quot;).setAttribute(&quot;class&quot;,&quot;inline&quot;);</span>
+<span class="fc" id="L363">                el.setAttribute(&quot;src&quot;,link);</span>
+<span class="fc" id="L364">                el.setAttribute(&quot;alt&quot;,text);</span>
+<span class="fc" id="L365">                el = createAnchor(IMAGELINK,text,&quot;&quot;,&quot;&quot;).addContent(el);</span>
+<span class="fc" id="L366">                break;</span>
+
+            case IMAGEWIKILINK:
+<span class="fc" id="L369">                String pagelink = m_context.getURL(WikiContext.VIEW,text);</span>
+<span class="fc" id="L370">                el = new Element(&quot;img&quot;).setAttribute(&quot;class&quot;,&quot;inline&quot;);</span>
+<span class="fc" id="L371">                el.setAttribute(&quot;src&quot;,link);</span>
+<span class="fc" id="L372">                el.setAttribute(&quot;alt&quot;,text);</span>
+<span class="fc" id="L373">                el = createAnchor(IMAGEWIKILINK,pagelink,&quot;&quot;,&quot;&quot;).addContent(el);</span>
+<span class="fc" id="L374">                break;</span>
+
+            case EXTERNAL:
+<span class="fc" id="L377">                el = createAnchor( EXTERNAL, link, text, section );</span>
+<span class="fc bfc" id="L378" title="All 2 branches covered.">                if( m_useRelNofollow ) el.setAttribute(&quot;rel&quot;,&quot;nofollow&quot;);</span>
+                break;
+
+            case INTERWIKI:
+<span class="fc" id="L382">                el = createAnchor( INTERWIKI, link, text, section );</span>
+<span class="fc" id="L383">                break;</span>
+
+            case ATTACHMENT:
+<span class="fc" id="L386">                String attlink = m_context.getURL( WikiContext.ATTACH,</span>
+                                                   link );
+
+<span class="fc" id="L389">                String infolink = m_context.getURL( WikiContext.INFO,</span>
+                                                    link );
+
+<span class="fc" id="L392">                String imglink = m_context.getURL( WikiContext.NONE,</span>
+                                                   &quot;images/attachment_small.png&quot; );
+
+<span class="fc" id="L395">                el = createAnchor( ATTACHMENT, attlink, text, &quot;&quot; );</span>
+
+<span class="fc" id="L397">                pushElement(el);</span>
+<span class="fc" id="L398">                popElement(el.getName());</span>
+
+<span class="pc bpc" id="L400" title="1 of 2 branches missed.">                if( m_useAttachmentImage )</span>
+                {
+<span class="fc" id="L402">                    el = new Element(&quot;img&quot;).setAttribute(&quot;src&quot;,imglink);</span>
+<span class="fc" id="L403">                    el.setAttribute(&quot;border&quot;,&quot;0&quot;);</span>
+<span class="fc" id="L404">                    el.setAttribute(&quot;alt&quot;,&quot;(info)&quot;);</span>
+
+<span class="fc" id="L406">                    el = new Element(&quot;a&quot;).setAttribute(&quot;href&quot;,infolink).addContent(el);</span>
+<span class="fc" id="L407">                    el.setAttribute(&quot;class&quot;,&quot;infolink&quot;);</span>
+                }
+                else
+                {
+<span class="nc" id="L411">                    el = null;</span>
+                }
+<span class="nc" id="L413">                break;</span>
+
+            default:
+                break;
+        }
+
+<span class="pc bpc" id="L419" title="1 of 4 branches missed.">        if( el != null &amp;&amp; attributes != null )</span>
+        {
+<span class="fc bfc" id="L421" title="All 2 branches covered.">            while( attributes.hasNext() )</span>
+            {
+<span class="fc" id="L423">                Attribute attr = attributes.next();</span>
+<span class="pc bpc" id="L424" title="1 of 2 branches missed.">                if( attr != null )</span>
+                {
+<span class="fc" id="L426">                    el.setAttribute(attr);</span>
+                }
+<span class="fc" id="L428">            }</span>
+        }
+
+<span class="pc bpc" id="L431" title="1 of 2 branches missed.">        if( el != null )</span>
+        {
+<span class="fc" id="L433">            flushPlainText();</span>
+<span class="fc" id="L434">            m_currentElement.addContent( el );</span>
+        }
+<span class="fc" id="L436">        return el;</span>
+    }
+
+    /**
+     *  Figures out if a link is an off-site link.  This recognizes
+     *  the most common protocols by checking how it starts.
+     *
+     *  @param link The link to check.
+     *  @return true, if this is a link outside of this wiki.
+     *  @since 2.4
+     *  @deprecated - use {@link LinkParsingOperations#isExternalLink(String)} instead.
+     */
+    @Deprecated
+    public static boolean isExternalLink( String link )
+    {
+<span class="nc" id="L451">        return new LinkParsingOperations(null).isExternalLink( link );</span>
+    }
+
+    /**
+     *  Returns true if the link is really command to insert
+     *  a plugin.
+     *  &lt;P&gt;
+     *  Currently we just check if the link starts with &quot;{INSERT&quot;,
+     *  or just plain &quot;{&quot; but not &quot;{$&quot;.
+     *
+     *  @param link Link text, i.e. the contents of text between [].
+     *  @return True, if this link seems to be a command to insert a plugin here.
+     *  @deprecated Use {@link LinkParsingOperations#isPluginLink(String)} instead,
+     */
+    @Deprecated
+    public static boolean isPluginLink( String link )
+    {
+<span class="nc" id="L468">        return new LinkParsingOperations( null ).isPluginLink( link );</span>
+    }
+
+    /**
+     *  These are all of the HTML 4.01 block-level elements.
+     */
+<span class="fc" id="L474">    private static final String[] BLOCK_ELEMENTS = {</span>
+        &quot;address&quot;, &quot;blockquote&quot;, &quot;div&quot;, &quot;dl&quot;, &quot;fieldset&quot;, &quot;form&quot;,
+        &quot;h1&quot;, &quot;h2&quot;, &quot;h3&quot;, &quot;h4&quot;, &quot;h5&quot;, &quot;h6&quot;,
+        &quot;hr&quot;, &quot;noscript&quot;, &quot;ol&quot;, &quot;p&quot;, &quot;pre&quot;, &quot;table&quot;, &quot;ul&quot;
+    };
+
+    private static boolean isBlockLevel( String name )
+    {
+<span class="fc bfc" id="L482" title="All 2 branches covered.">        return Arrays.binarySearch( BLOCK_ELEMENTS, name ) &gt;= 0;</span>
+    }
+
+    /**
+     *  This method peeks ahead in the stream until EOL and returns the result.
+     *  It will keep the buffers untouched.
+     *
+     *  @return The string from the current position to the end of line.
+     */
+
+    // FIXME: Always returns an empty line, even if the stream is full.
+    private String peekAheadLine()
+        throws IOException
+    {
+<span class="fc" id="L496">        String s = readUntilEOL().toString();</span>
+
+<span class="pc bpc" id="L498" title="1 of 2 branches missed.">        if( s.length() &gt; PUSHBACK_BUFFER_SIZE )</span>
+        {
+<span class="nc" id="L500">            log.warn(&quot;Line is longer than maximum allowed size (&quot;+PUSHBACK_BUFFER_SIZE+&quot; characters.  Attempting to recover...&quot;);</span>
+<span class="nc" id="L501">            pushBack( s.substring(0,PUSHBACK_BUFFER_SIZE-1) );</span>
+        }
+        else
+        {
+            try
+            {
+<span class="fc" id="L507">                pushBack( s );</span>
+            }
+<span class="nc" id="L509">            catch( IOException e )</span>
+            {
+<span class="nc" id="L511">                log.warn(&quot;Pushback failed: the line is probably too long.  Attempting to recover.&quot;);</span>
+<span class="fc" id="L512">            }</span>
+        }
+<span class="fc" id="L514">        return s;</span>
+    }
+
+    private int flushPlainText()
+    {
+<span class="fc" id="L519">        int numChars = m_plainTextBuf.length();</span>
+
+<span class="fc bfc" id="L521" title="All 2 branches covered.">        if( numChars &gt; 0 )</span>
+        {
+            String buf;
+
+<span class="fc bfc" id="L525" title="All 2 branches covered.">            if( !m_allowHTML )</span>
+            {
+<span class="fc" id="L527">                buf = escapeHTMLEntities(m_plainTextBuf.toString());</span>
+            }
+            else
+            {
+<span class="fc" id="L531">                buf = m_plainTextBuf.toString();</span>
+            }
+            //
+            //  We must first empty the buffer because the side effect of
+            //  calling makeCamelCaseLink() is to call this routine.
+            //
+
+<span class="fc" id="L538">            m_plainTextBuf = new StringBuilder(20);</span>
+
+            try
+            {
+                //
+                //  This is the heaviest part of parsing, and therefore we can
+                //  do some optimization here.
+                //
+                //  1) Only when the length of the buffer is big enough, we try to do the match
+                //
+
+<span class="fc bfc" id="L549" title="All 6 branches covered.">                if( m_camelCaseLinks &amp;&amp; !m_isEscaping &amp;&amp; buf.length() &gt; 3 )</span>
+                {
+                    // System.out.println(&quot;Buffer=&quot;+buf);
+
+<span class="fc bfc" id="L553" title="All 2 branches covered.">                    while( m_camelCaseMatcher.contains( buf, m_camelCasePattern ) )</span>
+                    {
+<span class="fc" id="L555">                        MatchResult result = m_camelCaseMatcher.getMatch();</span>
+
+<span class="fc" id="L557">                        String firstPart = buf.substring(0,result.beginOffset(0));</span>
+<span class="fc" id="L558">                        String prefix = result.group(1);</span>
+
+<span class="pc bpc" id="L560" title="1 of 2 branches missed.">                        if( prefix == null ) prefix = &quot;&quot;;</span>
+
+<span class="fc" id="L562">                        String camelCase = result.group(2);</span>
+<span class="fc" id="L563">                        String protocol  = result.group(3);</span>
+<span class="fc" id="L564">                        String uri       = protocol+result.group(4);</span>
+<span class="fc" id="L565">                        buf              = buf.substring(result.endOffset(0));</span>
+
+<span class="fc" id="L567">                        m_currentElement.addContent( firstPart );</span>
+
+                        //
+                        //  Check if the user does not wish to do URL or WikiWord expansion
+                        //
+<span class="fc bfc" id="L572" title="All 4 branches covered.">                        if( prefix.endsWith(&quot;~&quot;) || prefix.indexOf('[') != -1 )</span>
+                        {
+<span class="fc bfc" id="L574" title="All 2 branches covered.">                            if( prefix.endsWith(&quot;~&quot;) )</span>
+                            {
+<span class="pc bpc" id="L576" title="1 of 2 branches missed.">                                if( m_wysiwygEditorMode )</span>
+                                {
+<span class="nc" id="L578">                                    m_currentElement.addContent( &quot;~&quot; );</span>
+                                }
+<span class="fc" id="L580">                                prefix = prefix.substring(0,prefix.length()-1);</span>
+                            }
+<span class="pc bpc" id="L582" title="1 of 2 branches missed.">                            if( camelCase != null )</span>
+                            {
+<span class="fc" id="L584">                                m_currentElement.addContent( prefix+camelCase );</span>
+                            }
+<span class="nc bnc" id="L586" title="All 2 branches missed.">                            else if( protocol != null )</span>
+                            {
+<span class="nc" id="L588">                                m_currentElement.addContent( prefix+uri );</span>
+                            }
+                            continue;
+                        }
+
+                        //
+                        //  Fine, then let's check what kind of a link this was
+                        //  and emit the proper elements
+                        //
+<span class="fc bfc" id="L597" title="All 2 branches covered.">                        if( protocol != null )</span>
+                        {
+<span class="fc" id="L599">                            char c = uri.charAt(uri.length()-1);</span>
+<span class="pc bpc" id="L600" title="1 of 4 branches missed.">                            if( c == '.' || c == ',' )</span>
+                            {
+<span class="fc" id="L602">                                uri = uri.substring(0,uri.length()-1);</span>
+<span class="fc" id="L603">                                buf = c + buf;</span>
+                            }
+                            // System.out.println(&quot;URI match &quot;+uri);
+<span class="fc" id="L606">                            m_currentElement.addContent( prefix );</span>
+<span class="fc" id="L607">                            makeDirectURILink( uri );</span>
+<span class="fc" id="L608">                        }</span>
+                        else
+                        {
+                            // System.out.println(&quot;Matched: '&quot;+camelCase+&quot;'&quot;);
+                            // System.out.println(&quot;Split to '&quot;+firstPart+&quot;', and '&quot;+buf+&quot;'&quot;);
+                            // System.out.println(&quot;prefix=&quot;+prefix);
+<span class="fc" id="L614">                            m_currentElement.addContent( prefix );</span>
+
+<span class="fc" id="L616">                            makeCamelCaseLink( camelCase );</span>
+                        }
+<span class="fc" id="L618">                    }</span>
+
+<span class="fc" id="L620">                    m_currentElement.addContent( buf );</span>
+                }
+                else
+                {
+                    //
+                    //  No camelcase asked for, just add the elements
+                    //
+<span class="fc" id="L627">                    m_currentElement.addContent( buf );</span>
+                }
+            }
+<span class="fc" id="L630">            catch( IllegalDataException e )</span>
+            {
+                //
+                // Sometimes it's possible that illegal XML chars is added to the data.
+                // Here we make sure it does not stop parsing.
+                //
+<span class="fc" id="L636">                m_currentElement.addContent( makeError(cleanupSuspectData( e.getMessage() )) );</span>
+<span class="fc" id="L637">            }</span>
+        }
+
+<span class="fc" id="L640">        return numChars;</span>
+    }
+
+    /**
+     *  Escapes XML entities in a HTML-compatible way (i.e. does not escape
+     *  entities that are already escaped).
+     *
+     *  @param buf
+     *  @return An escaped string.
+     */
+    private String escapeHTMLEntities(String buf)
+    {
+<span class="fc" id="L652">        StringBuilder tmpBuf = new StringBuilder( buf.length() + 20 );</span>
+
+<span class="fc bfc" id="L654" title="All 2 branches covered.">        for( int i = 0; i &lt; buf.length(); i++ )</span>
+        {
+<span class="fc" id="L656">            char ch = buf.charAt(i);</span>
+
+<span class="fc bfc" id="L658" title="All 2 branches covered.">            if( ch == '&lt;' )</span>
+            {
+<span class="fc" id="L660">                tmpBuf.append(&quot;&amp;lt;&quot;);</span>
+            }
+<span class="fc bfc" id="L662" title="All 2 branches covered.">            else if( ch == '&gt;' )</span>
+            {
+<span class="fc" id="L664">                tmpBuf.append(&quot;&amp;gt;&quot;);</span>
+            }
+<span class="fc bfc" id="L666" title="All 2 branches covered.">            else if( ch == '\&quot;' )</span>
+            {
+<span class="fc" id="L668">                tmpBuf.append(&quot;&amp;quot;&quot;);</span>
+            }
+<span class="fc bfc" id="L670" title="All 2 branches covered.">            else if( ch == '&amp;' )</span>
+            {
+                //
+                //  If the following is an XML entity reference (&amp;#.*;) we'll
+                //  leave it as it is; otherwise we'll replace it with an &amp;amp;
+                //
+
+<span class="fc" id="L677">                boolean isEntity = false;</span>
+<span class="fc" id="L678">                StringBuilder entityBuf = new StringBuilder();</span>
+
+<span class="fc bfc" id="L680" title="All 2 branches covered.">                if( i &lt; buf.length() -1 )</span>
+                {
+<span class="fc bfc" id="L682" title="All 2 branches covered.">                    for( int j = i; j &lt; buf.length(); j++ )</span>
+                    {
+<span class="fc" id="L684">                        char ch2 = buf.charAt(j);</span>
+
+<span class="pc bpc" id="L686" title="1 of 10 branches missed.">                        if( Character.isLetterOrDigit( ch2 ) || (ch2 == '#' &amp;&amp; j == i+1) || ch2 == ';' || ch2 == '&amp;' )</span>
+                        {
+<span class="fc" id="L688">                            entityBuf.append(ch2);</span>
+
+<span class="fc bfc" id="L690" title="All 2 branches covered.">                            if( ch2 == ';' )</span>
+                            {
+<span class="fc" id="L692">                                isEntity = true;</span>
+<span class="fc" id="L693">                                break;</span>
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+
+<span class="fc bfc" id="L703" title="All 2 branches covered.">                if( isEntity )</span>
+                {
+<span class="fc" id="L705">                    tmpBuf.append( entityBuf );</span>
+<span class="fc" id="L706">                    i = i + entityBuf.length() - 1;</span>
+                }
+                else
+                {
+<span class="fc" id="L710">                    tmpBuf.append(&quot;&amp;amp;&quot;);</span>
+                }
+
+<span class="fc" id="L713">            }</span>
+            else
+            {
+<span class="fc" id="L716">                tmpBuf.append( ch );</span>
+            }
+        }
+
+<span class="fc" id="L720">        return tmpBuf.toString();</span>
+    }
+
+    private Element pushElement( Element e )
+    {
+<span class="fc" id="L725">        flushPlainText();</span>
+<span class="fc" id="L726">        m_currentElement.addContent( e );</span>
+<span class="fc" id="L727">        m_currentElement = e;</span>
+
+<span class="fc" id="L729">        return e;</span>
+    }
+
+    private Element addElement( Content e )
+    {
+<span class="fc bfc" id="L734" title="All 2 branches covered.">        if( e != null )</span>
+        {
+<span class="fc" id="L736">            flushPlainText();</span>
+<span class="fc" id="L737">            m_currentElement.addContent( e );</span>
+        }
+<span class="fc" id="L739">        return m_currentElement;</span>
+    }
+
+    /**
+     *  All elements that can be empty by the HTML DTD.
+     */
+    //  Keep sorted.
+<span class="fc" id="L746">    private static final String[] EMPTY_ELEMENTS = {</span>
+        &quot;area&quot;, &quot;base&quot;, &quot;br&quot;, &quot;col&quot;, &quot;hr&quot;, &quot;img&quot;, &quot;input&quot;, &quot;link&quot;, &quot;meta&quot;, &quot;p&quot;, &quot;param&quot;
+    };
+
+    /**
+     *  Goes through the current element stack and pops all elements until this
+     *  element is found - this essentially &quot;closes&quot; and element.
+     *
+     *  @param s
+     *  @return The new current element, or null, if there was no such element in the entire stack.
+     */
+    private Element popElement( String s )
+    {
+<span class="fc" id="L759">        int flushedBytes = flushPlainText();</span>
+
+<span class="fc" id="L761">        Element currEl = m_currentElement;</span>
+
+<span class="fc bfc" id="L763" title="All 2 branches covered.">        while( currEl.getParentElement() != null )</span>
+        {
+<span class="pc bpc" id="L765" title="1 of 4 branches missed.">            if( currEl.getName().equals(s) &amp;&amp; !currEl.isRootElement() )</span>
+            {
+<span class="fc" id="L767">                m_currentElement = currEl.getParentElement();</span>
+
+                //
+                //  Check if it's okay for this element to be empty.  Then we will
+                //  trick the JDOM generator into not generating an empty element,
+                //  by putting an empty string between the tags.  Yes, it's a kludge
+                //  but what'cha gonna do about it. :-)
+                //
+
+<span class="fc bfc" id="L776" title="All 4 branches covered.">                if( flushedBytes == 0 &amp;&amp; Arrays.binarySearch( EMPTY_ELEMENTS, s ) &lt; 0 )</span>
+                {
+<span class="fc" id="L778">                    currEl.addContent(&quot;&quot;);</span>
+                }
+
+<span class="fc" id="L781">                return m_currentElement;</span>
+            }
+
+<span class="fc" id="L784">            currEl = currEl.getParentElement();</span>
+        }
+
+<span class="fc" id="L787">        return null;</span>
+    }
+
+
+    /**
+     *  Reads the stream until it meets one of the specified
+     *  ending characters, or stream end.  The ending character will be left
+     *  in the stream.
+     */
+    private String readUntil( String endChars )
+        throws IOException
+    {
+<span class="fc" id="L799">        StringBuilder sb = new StringBuilder( 80 );</span>
+<span class="fc" id="L800">        int ch = nextToken();</span>
+
+<span class="pc bpc" id="L802" title="1 of 2 branches missed.">        while( ch != -1 )</span>
+        {
+<span class="pc bpc" id="L804" title="1 of 2 branches missed.">            if( ch == '\\' )</span>
+            {
+<span class="nc" id="L806">                ch = nextToken();</span>
+<span class="nc bnc" id="L807" title="All 2 branches missed.">                if( ch == -1 )</span>
+                {
+<span class="nc" id="L809">                    break;</span>
+                }
+            }
+            else
+            {
+<span class="fc bfc" id="L814" title="All 2 branches covered.">                if( endChars.indexOf((char)ch) != -1 )</span>
+                {
+<span class="fc" id="L816">                    pushBack( ch );</span>
+<span class="fc" id="L817">                    break;</span>
+                }
+            }
+<span class="fc" id="L820">            sb.append( (char) ch );</span>
+<span class="fc" id="L821">            ch = nextToken();</span>
+        }
+
+<span class="fc" id="L824">        return sb.toString();</span>
+    }
+
+    /**
+     *  Reads the stream while the characters that have been specified are
+     *  in the stream, returning then the result as a String.
+     */
+    private String readWhile( String endChars )
+        throws IOException
+    {
+<span class="fc" id="L834">        StringBuilder sb = new StringBuilder( 80 );</span>
+<span class="fc" id="L835">        int ch = nextToken();</span>
+
+<span class="pc bpc" id="L837" title="1 of 2 branches missed.">        while( ch != -1 )</span>
+        {
+<span class="fc bfc" id="L839" title="All 2 branches covered.">            if( endChars.indexOf((char)ch) == -1 )</span>
+            {
+<span class="fc" id="L841">                pushBack( ch );</span>
+<span class="fc" id="L842">                break;</span>
+            }
+
+<span class="fc" id="L845">            sb.append( (char) ch );</span>
+<span class="fc" id="L846">            ch = nextToken();</span>
+        }
+
+<span class="fc" id="L849">        return sb.toString();</span>
+    }
+
+    private JSPWikiMarkupParser m_cleanTranslator;
+
+    /**
+     *  Does a lazy init.  Otherwise, we would get into a situation
+     *  where HTMLRenderer would try and boot a TranslatorReader before
+     *  the TranslatorReader it is contained by is up.
+     */
+    private JSPWikiMarkupParser getCleanTranslator()
+    {
+<span class="fc bfc" id="L861" title="All 2 branches covered.">        if( m_cleanTranslator == null )</span>
+        {
+<span class="fc" id="L863">            WikiContext dummyContext = new WikiContext( m_engine,</span>
+<span class="fc" id="L864">                                                        m_context.getHttpRequest(),</span>
+<span class="fc" id="L865">                                                        m_context.getPage() );</span>
+<span class="fc" id="L866">            m_cleanTranslator = new JSPWikiMarkupParser( dummyContext, null );</span>
+
+<span class="fc" id="L868">            m_cleanTranslator.m_allowHTML = true;</span>
+        }
+
+<span class="fc" id="L871">        return m_cleanTranslator;</span>
+    }
+    /**
+     *  Modifies the &quot;hd&quot; parameter to contain proper values.  Because
+     *  an &quot;id&quot; tag may only contain [a-zA-Z0-9:_-], we'll replace the
+     *  % after url encoding with '_'.
+     *  &lt;p&gt;
+     *  Counts also duplicate headings (= headings with similar name), and
+     *  attaches a counter.
+     */
+    private String makeHeadingAnchor( String baseName, String title, Heading hd )
+    {
+<span class="fc" id="L883">        hd.m_titleText = title;</span>
+<span class="fc" id="L884">        title = MarkupParser.wikifyLink( title );</span>
+
+<span class="fc" id="L886">        hd.m_titleSection = m_engine.encodeName(title);</span>
+
+<span class="fc bfc" id="L888" title="All 2 branches covered.">        if( m_titleSectionCounter.containsKey( hd.m_titleSection ) )</span>
+        {
+<span class="fc" id="L890">            Integer count = m_titleSectionCounter.get( hd.m_titleSection );</span>
+<span class="fc" id="L891">            count = count + 1;</span>
+<span class="fc" id="L892">            m_titleSectionCounter.put( hd.m_titleSection, count );</span>
+<span class="fc" id="L893">            hd.m_titleSection += &quot;-&quot; + count;</span>
+<span class="fc" id="L894">        }</span>
+        else
+        {
+<span class="fc" id="L897">            m_titleSectionCounter.put( hd.m_titleSection, 1 );</span>
+        }
+
+<span class="fc" id="L900">        hd.m_titleAnchor = &quot;section-&quot;+m_engine.encodeName(baseName)+</span>
+                           &quot;-&quot;+hd.m_titleSection;
+<span class="fc" id="L902">        hd.m_titleAnchor = hd.m_titleAnchor.replace( '%', '_' );</span>
+<span class="fc" id="L903">        hd.m_titleAnchor = hd.m_titleAnchor.replace( '/', '_' );</span>
+
+<span class="fc" id="L905">        return hd.m_titleAnchor;</span>
+    }
+
+    private String makeSectionTitle( String title )
+    {
+<span class="fc" id="L910">        title = title.trim();</span>
+        String outTitle;
+
+        try
+        {
+<span class="fc" id="L915">            JSPWikiMarkupParser dtr = getCleanTranslator();</span>
+<span class="fc" id="L916">            dtr.setInputReader( new StringReader(title) );</span>
+
+<span class="fc" id="L918">            CleanTextRenderer ctt = new CleanTextRenderer(m_context, dtr.parse());</span>
+
+<span class="fc" id="L920">            outTitle = ctt.getString();</span>
+        }
+<span class="nc" id="L922">        catch( IOException e )</span>
+        {
+<span class="nc" id="L924">            log.fatal(&quot;CleanTranslator not working&quot;, e);</span>
+<span class="nc" id="L925">            throw new InternalWikiException(&quot;CleanTranslator not working as expected, when cleaning title&quot;+ e.getMessage() , e);</span>
+<span class="fc" id="L926">        }</span>
+
+<span class="fc" id="L928">        return outTitle;</span>
+    }
+
+    /**
+     *  Returns XHTML for the heading.
+     *
+     *  @param level The level of the heading.  @see Heading
+     *  @param title the title for the heading
+     *  @param hd a List to which heading should be added
+     *  @return An Element containing the heading
+     */
+    public Element makeHeading( int level, String title, Heading hd )
+    {
+<span class="fc" id="L941">        Element el = null;</span>
+
+<span class="fc" id="L943">        String pageName = m_context.getPage().getName();</span>
+
+<span class="fc" id="L945">        String outTitle = makeSectionTitle( title );</span>
+
+<span class="fc" id="L947">        hd.m_level = level;</span>
+
+<span class="pc bpc" id="L949" title="1 of 4 branches missed.">        switch( level )</span>
+        {
+          case Heading.HEADING_SMALL:
+<span class="fc" id="L952">            el = new Element(&quot;h4&quot;).setAttribute(&quot;id&quot;,makeHeadingAnchor( pageName, outTitle, hd ));</span>
+<span class="fc" id="L953">            break;</span>
+
+          case Heading.HEADING_MEDIUM:
+<span class="fc" id="L956">            el = new Element(&quot;h3&quot;).setAttribute(&quot;id&quot;,makeHeadingAnchor( pageName, outTitle, hd ));</span>
+<span class="fc" id="L957">            break;</span>
+
+          case Heading.HEADING_LARGE:
+<span class="fc" id="L960">            el = new Element(&quot;h2&quot;).setAttribute(&quot;id&quot;,makeHeadingAnchor( pageName, outTitle, hd ));</span>
+<span class="fc" id="L961">            break;</span>
+
+          default:
+<span class="nc" id="L964">            throw new InternalWikiException(&quot;Illegal heading type &quot;+level);</span>
+        }
+
+
+<span class="fc" id="L968">        return el;</span>
+    }
+
+    /**
+     *  When given a link to a WikiName, we just return
+     *  a proper HTML link for it.  The local link mutator
+     *  chain is also called.
+     */
+    private Element makeCamelCaseLink( String wikiname )
+    {
+<span class="fc" id="L978">        String matchedLink = m_linkParsingOperations.linkIfExists( wikiname );</span>
+
+<span class="fc" id="L980">        callMutatorChain( m_localLinkMutatorChain, wikiname );</span>
+
+<span class="fc bfc" id="L982" title="All 2 branches covered.">        if( matchedLink != null ) {</span>
+<span class="fc" id="L983">            makeLink( READ, matchedLink, wikiname, null, null );</span>
+        } else {
+<span class="fc" id="L985">            makeLink( EDIT, wikiname, wikiname, null, null );</span>
+        }
+
+<span class="fc" id="L988">        return m_currentElement;</span>
+    }
+
+    /** Holds the image URL for the duration of this parser */
+<span class="fc" id="L992">    private String m_outlinkImageURL = null;</span>
+
+    /**
+     *  Returns an element for the external link image (out.png).  However,
+     *  this method caches the URL for the lifetime of this MarkupParser,
+     *  because it's commonly used, and we'll end up with possibly hundreds
+     *  our thousands of references to it...  It's a lot faster, too.
+     *
+     *  @return  An element containing the HTML for the outlink image.
+     */
+    private Element outlinkImage()
+    {
+<span class="fc" id="L1004">        Element el = null;</span>
+
+<span class="pc bpc" id="L1006" title="1 of 2 branches missed.">        if( m_useOutlinkImage )</span>
+        {
+<span class="nc bnc" id="L1008" title="All 2 branches missed.">            if( m_outlinkImageURL == null )</span>
+            {
+<span class="nc" id="L1010">                m_outlinkImageURL = m_context.getURL( WikiContext.NONE, OUTLINK_IMAGE );</span>
+            }
+
+<span class="nc" id="L1013">            el = new Element( &quot;img&quot; ).setAttribute( &quot;class&quot;, OUTLINK );</span>
+<span class="nc" id="L1014">            el.setAttribute( &quot;src&quot;, m_outlinkImageURL );</span>
+<span class="nc" id="L1015">            el.setAttribute( &quot;alt&quot;,&quot;&quot; );</span>
+        }
+
+<span class="fc" id="L1018">        return el;</span>
+    }
+
+    /**
+     *  Takes an URL and turns it into a regular wiki link.  Unfortunately,
+     *  because of the way that flushPlainText() works, it already encodes
+     *  all of the XML entities.  But so does WikiContext.getURL(), so we
+     *  have to do a reverse-replace here, so that it can again be replaced in makeLink.
+     *  &lt;p&gt;
+     *  What a crappy problem.
+     *
+     * @param url
+     * @return An anchor Element containing the link.
+     */
+    private Element makeDirectURILink( String url )
+    {
+        Element result;
+<span class="fc" id="L1035">        String last = null;</span>
+
+<span class="pc bpc" id="L1037" title="2 of 4 branches missed.">        if( url.endsWith(&quot;,&quot;) || url.endsWith(&quot;.&quot;) )</span>
+        {
+<span class="nc" id="L1039">            last = url.substring( url.length()-1 );</span>
+<span class="nc" id="L1040">            url  = url.substring( 0, url.length()-1 );</span>
+        }
+
+<span class="fc" id="L1043">        callMutatorChain( m_externalLinkMutatorChain, url );</span>
+
+<span class="pc bpc" id="L1045" title="1 of 2 branches missed.">        if( m_linkParsingOperations.isImageLink( url ) )</span>
+        {
+<span class="nc" id="L1047">            result = handleImageLink( StringUtils.replace(url,&quot;&amp;amp;&quot;,&quot;&amp;&quot;), url, false );</span>
+        }
+        else
+        {
+<span class="fc" id="L1051">            result = makeLink( EXTERNAL, StringUtils.replace(url,&quot;&amp;amp;&quot;,&quot;&amp;&quot;), url, null, null );</span>
+<span class="fc" id="L1052">            addElement( outlinkImage() );</span>
+        }
+
+<span class="pc bpc" id="L1055" title="1 of 2 branches missed.">        if( last != null )</span>
+        {
+<span class="nc" id="L1057">            m_plainTextBuf.append(last);</span>
+        }
+
+<span class="fc" id="L1060">        return result;</span>
+    }
+
+    /**
+     *  Image links are handled differently:
+     *  1. If the text is a WikiName of an existing page,
+     *     it gets linked.
+     *  2. If the text is an external link, then it is inlined.
+     *  3. Otherwise it becomes an ALT text.
+     *
+     *  @param reallink The link to the image.
+     *  @param link     Link text portion, may be a link to somewhere else.
+     *  @param hasLinkText If true, then the defined link had a link text available.
+     *                  This means that the link text may be a link to a wiki page,
+     *                  or an external resource.
+     */
+
+    // FIXME: isExternalLink() is called twice.
+    private Element handleImageLink( String reallink, String link, boolean hasLinkText )
+    {
+<span class="fc" id="L1080">        String possiblePage = MarkupParser.cleanLink( link );</span>
+
+<span class="fc bfc" id="L1082" title="All 4 branches covered.">        if( m_linkParsingOperations.isExternalLink( link ) &amp;&amp; hasLinkText )</span>
+        {
+<span class="fc" id="L1084">            return makeLink( IMAGELINK, reallink, link, null, null );</span>
+        }
+<span class="pc bpc" id="L1086" title="1 of 4 branches missed.">        else if( m_linkParsingOperations.linkExists( possiblePage ) &amp;&amp; hasLinkText )</span>
+        {
+            // System.out.println(&quot;Orig=&quot;+link+&quot;, Matched: &quot;+matchedLink);
+<span class="fc" id="L1089">            callMutatorChain( m_localLinkMutatorChain, possiblePage );</span>
+
+<span class="fc" id="L1091">            return makeLink( IMAGEWIKILINK, reallink, link, null, null );</span>
+        }
+        else
+        {
+<span class="fc" id="L1095">            return makeLink( IMAGE, reallink, link, null, null );</span>
+        }
+    }
+
+    private Element handleAccessRule( String ruleLine )
+    {
+<span class="pc bpc" id="L1101" title="1 of 2 branches missed.">        if( m_wysiwygEditorMode )</span>
+        {
+<span class="nc" id="L1103">            m_currentElement.addContent( &quot;[&quot; + ruleLine + &quot;]&quot; );</span>
+        }
+
+<span class="fc bfc" id="L1106" title="All 2 branches covered.">        if( !m_parseAccessRules ) return m_currentElement;</span>
+        Acl acl;
+<span class="fc" id="L1108">        WikiPage          page = m_context.getRealPage();</span>
+        // UserDatabase      db = m_context.getEngine().getUserDatabase();
+
+<span class="pc bpc" id="L1111" title="1 of 2 branches missed.">        if( ruleLine.startsWith( &quot;{&quot; ) )</span>
+<span class="fc" id="L1112">            ruleLine = ruleLine.substring( 1 );</span>
+<span class="pc bpc" id="L1113" title="1 of 2 branches missed.">        if( ruleLine.endsWith( &quot;}&quot; ) )</span>
+<span class="fc" id="L1114">            ruleLine = ruleLine.substring( 0, ruleLine.length() - 1 );</span>
+
+<span class="pc bpc" id="L1116" title="1 of 2 branches missed.">        if( log.isDebugEnabled() ) log.debug(&quot;page=&quot;+page.getName()+&quot;, ACL = &quot;+ruleLine);</span>
+
+        try
+        {
+<span class="fc" id="L1120">            acl = m_engine.getAclManager().parseAcl( page, ruleLine );</span>
+
+<span class="fc" id="L1122">            page.setAcl( acl );</span>
+
+<span class="pc bpc" id="L1124" title="1 of 2 branches missed.">            if( log.isDebugEnabled() ) log.debug( acl.toString() );</span>
+        }
+<span class="nc" id="L1126">        catch( WikiSecurityException wse )</span>
+        {
+<span class="nc" id="L1128">            return makeError( wse.getMessage() );</span>
+<span class="fc" id="L1129">        }</span>
+
+<span class="fc" id="L1131">        return m_currentElement;</span>
+    }
+
+    /**
+     *  Handles metadata setting [{SET foo=bar}]
+     */
+    private Element handleMetadata( String link )
+    {
+<span class="pc bpc" id="L1139" title="1 of 2 branches missed.">        if( m_wysiwygEditorMode )</span>
+        {
+<span class="nc" id="L1141">            m_currentElement.addContent( &quot;[&quot; + link + &quot;]&quot; );</span>
+        }
+
+        try
+        {
+<span class="fc" id="L1146">            String args = link.substring( link.indexOf(' '), link.length()-1 );</span>
+
+<span class="fc" id="L1148">            String name = args.substring( 0, args.indexOf('=') );</span>
+<span class="fc" id="L1149">            String val  = args.substring( args.indexOf('=')+1, args.length() );</span>
+
+<span class="fc" id="L1151">            name = name.trim();</span>
+<span class="fc" id="L1152">            val  = val.trim();</span>
+
+<span class="fc bfc" id="L1154" title="All 2 branches covered.">            if( val.startsWith(&quot;'&quot;) ) val = val.substring( 1 );</span>
+<span class="fc bfc" id="L1155" title="All 2 branches covered.">            if( val.endsWith(&quot;'&quot;) )   val = val.substring( 0, val.length()-1 );</span>
+
+            // log.debug(&quot;SET name='&quot;+name+&quot;', value='&quot;+val+&quot;'.&quot;);
+
+<span class="pc bpc" id="L1159" title="2 of 4 branches missed.">            if( name.length() &gt; 0 &amp;&amp; val.length() &gt; 0 )</span>
+            {
+<span class="fc" id="L1161">                val = m_engine.getVariableManager().expandVariables( m_context,</span>
+                                                                     val );
+
+<span class="fc" id="L1164">                m_context.getPage().setAttribute( name, val );</span>
+            }
+        }
+<span class="nc" id="L1167">        catch( Exception e )</span>
+        {
+<span class="nc" id="L1169">            ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+<span class="nc" id="L1170">            return makeError( MessageFormat.format( rb.getString( &quot;markupparser.error.invalidset&quot; ), link ) );</span>
+<span class="fc" id="L1171">        }</span>
+
+<span class="fc" id="L1173">        return m_currentElement;</span>
+    }
+
+    /**
+     *  Emits a processing instruction that will disable markup escaping. This is
+     *  very useful if you want to emit HTML directly into the stream.
+     *
+     */
+    private void disableOutputEscaping()
+    {
+<span class="fc" id="L1183">        addElement( new ProcessingInstruction(Result.PI_DISABLE_OUTPUT_ESCAPING, &quot;&quot;) );</span>
+<span class="fc" id="L1184">    }</span>
+
+    /**
+     *  Gobbles up all hyperlinks that are encased in square brackets.
+     */
+    private Element handleHyperlinks( String linktext, int pos )
+    {
+<span class="fc" id="L1191">        ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+
+<span class="fc" id="L1193">        StringBuilder sb = new StringBuilder(linktext.length()+80);</span>
+
+<span class="fc bfc" id="L1195" title="All 2 branches covered.">        if( m_linkParsingOperations.isAccessRule( linktext ) )</span>
+        {
+<span class="fc" id="L1197">            return handleAccessRule( linktext );</span>
+        }
+
+<span class="fc bfc" id="L1200" title="All 2 branches covered.">        if( m_linkParsingOperations.isMetadata( linktext ) )</span>
+        {
+<span class="fc" id="L1202">            return handleMetadata( linktext );</span>
+        }
+
+<span class="fc bfc" id="L1205" title="All 2 branches covered.">        if( m_linkParsingOperations.isPluginLink( linktext ) )</span>
+        {
+            try
+            {
+<span class="fc" id="L1209">                PluginContent pluginContent = PluginContent.parsePluginLine( m_context, linktext, pos );</span>
+                //
+                //  This might sometimes fail, especially if there is something which looks
+                //  like a plugin invocation but is really not.
+                //
+<span class="pc bpc" id="L1214" title="1 of 2 branches missed.">                if( pluginContent != null )</span>
+                {
+<span class="fc" id="L1216">                    addElement( pluginContent );</span>
+
+<span class="fc" id="L1218">                    pluginContent.executeParse( m_context );</span>
+                }
+            }
+<span class="fc" id="L1221">            catch( PluginException e )</span>
+            {
+<span class="fc" id="L1223">                log.info( m_context.getRealPage().getWiki() + &quot; : &quot; + m_context.getRealPage().getName() + &quot; - Failed to insert plugin: &quot; + e.getMessage() );</span>
+                //log.info( &quot;Root cause:&quot;,e.getRootThrowable() );
+<span class="pc bpc" id="L1225" title="1 of 2 branches missed.">                if( !m_wysiwygEditorMode )</span>
+                {
+<span class="fc" id="L1227">                    ResourceBundle rbPlugin = Preferences.getBundle( m_context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+<span class="fc" id="L1228">                    return addElement( makeError( MessageFormat.format( rbPlugin.getString( &quot;plugin.error.insertionfailed&quot; ),</span>
+<span class="fc" id="L1229">                    		                                            m_context.getRealPage().getWiki(),</span>
+<span class="fc" id="L1230">                    		                                            m_context.getRealPage().getName(),</span>
+<span class="fc" id="L1231">                    		                                            e.getMessage() ) ) );</span>
+                }
+<span class="fc" id="L1233">            }</span>
+
+<span class="fc" id="L1235">            return m_currentElement;</span>
+        }
+
+        try
+        {
+<span class="fc" id="L1240">            LinkParser.Link link = m_linkParser.parse(linktext);</span>
+<span class="fc" id="L1241">            linktext       = link.getText();</span>
+<span class="fc" id="L1242">            String linkref = link.getReference();</span>
+
+            //
+            //  Yes, we now have the components separated.
+            //  linktext = the text the link should have
+            //  linkref  = the url or page name.
+            //
+            //  In many cases these are the same.  [linktext|linkref].
+            //
+<span class="fc bfc" id="L1251" title="All 2 branches covered.">            if( m_linkParsingOperations.isVariableLink( linktext ) )</span>
+            {
+<span class="fc" id="L1253">                Content el = new VariableContent(linktext);</span>
+
+<span class="fc" id="L1255">                addElement( el );</span>
+<span class="fc" id="L1256">            }</span>
+<span class="fc bfc" id="L1257" title="All 2 branches covered.">            else if( m_linkParsingOperations.isExternalLink( linkref ) )</span>
+            {
+                // It's an external link, out of this Wiki
+
+<span class="fc" id="L1261">                callMutatorChain( m_externalLinkMutatorChain, linkref );</span>
+
+<span class="fc bfc" id="L1263" title="All 2 branches covered.">                if( m_linkParsingOperations.isImageLink( linkref ) )</span>
+                {
+<span class="fc" id="L1265">                    handleImageLink( linkref, linktext, link.hasReference() );</span>
+                }
+                else
+                {
+<span class="fc" id="L1269">                    makeLink( EXTERNAL, linkref, linktext, null, link.getAttributes() );</span>
+<span class="fc" id="L1270">                    addElement( outlinkImage() );</span>
+                }
+            }
+<span class="fc bfc" id="L1273" title="All 2 branches covered.">            else if( link.isInterwikiLink() )</span>
+            {
+                // It's an interwiki link
+                // InterWiki links also get added to external link chain
+                // after the links have been resolved.
+
+                // FIXME: There is an interesting issue here:  We probably should
+                //        URLEncode the wikiPage, but we can't since some of the
+                //        Wikis use slashes (/), which won't survive URLEncoding.
+                //        Besides, we don't know which character set the other Wiki
+                //        is using, so you'll have to write the entire name as it appears
+                //        in the URL.  Bugger.
+
+<span class="fc" id="L1286">                String extWiki  = link.getExternalWiki();</span>
+<span class="fc" id="L1287">                String wikiPage = link.getExternalWikiPage();</span>
+
+<span class="pc bpc" id="L1289" title="1 of 2 branches missed.">                if( m_wysiwygEditorMode )</span>
+                {
+<span class="nc" id="L1291">                    makeLink( INTERWIKI, extWiki + &quot;:&quot; + wikiPage, linktext, null, link.getAttributes() );</span>
+                }
+                else
+                {
+<span class="fc" id="L1295">                    String urlReference = m_engine.getInterWikiURL( extWiki );</span>
+
+<span class="fc bfc" id="L1297" title="All 2 branches covered.">                    if( urlReference != null )</span>
+                    {
+<span class="fc" id="L1299">                        urlReference = TextUtil.replaceString( urlReference, &quot;%s&quot;, wikiPage );</span>
+<span class="fc" id="L1300">                        urlReference = callMutatorChain( m_externalLinkMutatorChain, urlReference );</span>
+
+<span class="pc bpc" id="L1302" title="1 of 2 branches missed.">                        if( m_linkParsingOperations.isImageLink(urlReference) )</span>
+                        {
+<span class="nc" id="L1304">                            handleImageLink( urlReference, linktext, link.hasReference() );</span>
+                        }
+                        else
+                        {
+<span class="fc" id="L1308">                            makeLink( INTERWIKI, urlReference, linktext, null, link.getAttributes() );</span>
+                        }
+
+<span class="pc bpc" id="L1311" title="1 of 2 branches missed.">                        if( m_linkParsingOperations.isExternalLink(urlReference) )</span>
+                        {
+<span class="fc" id="L1313">                            addElement( outlinkImage() );</span>
+                        }
+                    }
+                    else
+                    {
+<span class="fc" id="L1318">                        Object[] args = { extWiki };</span>
+<span class="fc" id="L1319">                        addElement( makeError( MessageFormat.format( rb.getString( &quot;markupparser.error.nointerwikiref&quot; ), args ) ) );</span>
+                    }
+                }
+<span class="fc" id="L1322">            }</span>
+<span class="fc bfc" id="L1323" title="All 2 branches covered.">            else if( linkref.startsWith(&quot;#&quot;) )</span>
+            {
+                // It defines a local footnote
+<span class="fc" id="L1326">                makeLink( LOCAL, linkref, linktext, null, link.getAttributes() );</span>
+            }
+<span class="fc bfc" id="L1328" title="All 2 branches covered.">            else if( TextUtil.isNumber( linkref ) )</span>
+            {
+                // It defines a reference to a local footnote
+<span class="fc" id="L1331">                makeLink( LOCALREF, linkref, linktext, null, link.getAttributes() );</span>
+            }
+            else
+            {
+<span class="fc" id="L1335">                int hashMark = -1;</span>
+
+                //
+                //  Internal wiki link, but is it an attachment link?
+                //
+<span class="fc" id="L1340">                String attachment = m_engine.getAttachmentManager().getAttachmentInfoName( m_context, linkref );</span>
+<span class="fc bfc" id="L1341" title="All 2 branches covered.">                if( attachment != null )</span>
+                {
+<span class="fc" id="L1343">                    callMutatorChain( m_attachmentLinkMutatorChain, attachment );</span>
+
+<span class="fc bfc" id="L1345" title="All 2 branches covered.">                    if( m_linkParsingOperations.isImageLink( linkref ) )</span>
+                    {
+<span class="fc" id="L1347">                        attachment = m_context.getURL( WikiContext.ATTACH, attachment );</span>
+<span class="fc" id="L1348">                        sb.append( handleImageLink( attachment, linktext, link.hasReference() ) );</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L1352">                        makeLink( ATTACHMENT, attachment, linktext, null, link.getAttributes() );</span>
+                    }
+                }
+<span class="fc bfc" id="L1355" title="All 2 branches covered.">                else if( (hashMark = linkref.indexOf('#')) != -1 )</span>
+                {
+                    // It's an internal Wiki link, but to a named section
+
+<span class="fc" id="L1359">                    String namedSection = linkref.substring( hashMark+1 );</span>
+<span class="fc" id="L1360">                    linkref = linkref.substring( 0, hashMark );</span>
+
+<span class="fc" id="L1362">                    linkref = MarkupParser.cleanLink( linkref );</span>
+
+<span class="fc" id="L1364">                    callMutatorChain( m_localLinkMutatorChain, linkref );</span>
+
+<span class="fc" id="L1366">                    String matchedLink = m_linkParsingOperations.linkIfExists( linkref );</span>
+<span class="fc bfc" id="L1367" title="All 2 branches covered.">                    if( matchedLink != null ) {</span>
+<span class="fc" id="L1368">                        String sectref = &quot;section-&quot;+m_engine.encodeName(matchedLink+&quot;-&quot;+wikifyLink(namedSection));</span>
+<span class="fc" id="L1369">                        sectref = sectref.replace('%', '_');</span>
+<span class="fc" id="L1370">                        makeLink( READ, matchedLink, linktext, sectref, link.getAttributes() );</span>
+<span class="fc" id="L1371">                    } else {</span>
+<span class="fc" id="L1372">                        makeLink( EDIT, linkref, linktext, null, link.getAttributes() );</span>
+                    }
+<span class="fc" id="L1374">                }</span>
+                else
+                {
+                    // It's an internal Wiki link
+<span class="fc" id="L1378">                    linkref = MarkupParser.cleanLink( linkref );</span>
+
+<span class="fc" id="L1380">                    callMutatorChain( m_localLinkMutatorChain, linkref );</span>
+
+<span class="fc" id="L1382">                    String matchedLink = m_linkParsingOperations.linkIfExists( linkref );</span>
+<span class="fc bfc" id="L1383" title="All 2 branches covered.">                    if( matchedLink != null ) {</span>
+<span class="fc" id="L1384">                        makeLink( READ, matchedLink, linktext, null, link.getAttributes() );</span>
+                    } else {
+<span class="fc" id="L1386">                        makeLink( EDIT, linkref, linktext, null, link.getAttributes() );</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L1391">        catch( ParseException e )</span>
+        {
+<span class="nc" id="L1393">            log.info(&quot;Parser failure: &quot;,e);</span>
+<span class="nc" id="L1394">            Object[] args = { e.getMessage() };</span>
+<span class="nc" id="L1395">            addElement( makeError( MessageFormat.format( rb.getString( &quot;markupparser.error.parserfailure&quot; ), args ) ) );</span>
+<span class="fc" id="L1396">        }</span>
+
+<span class="fc" id="L1398">        return m_currentElement;</span>
+    }
+
+    /**
+     *  Pushes back any string that has been read.  It will obviously
+     *  be pushed back in a reverse order.
+     *
+     *  @since 2.1.77
+     */
+    private void pushBack( String s )
+        throws IOException
+    {
+<span class="fc bfc" id="L1410" title="All 2 branches covered.">        for( int i = s.length()-1; i &gt;= 0; i-- )</span>
+        {
+<span class="fc" id="L1412">            pushBack( s.charAt(i) );</span>
+        }
+<span class="fc" id="L1414">    }</span>
+
+    private Element handleBackslash()
+        throws IOException
+    {
+<span class="fc" id="L1419">        int ch = nextToken();</span>
+
+<span class="fc bfc" id="L1421" title="All 2 branches covered.">        if( ch == '\\' )</span>
+        {
+<span class="fc" id="L1423">            int ch2 = nextToken();</span>
+
+<span class="fc bfc" id="L1425" title="All 2 branches covered.">            if( ch2 == '\\' )</span>
+            {
+<span class="fc" id="L1427">                pushElement( new Element(&quot;br&quot;).setAttribute(&quot;clear&quot;,&quot;all&quot;));</span>
+<span class="fc" id="L1428">                return popElement(&quot;br&quot;);</span>
+            }
+
+<span class="fc" id="L1431">            pushBack( ch2 );</span>
+
+<span class="fc" id="L1433">            pushElement( new Element(&quot;br&quot;) );</span>
+<span class="fc" id="L1434">            return popElement(&quot;br&quot;);</span>
+        }
+
+<span class="fc" id="L1437">        pushBack( ch );</span>
+
+<span class="fc" id="L1439">        return null;</span>
+    }
+
+    private Element handleUnderscore()
+        throws IOException
+    {
+<span class="fc" id="L1445">        int ch = nextToken();</span>
+<span class="fc" id="L1446">        Element el = null;</span>
+
+<span class="fc bfc" id="L1448" title="All 2 branches covered.">        if( ch == '_' )</span>
+        {
+<span class="fc bfc" id="L1450" title="All 2 branches covered.">            if( m_isbold )</span>
+            {
+<span class="fc" id="L1452">                el = popElement(&quot;b&quot;);</span>
+            }
+            else
+            {
+<span class="fc" id="L1456">                el = pushElement( new Element(&quot;b&quot;) );</span>
+            }
+<span class="fc bfc" id="L1458" title="All 2 branches covered.">            m_isbold = !m_isbold;</span>
+        }
+        else
+        {
+<span class="fc" id="L1462">            pushBack( ch );</span>
+        }
+
+<span class="fc" id="L1465">        return el;</span>
+    }
+
+
+    /**
+     *  For example: italics.
+     */
+    private Element handleApostrophe()
+        throws IOException
+    {
+<span class="fc" id="L1475">        int ch = nextToken();</span>
+<span class="fc" id="L1476">        Element el = null;</span>
+
+<span class="fc bfc" id="L1478" title="All 2 branches covered.">        if( ch == '\'' )</span>
+        {
+<span class="fc bfc" id="L1480" title="All 2 branches covered.">            if( m_isitalic )</span>
+            {
+<span class="fc" id="L1482">                el = popElement(&quot;i&quot;);</span>
+            }
+            else
+            {
+<span class="fc" id="L1486">                el = pushElement( new Element(&quot;i&quot;) );</span>
+            }
+<span class="fc bfc" id="L1488" title="All 2 branches covered.">            m_isitalic = !m_isitalic;</span>
+        }
+        else
+        {
+<span class="fc" id="L1492">            pushBack( ch );</span>
+        }
+
+<span class="fc" id="L1495">        return el;</span>
+    }
+
+    private Element handleOpenbrace( boolean isBlock )
+        throws IOException
+    {
+<span class="fc" id="L1501">        int ch = nextToken();</span>
+
+<span class="fc bfc" id="L1503" title="All 2 branches covered.">        if( ch == '{' )</span>
+        {
+<span class="fc" id="L1505">            int ch2 = nextToken();</span>
+
+<span class="fc bfc" id="L1507" title="All 2 branches covered.">            if( ch2 == '{' )</span>
+            {
+<span class="fc" id="L1509">                m_isPre = true;</span>
+<span class="fc" id="L1510">                m_isEscaping = true;</span>
+<span class="fc" id="L1511">                m_isPreBlock = isBlock;</span>
+
+<span class="fc bfc" id="L1513" title="All 2 branches covered.">                if( isBlock )</span>
+                {
+<span class="fc" id="L1515">                    startBlockLevel();</span>
+<span class="fc" id="L1516">                    return pushElement( new Element(&quot;pre&quot;) );</span>
+                }
+
+<span class="fc" id="L1519">                return pushElement( new Element(&quot;span&quot;).setAttribute(&quot;style&quot;,&quot;font-family:monospace; white-space:pre;&quot;) );</span>
+            }
+
+<span class="fc" id="L1522">            pushBack( ch2 );</span>
+
+<span class="fc" id="L1524">            return pushElement( new Element(&quot;tt&quot;) );</span>
+        }
+
+<span class="fc" id="L1527">        pushBack( ch );</span>
+
+<span class="fc" id="L1529">        return null;</span>
+    }
+
+    /**
+     *  Handles both }} and }}}
+     */
+    private Element handleClosebrace()
+        throws IOException
+    {
+<span class="fc" id="L1538">        int ch2 = nextToken();</span>
+
+<span class="fc bfc" id="L1540" title="All 2 branches covered.">        if( ch2 == '}' )</span>
+        {
+<span class="fc" id="L1542">            int ch3 = nextToken();</span>
+
+<span class="fc bfc" id="L1544" title="All 2 branches covered.">            if( ch3 == '}' )</span>
+            {
+<span class="fc bfc" id="L1546" title="All 2 branches covered.">                if( m_isPre )</span>
+                {
+<span class="fc bfc" id="L1548" title="All 2 branches covered.">                    if( m_isPreBlock )</span>
+                    {
+<span class="fc" id="L1550">                        popElement( &quot;pre&quot; );</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L1554">                        popElement( &quot;span&quot; );</span>
+                    }
+
+<span class="fc" id="L1557">                    m_isPre = false;</span>
+<span class="fc" id="L1558">                    m_isEscaping = false;</span>
+<span class="fc" id="L1559">                    return m_currentElement;</span>
+                }
+
+<span class="fc" id="L1562">                m_plainTextBuf.append(&quot;}}}&quot;);</span>
+<span class="fc" id="L1563">                return m_currentElement;</span>
+            }
+
+<span class="fc" id="L1566">            pushBack( ch3 );</span>
+
+<span class="fc bfc" id="L1568" title="All 2 branches covered.">            if( !m_isEscaping )</span>
+            {
+<span class="fc" id="L1570">                return popElement(&quot;tt&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L1574">        pushBack( ch2 );</span>
+
+<span class="fc" id="L1576">        return null;</span>
+    }
+
+    private Element handleDash()
+        throws IOException
+    {
+<span class="fc" id="L1582">        int ch = nextToken();</span>
+
+<span class="fc bfc" id="L1584" title="All 2 branches covered.">        if( ch == '-' )</span>
+        {
+<span class="fc" id="L1586">            int ch2 = nextToken();</span>
+
+<span class="fc bfc" id="L1588" title="All 2 branches covered.">            if( ch2 == '-' )</span>
+            {
+<span class="fc" id="L1590">                int ch3 = nextToken();</span>
+
+<span class="fc bfc" id="L1592" title="All 2 branches covered.">                if( ch3 == '-' )</span>
+                {
+                    // Empty away all the rest of the dashes.
+                    // Do not forget to return the first non-match back.
+                    do
+                    {
+<span class="fc" id="L1598">                        ch = nextToken();</span>
+                    }
+<span class="fc bfc" id="L1600" title="All 2 branches covered.">                    while ( ch == '-' );</span>
+
+<span class="fc" id="L1602">                    pushBack(ch);</span>
+<span class="fc" id="L1603">                    startBlockLevel();</span>
+<span class="fc" id="L1604">                    pushElement( new Element(&quot;hr&quot;) );</span>
+<span class="fc" id="L1605">                    return popElement( &quot;hr&quot; );</span>
+                }
+
+<span class="fc" id="L1608">                pushBack( ch3 );</span>
+            }
+<span class="fc" id="L1610">            pushBack( ch2 );</span>
+        }
+
+<span class="fc" id="L1613">        pushBack( ch );</span>
+
+<span class="fc" id="L1615">        return null;</span>
+    }
+
+    private Element handleHeading()
+        throws IOException
+    {
+<span class="fc" id="L1621">        Element el = null;</span>
+
+<span class="fc" id="L1623">        int ch  = nextToken();</span>
+
+<span class="fc" id="L1625">        Heading hd = new Heading();</span>
+
+<span class="fc bfc" id="L1627" title="All 2 branches covered.">        if( ch == '!' )</span>
+        {
+<span class="fc" id="L1629">            int ch2 = nextToken();</span>
+
+<span class="fc bfc" id="L1631" title="All 2 branches covered.">            if( ch2 == '!' )</span>
+            {
+<span class="fc" id="L1633">                String title = peekAheadLine();</span>
+
+<span class="fc" id="L1635">                el = makeHeading( Heading.HEADING_LARGE, title, hd);</span>
+<span class="fc" id="L1636">            }</span>
+            else
+            {
+<span class="fc" id="L1639">                pushBack( ch2 );</span>
+<span class="fc" id="L1640">                String title = peekAheadLine();</span>
+<span class="fc" id="L1641">                el = makeHeading( Heading.HEADING_MEDIUM, title, hd );</span>
+            }
+<span class="fc" id="L1643">        }</span>
+        else
+        {
+<span class="fc" id="L1646">            pushBack( ch );</span>
+<span class="fc" id="L1647">            String title = peekAheadLine();</span>
+<span class="fc" id="L1648">            el = makeHeading( Heading.HEADING_SMALL, title, hd );</span>
+        }
+
+<span class="fc" id="L1651">        callHeadingListenerChain( hd );</span>
+
+<span class="fc" id="L1653">        m_lastHeading = hd;</span>
+
+<span class="pc bpc" id="L1655" title="1 of 2 branches missed.">        if( el != null ) pushElement(el);</span>
+
+<span class="fc" id="L1657">        return el;</span>
+    }
+
+    /**
+     *  Reads the stream until the next EOL or EOF.  Note that it will also read the
+     *  EOL from the stream.
+     */
+    private StringBuilder readUntilEOL()
+        throws IOException
+    {
+        int ch;
+<span class="fc" id="L1668">        StringBuilder buf = new StringBuilder( 256 );</span>
+
+        while( true )
+        {
+<span class="fc" id="L1672">            ch = nextToken();</span>
+
+<span class="fc bfc" id="L1674" title="All 2 branches covered.">            if( ch == -1 )</span>
+<span class="fc" id="L1675">                break;</span>
+
+<span class="fc" id="L1677">            buf.append( (char) ch );</span>
+
+<span class="fc bfc" id="L1679" title="All 2 branches covered.">            if( ch == '\n' )</span>
+<span class="fc" id="L1680">                break;</span>
+        }
+<span class="fc" id="L1682">        return buf;</span>
+    }
+
+    /** Controls whether italic is restarted after a paragraph shift */
+
+<span class="fc" id="L1687">    private boolean m_restartitalic = false;</span>
+<span class="fc" id="L1688">    private boolean m_restartbold   = false;</span>
+
+    private boolean m_newLine;
+
+    /**
+     *  Starts a block level element, therefore closing
+     *  a potential open paragraph tag.
+     */
+    private void startBlockLevel()
+    {
+        // These may not continue over block level limits in XHTML
+
+<span class="fc" id="L1700">        popElement(&quot;i&quot;);</span>
+<span class="fc" id="L1701">        popElement(&quot;b&quot;);</span>
+<span class="fc" id="L1702">        popElement(&quot;tt&quot;);</span>
+
+<span class="fc bfc" id="L1704" title="All 2 branches covered.">        if( m_isOpenParagraph )</span>
+        {
+<span class="fc" id="L1706">            m_isOpenParagraph = false;</span>
+<span class="fc" id="L1707">            popElement(&quot;p&quot;);</span>
+<span class="fc" id="L1708">            m_plainTextBuf.append(&quot;\n&quot;); // Just small beautification</span>
+        }
+
+<span class="fc" id="L1711">        m_restartitalic = m_isitalic;</span>
+<span class="fc" id="L1712">        m_restartbold   = m_isbold;</span>
+
+<span class="fc" id="L1714">        m_isitalic = false;</span>
+<span class="fc" id="L1715">        m_isbold   = false;</span>
+<span class="fc" id="L1716">    }</span>
+
+    private static String getListType( char c )
+    {
+<span class="fc bfc" id="L1720" title="All 2 branches covered.">        if( c == '*' )</span>
+        {
+<span class="fc" id="L1722">            return &quot;ul&quot;;</span>
+        }
+<span class="pc bpc" id="L1724" title="1 of 2 branches missed.">        else if( c == '#' )</span>
+        {
+<span class="fc" id="L1726">            return &quot;ol&quot;;</span>
+        }
+<span class="nc" id="L1728">        throw new InternalWikiException(&quot;Parser got faulty list type: &quot;+c);</span>
+    }
+    /**
+     *  Like original handleOrderedList() and handleUnorderedList()
+     *  however handles both ordered ('#') and unordered ('*') mixed together.
+     */
+
+    // FIXME: Refactor this; it's a bit messy.
+
+    private Element handleGeneralList()
+        throws IOException
+    {
+<span class="fc" id="L1740">         startBlockLevel();</span>
+
+<span class="fc" id="L1742">         String strBullets = readWhile( &quot;*#&quot; );</span>
+         // String strBulletsRaw = strBullets;      // to know what was original before phpwiki style substitution
+<span class="fc" id="L1744">         int numBullets = strBullets.length();</span>
+
+         // override the beginning portion of bullet pattern to be like the previous
+         // to simulate PHPWiki style lists
+
+<span class="pc bpc" id="L1749" title="1 of 2 branches missed.">         if(m_allowPHPWikiStyleLists)</span>
+         {
+             // only substitute if different
+<span class="fc" id="L1752">             if(!( strBullets.substring(0,Math.min(numBullets,m_genlistlevel)).equals</span>
+<span class="fc bfc" id="L1753" title="All 2 branches covered.">                   (m_genlistBulletBuffer.substring(0,Math.min(numBullets,m_genlistlevel)) ) ) )</span>
+             {
+<span class="fc bfc" id="L1755" title="All 2 branches covered.">                 if(numBullets &lt;= m_genlistlevel)</span>
+                 {
+                     // Substitute all but the last character (keep the expressed bullet preference)
+<span class="pc bpc" id="L1758" title="1 of 2 branches missed.">                     strBullets  = (numBullets &gt; 1 ? m_genlistBulletBuffer.substring(0, numBullets-1) : &quot;&quot;)</span>
+<span class="fc" id="L1759">                                   + strBullets.substring(numBullets-1, numBullets);</span>
+                 }
+                 else
+                 {
+<span class="fc" id="L1763">                     strBullets = m_genlistBulletBuffer + strBullets.substring(m_genlistlevel, numBullets);</span>
+                 }
+             }
+         }
+
+         //
+         //  Check if this is still of the same type
+         //
+<span class="fc" id="L1771">         if( strBullets.substring(0,Math.min(numBullets,m_genlistlevel)).equals</span>
+<span class="fc bfc" id="L1772" title="All 2 branches covered.">            (m_genlistBulletBuffer.substring(0,Math.min(numBullets,m_genlistlevel)) ) )</span>
+         {
+<span class="fc bfc" id="L1774" title="All 2 branches covered.">             if( numBullets &gt; m_genlistlevel )</span>
+             {
+<span class="fc" id="L1776">                 pushElement( new Element( getListType(strBullets.charAt(m_genlistlevel++) ) ) );</span>
+
+<span class="fc bfc" id="L1778" title="All 2 branches covered.">                 for( ; m_genlistlevel &lt; numBullets; m_genlistlevel++ )</span>
+                 {
+                     // bullets are growing, get from new bullet list
+<span class="fc" id="L1781">                     pushElement( new Element(&quot;li&quot;) );</span>
+<span class="fc" id="L1782">                     pushElement( new Element( getListType(strBullets.charAt(m_genlistlevel)) ));</span>
+                 }
+             }
+<span class="fc bfc" id="L1785" title="All 2 branches covered.">             else if( numBullets &lt; m_genlistlevel )</span>
+             {
+                 //  Close the previous list item.
+                 // buf.append( m_renderer.closeListItem() );
+<span class="fc" id="L1789">                 popElement( &quot;li&quot; );</span>
+
+<span class="fc bfc" id="L1791" title="All 2 branches covered.">                 for( ; m_genlistlevel &gt; numBullets; m_genlistlevel-- )</span>
+                 {
+                     // bullets are shrinking, get from old bullet list
+
+<span class="fc" id="L1795">                     popElement( getListType(m_genlistBulletBuffer.charAt(m_genlistlevel-1)) );</span>
+<span class="pc bpc" id="L1796" title="1 of 2 branches missed.">                     if( m_genlistlevel &gt; 0 )</span>
+                     {
+<span class="fc" id="L1798">                         popElement( &quot;li&quot; );</span>
+                     }
+
+                 }
+             }
+             else
+             {
+<span class="pc bpc" id="L1805" title="1 of 2 branches missed.">                 if( m_genlistlevel &gt; 0 )</span>
+                 {
+<span class="fc" id="L1807">                     popElement( &quot;li&quot; );</span>
+                 }
+             }
+         }
+         else
+         {
+             //
+             //  The pattern has changed, unwind and restart
+             //
+             int  numEqualBullets;
+             int  numCheckBullets;
+
+             // find out how much is the same
+<span class="fc" id="L1820">             numEqualBullets = 0;</span>
+<span class="fc" id="L1821">             numCheckBullets = Math.min(numBullets,m_genlistlevel);</span>
+
+<span class="pc bpc" id="L1823" title="1 of 2 branches missed.">             while( numEqualBullets &lt; numCheckBullets )</span>
+             {
+                 // if the bullets are equal so far, keep going
+<span class="fc bfc" id="L1826" title="All 2 branches covered.">                 if( strBullets.charAt(numEqualBullets) == m_genlistBulletBuffer.charAt(numEqualBullets))</span>
+<span class="fc" id="L1827">                     numEqualBullets++;</span>
+                 // otherwise giveup, we have found how many are equal
+                 else
+                     break;
+             }
+
+             //unwind
+<span class="fc bfc" id="L1834" title="All 2 branches covered.">             for( ; m_genlistlevel &gt; numEqualBullets; m_genlistlevel-- )</span>
+             {
+<span class="fc" id="L1836">                 popElement( getListType( m_genlistBulletBuffer.charAt(m_genlistlevel-1) ) );</span>
+<span class="pc bpc" id="L1837" title="1 of 2 branches missed.">                 if( m_genlistlevel &gt; numBullets )</span>
+                 {
+<span class="nc" id="L1839">                     popElement(&quot;li&quot;);</span>
+                 }
+             }
+
+             //rewind
+
+<span class="fc" id="L1845">             pushElement( new Element(getListType( strBullets.charAt(numEqualBullets++) ) ) );</span>
+<span class="pc bpc" id="L1846" title="1 of 2 branches missed.">             for(int i = numEqualBullets; i &lt; numBullets; i++)</span>
+             {
+<span class="nc" id="L1848">                 pushElement( new Element(&quot;li&quot;) );</span>
+<span class="nc" id="L1849">                 pushElement( new Element( getListType( strBullets.charAt(i) ) ) );</span>
+             }
+<span class="fc" id="L1851">             m_genlistlevel = numBullets;</span>
+         }
+
+         //
+         //  Push a new list item, and eat away any extra whitespace
+         //
+<span class="fc" id="L1857">         pushElement( new Element(&quot;li&quot;) );</span>
+<span class="fc" id="L1858">         readWhile(&quot; &quot;);</span>
+
+         // work done, remember the new bullet list (in place of old one)
+<span class="fc" id="L1861">         m_genlistBulletBuffer.setLength(0);</span>
+<span class="fc" id="L1862">         m_genlistBulletBuffer.append(strBullets);</span>
+
+<span class="fc" id="L1864">         return m_currentElement;</span>
+    }
+
+    private Element unwindGeneralList()
+    {
+        //unwind
+<span class="fc bfc" id="L1870" title="All 2 branches covered.">        for( ; m_genlistlevel &gt; 0; m_genlistlevel-- )</span>
+        {
+<span class="fc" id="L1872">            popElement( &quot;li&quot; );</span>
+<span class="fc" id="L1873">            popElement( getListType(m_genlistBulletBuffer.charAt(m_genlistlevel-1)) );</span>
+        }
+
+<span class="fc" id="L1876">        m_genlistBulletBuffer.setLength(0);</span>
+
+<span class="fc" id="L1878">        return null;</span>
+    }
+
+
+    private Element handleDefinitionList()
+        throws IOException
+    {
+<span class="pc bpc" id="L1885" title="1 of 2 branches missed.">        if( !m_isdefinition )</span>
+        {
+<span class="fc" id="L1887">            m_isdefinition = true;</span>
+
+<span class="fc" id="L1889">            startBlockLevel();</span>
+
+<span class="fc" id="L1891">            pushElement( new Element(&quot;dl&quot;) );</span>
+<span class="fc" id="L1892">            return pushElement( new Element(&quot;dt&quot;) );</span>
+        }
+
+<span class="nc" id="L1895">        return null;</span>
+    }
+
+    private Element handleOpenbracket()
+        throws IOException
+    {
+<span class="fc" id="L1901">        StringBuilder sb = new StringBuilder(40);</span>
+<span class="fc" id="L1902">        int pos = getPosition();</span>
+<span class="fc" id="L1903">        int ch = nextToken();</span>
+<span class="fc" id="L1904">        boolean isPlugin = false;</span>
+
+<span class="fc bfc" id="L1906" title="All 2 branches covered.">        if( ch == '[' )</span>
+        {
+<span class="pc bpc" id="L1908" title="1 of 2 branches missed.">            if( m_wysiwygEditorMode )</span>
+            {
+<span class="nc" id="L1910">                sb.append( '[' );</span>
+            }
+
+<span class="fc" id="L1913">            sb.append( (char)ch );</span>
+
+<span class="fc bfc" id="L1915" title="All 2 branches covered.">            while( (ch = nextToken()) == '[' )</span>
+            {
+<span class="fc" id="L1917">                sb.append( (char)ch );</span>
+            }
+        }
+
+
+<span class="fc bfc" id="L1922" title="All 2 branches covered.">        if( ch == '{' )</span>
+        {
+<span class="fc" id="L1924">            isPlugin = true;</span>
+        }
+
+<span class="fc" id="L1927">        pushBack( ch );</span>
+
+<span class="fc bfc" id="L1929" title="All 2 branches covered.">        if( sb.length() &gt; 0 )</span>
+        {
+<span class="fc" id="L1931">            m_plainTextBuf.append( sb );</span>
+<span class="fc" id="L1932">            return m_currentElement;</span>
+        }
+
+        //
+        //  Find end of hyperlink
+        //
+
+<span class="fc" id="L1939">        ch = nextToken();</span>
+<span class="fc" id="L1940">        int nesting = 1;    // Check for nested plugins</span>
+
+<span class="fc bfc" id="L1942" title="All 2 branches covered.">        while( ch != -1 )</span>
+        {
+<span class="fc" id="L1944">            int ch2 = nextToken(); pushBack(ch2);</span>
+
+<span class="fc bfc" id="L1946" title="All 2 branches covered.">            if( isPlugin )</span>
+            {
+<span class="fc bfc" id="L1948" title="All 4 branches covered.">                if( ch == '[' &amp;&amp; ch2 == '{' )</span>
+                {
+<span class="fc" id="L1950">                    nesting++;</span>
+                }
+<span class="pc bpc" id="L1952" title="2 of 6 branches missed.">                else if( nesting == 0 &amp;&amp; ch == ']' &amp;&amp; sb.charAt(sb.length()-1) == '}' )</span>
+                {
+<span class="fc" id="L1954">                    break;</span>
+                }
+<span class="fc bfc" id="L1956" title="All 4 branches covered.">                else if( ch == '}' &amp;&amp; ch2 == ']' )</span>
+                {
+                    // NB: This will be decremented once at the end
+<span class="fc" id="L1959">                    nesting--;</span>
+                }
+            }
+            else
+            {
+<span class="fc bfc" id="L1964" title="All 2 branches covered.">                if( ch == ']' )</span>
+                {
+<span class="fc" id="L1966">                    break;</span>
+                }
+            }
+
+<span class="fc" id="L1970">            sb.append( (char) ch );</span>
+
+<span class="fc" id="L1972">            ch = nextToken();</span>
+<span class="fc" id="L1973">        }</span>
+
+        //
+        //  If the link is never finished, do some tricks to display the rest of the line
+        //  unchanged.
+        //
+<span class="fc bfc" id="L1979" title="All 2 branches covered.">        if( ch == -1 )</span>
+        {
+<span class="fc" id="L1981">            log.debug(&quot;Warning: unterminated link detected!&quot;);</span>
+<span class="fc" id="L1982">            m_isEscaping = true;</span>
+<span class="fc" id="L1983">            m_plainTextBuf.append( sb );</span>
+<span class="fc" id="L1984">            flushPlainText();</span>
+<span class="fc" id="L1985">            m_isEscaping = false;</span>
+<span class="fc" id="L1986">            return m_currentElement;</span>
+        }
+
+<span class="fc" id="L1989">        return handleHyperlinks( sb.toString(), pos );</span>
+    }
+
+    /**
+     *  Reads the stream until the current brace is closed or stream end.
+     */
+    private String readBraceContent( char opening, char closing )
+        throws IOException
+    {
+<span class="fc" id="L1998">        StringBuilder sb = new StringBuilder(40);</span>
+<span class="fc" id="L1999">        int braceLevel = 1;</span>
+        int ch;
+<span class="pc bpc" id="L2001" title="1 of 2 branches missed.">        while(( ch = nextToken() ) != -1 )</span>
+        {
+<span class="pc bpc" id="L2003" title="1 of 2 branches missed.">            if( ch == '\\' )</span>
+            {
+<span class="nc" id="L2005">                continue;</span>
+            }
+<span class="fc bfc" id="L2007" title="All 2 branches covered.">            else if ( ch == opening )</span>
+            {
+<span class="fc" id="L2009">                braceLevel++;</span>
+            }
+<span class="fc bfc" id="L2011" title="All 2 branches covered.">            else if ( ch == closing )</span>
+            {
+<span class="fc" id="L2013">                braceLevel--;</span>
+<span class="fc bfc" id="L2014" title="All 2 branches covered.">                if (braceLevel==0)</span>
+                {
+<span class="fc" id="L2016">                  break;</span>
+                }
+            }
+<span class="fc" id="L2019">            sb.append( (char)ch );</span>
+        }
+<span class="fc" id="L2021">        return sb.toString();</span>
+    }
+
+
+    /**
+     *  Handles constructs of type %%(style) and %%class
+     * @param newLine
+     * @return An Element containing the div or span, depending on the situation.
+     * @throws IOException
+     */
+    private Element handleDiv( boolean newLine )
+        throws IOException
+    {
+<span class="fc" id="L2034">        int ch = nextToken();</span>
+<span class="fc" id="L2035">        Element el = null;</span>
+
+<span class="fc bfc" id="L2037" title="All 2 branches covered.">        if( ch == '%' )</span>
+        {
+<span class="fc" id="L2039">            String style = null;</span>
+<span class="fc" id="L2040">            String clazz = null;</span>
+
+<span class="fc" id="L2042">            ch = nextToken();</span>
+
+            //
+            //  Style or class?
+            //
+<span class="fc bfc" id="L2047" title="All 2 branches covered.">            if( ch == '(' )</span>
+            {
+<span class="fc" id="L2049">                style = readBraceContent('(',')');</span>
+            }
+<span class="fc bfc" id="L2051" title="All 2 branches covered.">            else if( Character.isLetter( (char) ch ) )</span>
+            {
+<span class="fc" id="L2053">                pushBack( ch );</span>
+<span class="fc" id="L2054">                clazz = readUntil( &quot; \t\n\r&quot; );</span>
+                //Note: ref.https://www.w3.org/TR/CSS21/syndata.html#characters
+                //CSS Classnames can contain only the characters [a-zA-Z0-9] and
+                //ISO 10646 characters U+00A0 and higher, plus the &quot;-&quot; and the &quot;_&quot;.
+                //They cannot start with a digit, two hyphens, or a hyphen followed by a digit.
+
+                //(1) replace '.' by spaces, allowing multiple classnames on a div or span
+                //(2) remove any invalid character
+<span class="pc bpc" id="L2062" title="1 of 2 branches missed.">                if( clazz != null){</span>
+
+<span class="fc" id="L2064">                    clazz = clazz.replace('.', ' ')</span>
+<span class="fc" id="L2065">                                 .replaceAll(&quot;[^\\s-_\\w\\x200-\\x377]+&quot;,&quot;&quot;);</span>
+
+                }
+<span class="fc" id="L2068">                ch = nextToken();</span>
+
+                //
+                //  Pop out only spaces, so that the upcoming EOL check does not check the
+                //  next line.
+                //
+<span class="pc bpc" id="L2074" title="1 of 4 branches missed.">                if( ch == '\n' || ch == '\r' )</span>
+                {
+<span class="fc" id="L2076">                    pushBack(ch);</span>
+                }
+            }
+            else
+            {
+                //
+                // Anything else stops.
+                //
+
+<span class="fc" id="L2085">                pushBack(ch);</span>
+
+                try
+                {
+<span class="fc" id="L2089">                    Boolean isSpan = m_styleStack.pop();</span>
+
+<span class="pc bpc" id="L2091" title="1 of 2 branches missed.">                    if( isSpan == null )</span>
+                    {
+                        // Fail quietly
+                    }
+<span class="fc bfc" id="L2095" title="All 2 branches covered.">                    else if( isSpan.booleanValue() )</span>
+                    {
+<span class="fc" id="L2097">                        el = popElement( &quot;span&quot; );</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L2101">                        el = popElement( &quot;div&quot; );</span>
+                    }
+                }
+<span class="fc" id="L2104">                catch( EmptyStackException e )</span>
+                {
+<span class="fc" id="L2106">                    log.debug(&quot;Page '&quot;+m_context.getName()+&quot;' closes a %%-block that has not been opened.&quot;);</span>
+<span class="fc" id="L2107">                    return m_currentElement;</span>
+<span class="fc" id="L2108">                }</span>
+
+<span class="fc" id="L2110">                return el;</span>
+            }
+
+            //
+            //  Check if there is an attempt to do something nasty
+            //
+
+            try
+            {
+<span class="fc" id="L2119">                style = StringEscapeUtils.unescapeHtml(style);</span>
+<span class="fc bfc" id="L2120" title="All 4 branches covered.">                if( style != null &amp;&amp; style.indexOf(&quot;javascript:&quot;) != -1 )</span>
+                {
+<span class="fc" id="L2122">                    log.debug(&quot;Attempt to output javascript within CSS:&quot;+style);</span>
+<span class="fc" id="L2123">                    ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+<span class="fc" id="L2124">                    return addElement( makeError( rb.getString( &quot;markupparser.error.javascriptattempt&quot; ) ) );</span>
+                }
+            }
+<span class="nc" id="L2127">            catch( NumberFormatException e )</span>
+            {
+                //
+                //  If there are unknown entities, we don't want the parser to stop.
+                //
+<span class="nc" id="L2132">                ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+<span class="nc" id="L2133">                String msg = MessageFormat.format( rb.getString( &quot;markupparser.error.parserfailure&quot;), e.getMessage() );</span>
+<span class="nc" id="L2134">                return addElement( makeError( msg ) );</span>
+<span class="fc" id="L2135">            }</span>
+
+            //
+            //  Decide if we should open a div or a span?
+            //
+<span class="fc" id="L2140">            String eol = peekAheadLine();</span>
+
+<span class="fc bfc" id="L2142" title="All 2 branches covered.">            if( eol.trim().length() &gt; 0 )</span>
+            {
+                // There is stuff after the class
+
+<span class="fc" id="L2146">                el = new Element(&quot;span&quot;);</span>
+
+<span class="fc" id="L2148">                m_styleStack.push( Boolean.TRUE );</span>
+            }
+            else
+            {
+<span class="fc" id="L2152">                startBlockLevel();</span>
+<span class="fc" id="L2153">                el = new Element(&quot;div&quot;);</span>
+<span class="fc" id="L2154">                m_styleStack.push( Boolean.FALSE );</span>
+            }
+
+<span class="fc bfc" id="L2157" title="All 2 branches covered.">            if( style != null ) el.setAttribute(&quot;style&quot;, style);</span>
+<span class="fc bfc" id="L2158" title="All 2 branches covered.">            if( clazz != null ) el.setAttribute(&quot;class&quot;, clazz);</span>
+<span class="fc" id="L2159">            el = pushElement( el );</span>
+
+<span class="fc" id="L2161">            return el;</span>
+        }
+
+<span class="fc" id="L2164">        pushBack(ch);</span>
+
+<span class="fc" id="L2166">        return el;</span>
+    }
+
+    private Element handleSlash( boolean newLine )
+        throws IOException
+    {
+<span class="fc" id="L2172">        int ch = nextToken();</span>
+
+<span class="fc" id="L2174">        pushBack(ch);</span>
+<span class="fc bfc" id="L2175" title="All 4 branches covered.">        if( ch == '%' &amp;&amp; !m_styleStack.isEmpty() )</span>
+        {
+<span class="fc" id="L2177">            return handleDiv( newLine );</span>
+        }
+
+<span class="fc" id="L2180">        return null;</span>
+    }
+
+    private Element handleBar( boolean newLine )
+        throws IOException
+    {
+<span class="fc" id="L2186">        Element el = null;</span>
+
+<span class="fc bfc" id="L2188" title="All 4 branches covered.">        if( !m_istable &amp;&amp; !newLine )</span>
+        {
+<span class="fc" id="L2190">            return null;</span>
+        }
+
+        //
+        //  If the bar is in the first column, we will either start
+        //  a new table or continue the old one.
+        //
+
+<span class="fc bfc" id="L2198" title="All 2 branches covered.">        if( newLine )</span>
+        {
+<span class="fc bfc" id="L2200" title="All 2 branches covered.">            if( !m_istable )</span>
+            {
+<span class="fc" id="L2202">                startBlockLevel();</span>
+<span class="fc" id="L2203">                el = pushElement( new Element(&quot;table&quot;).setAttribute(&quot;class&quot;,&quot;wikitable&quot;).setAttribute(&quot;border&quot;,&quot;1&quot;) );</span>
+<span class="fc" id="L2204">                m_istable = true;</span>
+<span class="fc" id="L2205">                m_rowNum = 0;</span>
+            }
+
+<span class="fc" id="L2208">            m_rowNum++;</span>
+<span class="fc bfc" id="L2209" title="All 2 branches covered.">            Element tr = ( m_rowNum % 2 != 0 )</span>
+<span class="fc" id="L2210">                       ? new Element(&quot;tr&quot;).setAttribute(&quot;class&quot;, &quot;odd&quot;)</span>
+                       : new Element(&quot;tr&quot;);
+<span class="fc" id="L2212">            el = pushElement( tr );</span>
+        }
+
+        //
+        //  Check out which table cell element to start;
+        //  a header element (th) or a regular element (td).
+        //
+<span class="fc" id="L2219">        int ch = nextToken();</span>
+
+<span class="fc bfc" id="L2221" title="All 2 branches covered.">        if( ch == '|' )</span>
+        {
+<span class="fc bfc" id="L2223" title="All 2 branches covered.">            if( !newLine )</span>
+            {
+<span class="fc" id="L2225">                el = popElement(&quot;th&quot;);</span>
+<span class="fc bfc" id="L2226" title="All 2 branches covered.">                if( el == null ) popElement(&quot;td&quot;);</span>
+            }
+<span class="fc" id="L2228">            el = pushElement( new Element(&quot;th&quot;) );</span>
+        }
+        else
+        {
+<span class="fc bfc" id="L2232" title="All 2 branches covered.">            if( !newLine )</span>
+            {
+<span class="fc" id="L2234">                el = popElement(&quot;td&quot;);</span>
+<span class="fc bfc" id="L2235" title="All 2 branches covered.">                if( el == null ) popElement(&quot;th&quot;);</span>
+            }
+
+<span class="fc" id="L2238">            el = pushElement( new Element(&quot;td&quot;) );</span>
+
+<span class="fc" id="L2240">            pushBack( ch );</span>
+        }
+
+<span class="fc" id="L2243">        return el;</span>
+    }
+
+    /**
+     *  Generic escape of next character or entity.
+     */
+    private Element handleTilde()
+        throws IOException
+    {
+<span class="fc" id="L2252">        int ch = nextToken();</span>
+
+<span class="fc bfc" id="L2254" title="All 2 branches covered.">        if( ch == ' ' )</span>
+        {
+<span class="pc bpc" id="L2256" title="1 of 2 branches missed.">            if( m_wysiwygEditorMode )</span>
+            {
+<span class="nc" id="L2258">                m_plainTextBuf.append( &quot;~ &quot; );</span>
+            }
+<span class="fc" id="L2260">            return m_currentElement;</span>
+        }
+
+<span class="pc bpc" id="L2263" title="9 of 28 branches missed.">        if( ch == '|' || ch == '~' || ch == '\\' || ch == '*' || ch == '#' ||</span>
+            ch == '-' || ch == '!' || ch == '\'' || ch == '_' || ch == '[' ||
+            ch == '{' || ch == ']' || ch == '}' || ch == '%' )
+        {
+<span class="pc bpc" id="L2267" title="1 of 2 branches missed.">            if( m_wysiwygEditorMode )</span>
+            {
+<span class="nc" id="L2269">                m_plainTextBuf.append( '~' );</span>
+            }
+
+<span class="fc" id="L2272">            m_plainTextBuf.append( (char)ch );</span>
+<span class="fc" id="L2273">            m_plainTextBuf.append(readWhile( &quot;&quot;+(char)ch ));</span>
+<span class="fc" id="L2274">            return m_currentElement;</span>
+        }
+
+        // No escape.
+<span class="fc" id="L2278">        pushBack( ch );</span>
+
+<span class="fc" id="L2280">        return null;</span>
+    }
+
+    private void fillBuffer( Element startElement )
+        throws IOException
+    {
+<span class="fc" id="L2286">        m_currentElement = startElement;</span>
+
+<span class="fc" id="L2288">        boolean quitReading = false;</span>
+<span class="fc" id="L2289">        m_newLine = true;</span>
+<span class="fc" id="L2290">        disableOutputEscaping();</span>
+
+<span class="pc bpc" id="L2292" title="1 of 2 branches missed.">        while(!quitReading)</span>
+        {
+<span class="fc" id="L2294">            int ch = nextToken();</span>
+
+<span class="fc bfc" id="L2296" title="All 2 branches covered.">            if( ch == -1 ) break;</span>
+
+            //
+            //  Check if we're actually ending the preformatted mode.
+            //  We still must do an entity transformation here.
+            //
+<span class="fc bfc" id="L2302" title="All 2 branches covered.">            if( m_isEscaping )</span>
+            {
+<span class="fc bfc" id="L2304" title="All 2 branches covered.">                if( ch == '}' )</span>
+                {
+<span class="fc bfc" id="L2306" title="All 2 branches covered.">                    if( handleClosebrace() == null ) m_plainTextBuf.append( (char) ch );</span>
+                }
+<span class="pc bpc" id="L2308" title="1 of 2 branches missed.">                else if( ch == -1 )</span>
+                {
+<span class="nc" id="L2310">                    quitReading = true;</span>
+                }
+<span class="fc bfc" id="L2312" title="All 2 branches covered.">                else if( ch == '\r' )</span>
+                {
+                    // DOS line feeds we ignore.
+                }
+<span class="fc bfc" id="L2316" title="All 2 branches covered.">                else if( ch == '&lt;' )</span>
+                {
+<span class="fc" id="L2318">                    m_plainTextBuf.append( &quot;&amp;lt;&quot; );</span>
+                }
+<span class="fc bfc" id="L2320" title="All 2 branches covered.">                else if( ch == '&gt;' )</span>
+                {
+<span class="fc" id="L2322">                    m_plainTextBuf.append( &quot;&amp;gt;&quot; );</span>
+                }
+<span class="pc bpc" id="L2324" title="1 of 2 branches missed.">                else if( ch == '&amp;' )</span>
+                {
+<span class="nc" id="L2326">                    m_plainTextBuf.append( &quot;&amp;amp;&quot; );</span>
+                }
+<span class="fc bfc" id="L2328" title="All 2 branches covered.">                else if( ch == '~' )</span>
+                {
+<span class="fc" id="L2330">                    String braces = readWhile(&quot;}&quot;);</span>
+<span class="fc bfc" id="L2331" title="All 2 branches covered.">                    if( braces.length() &gt;= 3 )</span>
+                    {
+<span class="fc" id="L2333">                        m_plainTextBuf.append(&quot;}}}&quot;);</span>
+
+<span class="fc" id="L2335">                        braces = braces.substring(3);</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L2339">                        m_plainTextBuf.append( (char) ch );</span>
+                    }
+
+<span class="fc bfc" id="L2342" title="All 2 branches covered.">                    for( int i = braces.length()-1; i &gt;= 0; i-- )</span>
+                    {
+<span class="fc" id="L2344">                        pushBack(braces.charAt(i));</span>
+                    }
+<span class="fc" id="L2346">                }</span>
+                else
+                {
+<span class="fc" id="L2349">                    m_plainTextBuf.append( (char) ch );</span>
+                }
+
+<span class="fc" id="L2352">                continue;</span>
+            }
+
+            //
+            //  An empty line stops a list
+            //
+<span class="fc bfc" id="L2358" title="All 10 branches covered.">            if( m_newLine &amp;&amp; ch != '*' &amp;&amp; ch != '#' &amp;&amp; ch != ' ' &amp;&amp; m_genlistlevel &gt; 0 )</span>
+            {
+<span class="fc" id="L2360">                m_plainTextBuf.append(unwindGeneralList());</span>
+            }
+
+<span class="fc bfc" id="L2363" title="All 6 branches covered.">            if( m_newLine &amp;&amp; ch != '|' &amp;&amp; m_istable )</span>
+            {
+<span class="fc" id="L2365">                popElement(&quot;table&quot;);</span>
+<span class="fc" id="L2366">                m_istable = false;</span>
+            }
+
+<span class="fc" id="L2369">            int skip = IGNORE;</span>
+
+            //
+            //  Do the actual parsing and catch any errors.
+            //
+            try
+            {
+<span class="fc" id="L2376">                skip = parseToken( ch );</span>
+            }
+<span class="nc" id="L2378">            catch( IllegalDataException e )</span>
+            {
+<span class="nc" id="L2380">                log.info(&quot;Page &quot;+m_context.getPage().getName()+&quot; contains data which cannot be added to DOM tree: &quot;+e.getMessage());</span>
+
+<span class="nc" id="L2382">                makeError(&quot;Error: &quot;+cleanupSuspectData(e.getMessage()) );</span>
+<span class="fc" id="L2383">            }</span>
+
+            //
+            //   The idea is as follows:  If the handler method returns
+            //   an element (el != null), it is assumed that it has been
+            //   added in the stack.  Otherwise the character is added
+            //   as is to the plaintext buffer.
+            //
+            //   For the transition phase, if s != null, it also gets
+            //   added in the plaintext buffer.
+            //
+
+<span class="fc bfc" id="L2395" title="All 3 branches covered.">            switch( skip )</span>
+            {
+                case ELEMENT:
+<span class="fc" id="L2398">                    m_newLine = false;</span>
+<span class="fc" id="L2399">                    break;</span>
+
+                case CHARACTER:
+<span class="fc" id="L2402">                    m_plainTextBuf.append( (char) ch );</span>
+<span class="fc" id="L2403">                    m_newLine = false;</span>
+<span class="fc" id="L2404">                    break;</span>
+
+                case IGNORE:
+                default:
+                    break;
+            }
+<span class="fc" id="L2410">        }</span>
+
+<span class="fc" id="L2412">        closeHeadings();</span>
+<span class="fc" id="L2413">        popElement(&quot;domroot&quot;);</span>
+<span class="fc" id="L2414">    }</span>
+
+    private String cleanupSuspectData( String s )
+    {
+<span class="fc" id="L2418">        StringBuilder sb = new StringBuilder( s.length() );</span>
+
+<span class="fc bfc" id="L2420" title="All 2 branches covered.">        for( int i = 0; i &lt; s.length(); i++ )</span>
+        {
+<span class="fc" id="L2422">            char c = s.charAt(i);</span>
+
+<span class="fc bfc" id="L2424" title="All 2 branches covered.">            if( Verifier.isXMLCharacter( c ) ) sb.append( c );</span>
+<span class="fc" id="L2425">            else sb.append( &quot;0x&quot;+Integer.toString(c,16).toUpperCase() );</span>
+        }
+
+<span class="fc" id="L2428">        return sb.toString();</span>
+    }
+
+    /** The token is a plain character. */
+    protected static final int CHARACTER = 0;
+
+    /** The token is a wikimarkup element. */
+    protected static final int ELEMENT   = 1;
+
+    /** The token is to be ignored. */
+    protected static final int IGNORE    = 2;
+
+    /**
+     *  Return CHARACTER, if you think this was a plain character; ELEMENT, if
+     *  you think this was a wiki markup element, and IGNORE, if you think
+     *  we should ignore this altogether.
+     *  &lt;p&gt;
+     *  To add your own MarkupParser, you can override this method, but it
+     *  is recommended that you call super.parseToken() as well to gain advantage
+     *  of JSPWiki's own markup.  You can call it at the start of your own
+     *  parseToken() or end - it does not matter.
+     *
+     * @param ch The character under investigation
+     * @return {@link #ELEMENT}, {@link #CHARACTER} or {@link #IGNORE}.
+     * @throws IOException If parsing fails.
+     */
+    protected int parseToken( int ch )
+        throws IOException
+    {
+<span class="fc" id="L2457">        Element el = null;</span>
+
+        //
+        //  Now, check the incoming token.
+        //
+<span class="fc bfc" id="L2462" title="All 19 branches covered.">        switch( ch )</span>
+        {
+          case '\r':
+            // DOS linefeeds we forget
+<span class="fc" id="L2466">            return IGNORE;</span>
+
+          case '\n':
+            //
+            //  Close things like headings, etc.
+            //
+
+            // FIXME: This is not really very fast
+
+<span class="fc" id="L2475">            closeHeadings();</span>
+
+<span class="fc" id="L2477">            popElement(&quot;dl&quot;); // Close definition lists.</span>
+<span class="fc bfc" id="L2478" title="All 2 branches covered.">            if( m_istable )</span>
+            {
+<span class="fc" id="L2480">                popElement(&quot;tr&quot;);</span>
+            }
+
+<span class="fc" id="L2483">            m_isdefinition = false;</span>
+
+<span class="fc bfc" id="L2485" title="All 2 branches covered.">            if( m_newLine )</span>
+            {
+                // Paragraph change.
+<span class="fc" id="L2488">                startBlockLevel();</span>
+
+                //
+                //  Figure out which elements cannot be enclosed inside
+                //  a &lt;p&gt;&lt;/p&gt; pair according to XHTML rules.
+                //
+<span class="fc" id="L2494">                String nextLine = peekAheadLine();</span>
+<span class="fc bfc" id="L2495" title="All 2 branches covered.">                if( nextLine.length() == 0 ||</span>
+<span class="pc bpc" id="L2496" title="1 of 2 branches missed.">                    (nextLine.length() &gt; 0 &amp;&amp;</span>
+<span class="fc bfc" id="L2497" title="All 2 branches covered.">                     !nextLine.startsWith(&quot;{{{&quot;) &amp;&amp;</span>
+<span class="fc bfc" id="L2498" title="All 2 branches covered.">                     !nextLine.startsWith(&quot;----&quot;) &amp;&amp;</span>
+<span class="pc bpc" id="L2499" title="1 of 2 branches missed.">                     !nextLine.startsWith(&quot;%%&quot;) &amp;&amp;</span>
+<span class="fc bfc" id="L2500" title="All 2 branches covered.">                     &quot;*#!;&quot;.indexOf( nextLine.charAt(0) ) == -1) )</span>
+                {
+<span class="fc" id="L2502">                    pushElement( new Element(&quot;p&quot;) );</span>
+<span class="fc" id="L2503">                    m_isOpenParagraph = true;</span>
+
+<span class="fc bfc" id="L2505" title="All 2 branches covered.">                    if( m_restartitalic )</span>
+                    {
+<span class="fc" id="L2507">                        pushElement( new Element(&quot;i&quot;) );</span>
+<span class="fc" id="L2508">                        m_isitalic = true;</span>
+<span class="fc" id="L2509">                        m_restartitalic = false;</span>
+                    }
+<span class="fc bfc" id="L2511" title="All 2 branches covered.">                    if( m_restartbold )</span>
+                    {
+<span class="fc" id="L2513">                        pushElement( new Element(&quot;b&quot;) );</span>
+<span class="fc" id="L2514">                        m_isbold = true;</span>
+<span class="fc" id="L2515">                        m_restartbold = false;</span>
+                    }
+                }
+<span class="fc" id="L2518">            }</span>
+            else
+            {
+<span class="fc" id="L2521">                m_plainTextBuf.append(&quot;\n&quot;);</span>
+<span class="fc" id="L2522">                m_newLine = true;</span>
+            }
+<span class="fc" id="L2524">            return IGNORE;</span>
+
+
+          case '\\':
+<span class="fc" id="L2528">            el = handleBackslash();</span>
+<span class="fc" id="L2529">            break;</span>
+
+          case '_':
+<span class="fc" id="L2532">            el = handleUnderscore();</span>
+<span class="fc" id="L2533">            break;</span>
+
+          case '\'':
+<span class="fc" id="L2536">            el = handleApostrophe();</span>
+<span class="fc" id="L2537">            break;</span>
+
+          case '{':
+<span class="fc" id="L2540">            el = handleOpenbrace( m_newLine );</span>
+<span class="fc" id="L2541">            break;</span>
+
+          case '}':
+<span class="fc" id="L2544">            el = handleClosebrace();</span>
+<span class="fc" id="L2545">            break;</span>
+
+          case '-':
+<span class="fc bfc" id="L2548" title="All 2 branches covered.">            if( m_newLine )</span>
+<span class="fc" id="L2549">                el = handleDash();</span>
+
+            break;
+
+          case '!':
+<span class="fc bfc" id="L2554" title="All 2 branches covered.">            if( m_newLine )</span>
+            {
+<span class="fc" id="L2556">                el = handleHeading();</span>
+            }
+            break;
+
+          case ';':
+<span class="fc bfc" id="L2561" title="All 2 branches covered.">            if( m_newLine )</span>
+            {
+<span class="fc" id="L2563">                el = handleDefinitionList();</span>
+            }
+            break;
+
+          case ':':
+<span class="fc bfc" id="L2568" title="All 2 branches covered.">            if( m_isdefinition )</span>
+            {
+<span class="fc" id="L2570">                popElement(&quot;dt&quot;);</span>
+<span class="fc" id="L2571">                el = pushElement( new Element(&quot;dd&quot;) );</span>
+<span class="fc" id="L2572">                m_isdefinition = false;</span>
+            }
+            break;
+
+          case '[':
+<span class="fc" id="L2577">            el = handleOpenbracket();</span>
+<span class="fc" id="L2578">            break;</span>
+
+          case '*':
+<span class="fc bfc" id="L2581" title="All 2 branches covered.">            if( m_newLine )</span>
+            {
+<span class="fc" id="L2583">                pushBack('*');</span>
+<span class="fc" id="L2584">                el = handleGeneralList();</span>
+            }
+            break;
+
+          case '#':
+<span class="fc bfc" id="L2589" title="All 2 branches covered.">            if( m_newLine )</span>
+            {
+<span class="fc" id="L2591">                pushBack('#');</span>
+<span class="fc" id="L2592">                el = handleGeneralList();</span>
+            }
+            break;
+
+          case '|':
+<span class="fc" id="L2597">            el = handleBar( m_newLine );</span>
+<span class="fc" id="L2598">            break;</span>
+
+          case '~':
+<span class="fc" id="L2601">            el = handleTilde();</span>
+<span class="fc" id="L2602">            break;</span>
+
+          case '%':
+<span class="fc" id="L2605">            el = handleDiv( m_newLine );</span>
+<span class="fc" id="L2606">            break;</span>
+
+          case '/':
+<span class="fc" id="L2609">            el = handleSlash( m_newLine );</span>
+<span class="fc" id="L2610">            break;</span>
+
+          default:
+            break;
+        }
+
+<span class="fc bfc" id="L2616" title="All 2 branches covered.">        return el != null ? ELEMENT : CHARACTER;</span>
+    }
+
+    private void closeHeadings()
+    {
+<span class="pc bpc" id="L2621" title="1 of 4 branches missed.">        if( m_lastHeading != null &amp;&amp; !m_wysiwygEditorMode )</span>
+        {
+            // Add the hash anchor element at the end of the heading
+<span class="fc" id="L2624">            addElement( new Element(&quot;a&quot;).setAttribute( &quot;class&quot;,HASHLINK ).setAttribute( &quot;href&quot;,&quot;#&quot;+m_lastHeading.m_titleAnchor ).setText( &quot;#&quot; ) );</span>
+<span class="fc" id="L2625">            m_lastHeading = null;</span>
+        }
+<span class="fc" id="L2627">        popElement(&quot;h2&quot;);</span>
+<span class="fc" id="L2628">        popElement(&quot;h3&quot;);</span>
+<span class="fc" id="L2629">        popElement(&quot;h4&quot;);</span>
+<span class="fc" id="L2630">    }</span>
+
+    /**
+     *  Parses the entire document from the Reader given in the constructor or
+     *  set by {@link #setInputReader(Reader)}.
+     *
+     *  @return A WikiDocument, ready to be passed to the renderer.
+     *  @throws IOException If parsing cannot be accomplished.
+     */
+    @Override
+    public WikiDocument parse()
+        throws IOException
+    {
+<span class="fc" id="L2643">        WikiDocument d = new WikiDocument( m_context.getPage() );</span>
+<span class="fc" id="L2644">        d.setContext( m_context );</span>
+
+<span class="fc" id="L2646">        Element rootElement = new Element(&quot;domroot&quot;);</span>
+
+<span class="fc" id="L2648">        d.setRootElement( rootElement );</span>
+
+<span class="fc" id="L2650">        fillBuffer( rootElement );</span>
+
+<span class="fc" id="L2652">        paragraphify(rootElement);</span>
+
+<span class="fc" id="L2654">        return d;</span>
+    }
+
+    /**
+     *  Checks out that the first paragraph is correctly installed.
+     *
+     *  @param rootElement
+     */
+    private void paragraphify(Element rootElement)
+    {
+        //
+        //  Add the paragraph tag to the first paragraph
+        //
+<span class="fc" id="L2667">        List&lt; Content &gt; kids = rootElement.getContent();</span>
+
+<span class="fc bfc" id="L2669" title="All 2 branches covered.">        if( rootElement.getChild(&quot;p&quot;) != null )</span>
+        {
+<span class="fc" id="L2671">            ArrayList&lt;Content&gt; ls = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L2672">            int idxOfFirstContent = 0;</span>
+<span class="fc" id="L2673">            int count = 0;</span>
+
+<span class="pc bpc" id="L2675" title="1 of 2 branches missed.">            for( Iterator&lt; Content &gt; i = kids.iterator(); i.hasNext(); count++ )</span>
+            {
+<span class="fc" id="L2677">                Content c = i.next();</span>
+<span class="fc bfc" id="L2678" title="All 2 branches covered.">                if( c instanceof Element )</span>
+                {
+<span class="fc" id="L2680">                    String name = ( ( Element )c ).getName();</span>
+<span class="fc bfc" id="L2681" title="All 2 branches covered.">                    if( isBlockLevel( name ) ) break;</span>
+                }
+
+<span class="fc bfc" id="L2684" title="All 2 branches covered.">                if( !(c instanceof ProcessingInstruction) )</span>
+                {
+<span class="fc" id="L2686">                    ls.add( c );</span>
+<span class="fc bfc" id="L2687" title="All 2 branches covered.">                    if( idxOfFirstContent == 0 ) idxOfFirstContent = count;</span>
+                }
+            }
+
+            //
+            //  If there were any elements, then add a new &lt;p&gt; (unless it would
+            //  be an empty one)
+            //
+<span class="fc bfc" id="L2695" title="All 2 branches covered.">            if( ls.size() &gt; 0 )</span>
+            {
+<span class="fc" id="L2697">                Element newel = new Element(&quot;p&quot;);</span>
+
+<span class="fc bfc" id="L2699" title="All 2 branches covered.">                for( Iterator&lt; Content &gt; i = ls.iterator(); i.hasNext(); )</span>
+                {
+<span class="fc" id="L2701">                    Content c = i.next();</span>
+
+<span class="fc" id="L2703">                    c.detach();</span>
+<span class="fc" id="L2704">                    newel.addContent(c);</span>
+<span class="fc" id="L2705">                }</span>
+
+                //
+                // Make sure there are no empty &lt;p/&gt; tags added.
+                //
+<span class="fc bfc" id="L2710" title="All 4 branches covered.">                if( newel.getTextTrim().length() &gt; 0 || !newel.getChildren().isEmpty() )</span>
+<span class="fc" id="L2711">                    rootElement.addContent(idxOfFirstContent, newel);</span>
+            }
+        }
+<span class="fc" id="L2714">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

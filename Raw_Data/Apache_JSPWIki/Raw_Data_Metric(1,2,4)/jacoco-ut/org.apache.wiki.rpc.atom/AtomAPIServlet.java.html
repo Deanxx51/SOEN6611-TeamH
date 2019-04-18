@@ -1,0 +1,346 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AtomAPIServlet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.rpc.atom</a> &gt; <span class="el_source">AtomAPIServlet.java</span></div><h1>AtomAPIServlet.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.rpc.atom;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.plugin.WeblogEntryPlugin;
+import org.apache.wiki.plugin.WeblogPlugin;
+import org.apache.wiki.util.TextUtil;
+import org.intabulas.sandler.Sandler;
+import org.intabulas.sandler.SyndicationFactory;
+import org.intabulas.sandler.elements.Content;
+import org.intabulas.sandler.elements.Entry;
+import org.intabulas.sandler.elements.Feed;
+import org.intabulas.sandler.elements.Link;
+import org.intabulas.sandler.elements.Person;
+import org.intabulas.sandler.exceptions.FeedMarshallException;
+
+
+/**
+ *  Handles incoming requests for the Atom API.  This class uses the
+ *  &quot;sandler&quot; Atom API implementation.
+ *
+ *  @since 2.1.97
+ */
+// FIXME: Rewrite using some other library
+<span class="nc" id="L58">public class AtomAPIServlet extends HttpServlet</span>
+{
+<span class="nc" id="L60">    static final Logger log = Logger.getLogger( AtomAPIServlet.class );</span>
+
+    private static final long serialVersionUID = 0L;
+
+    private WikiEngine       m_engine;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void init( ServletConfig config )
+        throws ServletException
+    {
+<span class="nc" id="L72">        m_engine = WikiEngine.getInstance( config );</span>
+<span class="nc" id="L73">    }</span>
+
+    /**
+     *  Takes the name of the page from the request URI.
+     *  The initial slash is also removed.  If there is no page,
+     *  returns null.
+     */
+    private String getPageName( HttpServletRequest request )
+    {
+<span class="nc" id="L82">        String name = request.getPathInfo();</span>
+
+<span class="nc bnc" id="L84" title="All 4 branches missed.">        if( name == null || name.length() &lt;= 1 )</span>
+        {
+<span class="nc" id="L86">            return null;</span>
+        }
+<span class="nc bnc" id="L88" title="All 2 branches missed.">        else if( name.charAt(0) == '/' )</span>
+        {
+<span class="nc" id="L90">            name = name.substring(1);</span>
+        }
+
+<span class="nc" id="L93">        name = TextUtil.urlDecodeUTF8( name );</span>
+
+<span class="nc" id="L95">        return name;</span>
+    }
+
+    /**
+     *  Implements the PostURI of the Atom spec.
+     *  &lt;p&gt;
+     *  Implementation notes:
+     *  &lt;ul&gt;
+     *   &lt;li&gt;Only fetches the first content.  All other contents are ignored.
+     *   &lt;li&gt;Assumes that incoming code is plain text or WikiMarkup, not html.
+     *  &lt;/ul&gt;
+     *  
+     *  @param request {@inheritDoc}
+     *  @param response {@inheritDoc}
+     *  @throws ServletException {@inheritDoc}
+     */
+    public void doPost( HttpServletRequest request, HttpServletResponse response )
+        throws ServletException
+    {
+<span class="nc" id="L114">        log.debug(&quot;Received POST to AtomAPIServlet&quot;);</span>
+
+        try
+        {
+<span class="nc" id="L118">            String blogid = getPageName( request );</span>
+
+<span class="nc" id="L120">            WikiPage page    = m_engine.getPage( blogid );</span>
+
+<span class="nc bnc" id="L122" title="All 2 branches missed.">            if( page == null )</span>
+            {
+<span class="nc" id="L124">                throw new ServletException(&quot;Page &quot;+blogid+&quot; does not exist, cannot add blog post.&quot;);</span>
+            }
+
+            //FIXME: Do authentication here
+<span class="nc" id="L128">            Entry entry = Sandler.unmarshallEntry( request.getInputStream() );</span>
+
+            //
+            //  Fetch the obligatory parts of the content.
+            //
+<span class="nc" id="L133">            Content title   = entry.getTitle();</span>
+<span class="nc" id="L134">            Content content = entry.getContent(0);</span>
+
+<span class="nc" id="L136">            Person  author  = entry.getAuthor();</span>
+
+            //FIXME: Sandler 0.5 does not support generator
+
+            //
+            //  Generate new blog entry.
+            //
+<span class="nc" id="L143">            WeblogEntryPlugin plugin = new WeblogEntryPlugin();</span>
+
+<span class="nc" id="L145">            String pageName = plugin.getNewEntryPage( m_engine, blogid );</span>
+<span class="nc" id="L146">            String username = author.getName();</span>
+
+<span class="nc" id="L148">            WikiPage entryPage = new WikiPage( m_engine, pageName );</span>
+<span class="nc" id="L149">            entryPage.setAuthor( username );</span>
+
+<span class="nc" id="L151">            WikiContext context = new WikiContext( m_engine, request, entryPage );</span>
+
+<span class="nc" id="L153">            StringBuilder text = new StringBuilder();</span>
+<span class="nc" id="L154">            text.append( &quot;!&quot; + title.getBody() );</span>
+<span class="nc" id="L155">            text.append( &quot;\n\n&quot; );</span>
+<span class="nc" id="L156">            text.append( content.getBody() );</span>
+
+<span class="nc" id="L158">            log.debug(&quot;Writing entry: &quot;+text);</span>
+
+<span class="nc" id="L160">            m_engine.saveText( context, text.toString() );</span>
+
+        }
+<span class="nc" id="L163">        catch( FeedMarshallException e )</span>
+        {
+<span class="nc" id="L165">            log.error(&quot;Received faulty Atom entry&quot;,e);</span>
+<span class="nc" id="L166">            throw new ServletException(&quot;Faulty Atom entry&quot;,e);</span>
+        }
+<span class="nc" id="L168">        catch( IOException e )</span>
+        {
+<span class="nc" id="L170">            log.error(&quot;I/O exception&quot;,e);</span>
+<span class="nc" id="L171">            throw new ServletException(&quot;Could not get body of request&quot;,e);</span>
+        }
+<span class="nc" id="L173">        catch( WikiException e )</span>
+        {
+<span class="nc" id="L175">            log.error(&quot;Provider exception while posting&quot;,e);</span>
+<span class="nc" id="L176">            throw new ServletException(&quot;JSPWiki cannot save the entry&quot;,e);</span>
+<span class="nc" id="L177">        }</span>
+<span class="nc" id="L178">    }</span>
+
+    /**
+     *  Handles HTTP GET.  However, we do not respond to GET requests,
+     *  other than to show an explanatory text.
+     *  
+     *  {@inheritDoc}
+     */
+    public void doGet( HttpServletRequest request, HttpServletResponse response )
+        throws ServletException
+    {
+<span class="nc" id="L189">        log.debug(&quot;Received HTTP GET to AtomAPIServlet&quot;);</span>
+
+<span class="nc" id="L191">        String blogid = getPageName( request );</span>
+
+<span class="nc" id="L193">        log.debug(&quot;Requested page &quot;+blogid);</span>
+
+        try
+        {
+<span class="nc bnc" id="L197" title="All 2 branches missed.">            if( blogid == null )</span>
+            {
+<span class="nc" id="L199">                Feed feed = listBlogs();</span>
+
+<span class="nc" id="L201">                response.setContentType(&quot;application/x.atom+xml; charset=UTF-8&quot;);</span>
+<span class="nc" id="L202">                response.getWriter().println( Sandler.marshallFeed(feed) );</span>
+
+<span class="nc" id="L204">                response.getWriter().flush();</span>
+<span class="nc" id="L205">            }</span>
+            else
+            {
+<span class="nc" id="L208">                Entry entry = getBlogEntry( blogid );</span>
+
+<span class="nc" id="L210">                response.setContentType(&quot;application/x.atom+xml; charset=UTF-8&quot;);</span>
+<span class="nc" id="L211">                response.getWriter().println( Sandler.marshallEntry(entry) );</span>
+
+<span class="nc" id="L213">                response.getWriter().flush();</span>
+            }
+        }
+<span class="nc" id="L216">        catch( Exception e )</span>
+        {
+<span class="nc" id="L218">            log.error(&quot;Unable to generate response&quot;,e);</span>
+<span class="nc" id="L219">            throw new ServletException(&quot;Internal problem - whack Janne on the head to get a better error report&quot;,e);</span>
+<span class="nc" id="L220">        }</span>
+
+<span class="nc" id="L222">    }</span>
+
+    private Entry getBlogEntry( String entryid )
+        throws ProviderException
+    {
+<span class="nc" id="L227">        WikiPage page = m_engine.getPage( entryid );</span>
+<span class="nc" id="L228">        WikiPage firstVersion = m_engine.getPage( entryid, 1 );</span>
+
+<span class="nc" id="L230">        Entry entry = SyndicationFactory.newSyndicationEntry();</span>
+
+<span class="nc" id="L232">        String pageText = m_engine.getText(page.getName());</span>
+<span class="nc" id="L233">        String title = &quot;&quot;;</span>
+<span class="nc" id="L234">        int firstLine = pageText.indexOf('\n');</span>
+
+<span class="nc bnc" id="L236" title="All 2 branches missed.">        if( firstLine &gt; 0 )</span>
+        {
+<span class="nc" id="L238">            title = pageText.substring( 0, firstLine );</span>
+        }
+
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if( title.trim().length() == 0 ) title = page.getName();</span>
+
+        // Remove wiki formatting
+<span class="nc bnc" id="L244" title="All 2 branches missed.">        while( title.startsWith(&quot;!&quot;) ) title = title.substring(1);</span>
+
+<span class="nc" id="L246">        entry.setTitle( title );</span>
+<span class="nc" id="L247">        entry.setCreated( firstVersion.getLastModified() );</span>
+<span class="nc" id="L248">        entry.setModified( page.getLastModified() );</span>
+<span class="nc" id="L249">        entry.setAuthor( SyndicationFactory.createPerson( page.getAuthor(),</span>
+                                                          null,
+                                                          null ) );
+
+<span class="nc" id="L253">        entry.addContent( SyndicationFactory.createEscapedContent(pageText) );</span>
+
+<span class="nc" id="L255">        return entry;</span>
+    }
+
+    /**
+     *  Creates and outputs a full list of all available blogs
+     */
+    private Feed listBlogs()
+        throws ProviderException,
+               IOException
+    {
+<span class="nc" id="L265">        Collection&lt; WikiPage &gt; pages = m_engine.getPageManager().getAllPages();</span>
+
+<span class="nc" id="L267">        Feed feed = SyndicationFactory.newSyndicationFeed();</span>
+<span class="nc" id="L268">        feed.setTitle(&quot;List of blogs at this site&quot;);</span>
+<span class="nc" id="L269">        feed.setModified( new Date() );</span>
+
+<span class="nc bnc" id="L271" title="All 2 branches missed.">        for( Iterator&lt; WikiPage &gt; i = pages.iterator(); i.hasNext(); )</span>
+        {
+<span class="nc" id="L273">            WikiPage p = i.next();</span>
+
+            //
+            //  List only weblogs
+            //  FIXME: Unfortunately, a weblog is not known until it has
+            //         been executed once, because plugins are off during
+            //         the initial startup phase.
+            //
+
+<span class="nc" id="L282">            log.debug( p.getName()+&quot; = &quot;+p.getAttribute(WeblogPlugin.ATTR_ISWEBLOG)) ;</span>
+
+<span class="nc bnc" id="L284" title="All 2 branches missed.">            if( !(&quot;true&quot;.equals(p.getAttribute(WeblogPlugin.ATTR_ISWEBLOG)) ) )</span>
+<span class="nc" id="L285">                continue;</span>
+
+<span class="nc" id="L287">            String encodedName = TextUtil.urlEncodeUTF8( p.getName() );</span>
+
+<span class="nc" id="L289">            WikiContext context = new WikiContext( m_engine, p );</span>
+
+<span class="nc" id="L291">            String title = TextUtil.replaceEntities(org.apache.wiki.rss.Feed.getSiteName(context));</span>
+
+<span class="nc" id="L293">            Link postlink = createLink( &quot;service.post&quot;,</span>
+<span class="nc" id="L294">                                        m_engine.getBaseURL()+&quot;atom/&quot;+encodedName,</span>
+                                        title );
+
+<span class="nc" id="L297">            Link editlink = createLink( &quot;service.edit&quot;,</span>
+<span class="nc" id="L298">                                        m_engine.getBaseURL()+&quot;atom/&quot;+encodedName,</span>
+                                        title );
+
+<span class="nc" id="L301">            Link feedlink = createLink( &quot;service.feed&quot;,</span>
+<span class="nc" id="L302">                                        m_engine.getBaseURL()+&quot;atom.jsp?page=&quot;+encodedName,</span>
+                                        title );
+
+
+<span class="nc" id="L306">            feed.addLink( postlink );</span>
+<span class="nc" id="L307">            feed.addLink( feedlink );</span>
+<span class="nc" id="L308">            feed.addLink( editlink );</span>
+<span class="nc" id="L309">        }</span>
+
+<span class="nc" id="L311">        return feed;</span>
+    }
+
+    private Link createLink( String rel,
+                             String href,
+                             String title )
+    {
+<span class="nc" id="L318">        org.intabulas.sandler.elements.impl.LinkImpl link = new org.intabulas.sandler.elements.impl.LinkImpl();</span>
+
+<span class="nc" id="L320">        link.setRelationship( rel );</span>
+<span class="nc" id="L321">        link.setTitle( title );</span>
+<span class="nc" id="L322">        link.setType( &quot;application/x.atom+xml&quot; );</span>
+<span class="nc" id="L323">        link.setHref( href );</span>
+
+<span class="nc" id="L325">        return link;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void doDelete( HttpServletRequest request, HttpServletResponse response )
+        throws ServletException
+    {
+<span class="nc" id="L334">        log.debug(&quot;Received HTTP DELETE&quot;);</span>
+<span class="nc" id="L335">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void doPut( HttpServletRequest request, HttpServletResponse response )
+        throws ServletException
+    {
+<span class="nc" id="L343">        log.debug(&quot;Received HTTP PUT&quot;);</span>
+<span class="nc" id="L344">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserBean.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.admin.beans</a> &gt; <span class="el_source">UserBean.java</span></div><h1>UserBean.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui.admin.beans;
+
+import java.util.Date;
+
+import javax.management.NotCompliantMBeanException;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.ui.admin.AdminBean;
+import org.apache.wiki.ui.admin.SimpleAdminBean;
+
+
+public class UserBean extends SimpleAdminBean
+{
+    public UserBean( WikiEngine engine ) throws NotCompliantMBeanException
+    {
+<span class="fc" id="L41">        super();</span>
+<span class="fc" id="L42">    }</span>
+
+    public String[] getAttributeNames()
+    {
+<span class="fc" id="L46">        return new String[0];</span>
+    }
+
+    // FIXME: We don't yet support MBean for this kind of stuff.
+    public String[] getMethodNames()
+    {
+<span class="fc" id="L52">        return new String[0];</span>
+    }
+
+
+
+    public String doPost(WikiContext context)
+    {
+<span class="nc" id="L59">        HttpServletRequest request = context.getHttpRequest();</span>
+<span class="nc" id="L60">        WikiSession session = context.getWikiSession();</span>
+<span class="nc" id="L61">        UserManager mgr = context.getEngine().getUserManager();</span>
+
+<span class="nc" id="L63">        String loginid   = request.getParameter(&quot;loginid&quot;);</span>
+<span class="nc" id="L64">        String loginname = request.getParameter(&quot;loginname&quot;);</span>
+<span class="nc" id="L65">        String fullname  = request.getParameter(&quot;fullname&quot;);</span>
+<span class="nc" id="L66">        String password  = request.getParameter(&quot;password&quot;);</span>
+<span class="nc" id="L67">        String password2 = request.getParameter(&quot;password2&quot;);</span>
+<span class="nc" id="L68">        String email     = request.getParameter(&quot;email&quot;);</span>
+
+
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if( request.getParameter(&quot;action&quot;).equalsIgnoreCase(&quot;remove&quot;) )</span>
+        {
+            try
+            {
+<span class="nc" id="L75">                mgr.getUserDatabase().deleteByLoginName(loginid);</span>
+<span class="nc" id="L76">                session.addMessage(&quot;User profile &quot;+loginid+&quot; (&quot;+fullname+&quot;) has been deleted&quot;);</span>
+            }
+<span class="nc" id="L78">            catch (NoSuchPrincipalException e)</span>
+            {
+<span class="nc" id="L80">                session.addMessage(&quot;User profile has already been removed&quot;);</span>
+            }
+<span class="nc" id="L82">            catch (WikiSecurityException e)</span>
+            {
+<span class="nc" id="L84">                session.addMessage(&quot;Security problem: &quot;+e);</span>
+<span class="nc" id="L85">            }</span>
+<span class="nc" id="L86">            return &quot;&quot;;</span>
+        }
+
+
+<span class="nc bnc" id="L90" title="All 6 branches missed.">        if( password != null &amp;&amp; password.length() &gt; 0 &amp;&amp; !password.equals(password2) )</span>
+        {
+<span class="nc" id="L92">            session.addMessage(&quot;Passwords do not match!&quot;);</span>
+<span class="nc" id="L93">            return &quot;&quot;;</span>
+        }
+
+        UserProfile p;
+
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if( loginid.equals(&quot;--New--&quot;) )</span>
+        {
+            // Create new user
+
+<span class="nc" id="L102">            p = mgr.getUserDatabase().newProfile();</span>
+<span class="nc" id="L103">            p.setCreated( new Date() );</span>
+        }
+        else
+        {
+            try
+            {
+<span class="nc" id="L109">                p = mgr.getUserDatabase().findByLoginName( loginid );</span>
+            }
+<span class="nc" id="L111">            catch (NoSuchPrincipalException e)</span>
+            {
+<span class="nc" id="L113">                session.addMessage(&quot;I could not find user profile &quot;+loginid);</span>
+<span class="nc" id="L114">                return &quot;&quot;;</span>
+<span class="nc" id="L115">            }</span>
+        }
+
+<span class="nc" id="L118">        p.setEmail(email);</span>
+<span class="nc" id="L119">        p.setFullname(fullname);</span>
+<span class="nc bnc" id="L120" title="All 4 branches missed.">        if( password != null &amp;&amp; password.length() &gt; 0 ) p.setPassword(password);</span>
+<span class="nc" id="L121">        p.setLoginName(loginname);</span>
+
+        try
+        {
+<span class="nc" id="L125">            mgr.getUserDatabase().save( p );</span>
+        }
+<span class="nc" id="L127">        catch( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L129">            session.addMessage(&quot;Unable to save &quot;+e.getMessage());</span>
+<span class="nc" id="L130">        }</span>
+
+<span class="nc" id="L132">        session.addMessage(&quot;User profile has been updated&quot;);</span>
+
+<span class="nc" id="L134">        return &quot;&quot;;</span>
+    }
+
+    public String getTitle()
+    {
+<span class="fc" id="L139">        return &quot;User administration&quot;;</span>
+    }
+
+    public int getType()
+    {
+<span class="fc" id="L144">        return AdminBean.UNKNOWN;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormSelect.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormSelect.java</span></div><h1>FormSelect.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.forms;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.XHTML;
+import org.apache.wiki.util.XhtmlUtil;
+import org.jdom2.Element;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+/**
+ *  Creates a Form select field.
+ */
+<span class="nc" id="L37">public class FormSelect</span>
+    extends FormElement
+{
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params )
+        throws PluginException
+    {
+        // Don't render if no error and error-only-rendering is on.
+<span class="nc" id="L47">        FormInfo info = getFormInfo( ctx );</span>
+
+<span class="nc" id="L49">        ResourceBundle rb = Preferences.getBundle( ctx, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+<span class="nc" id="L50">        Map&lt; String, String &gt; previousValues = null;</span>
+        
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        if ( info != null )</span>
+        {
+<span class="nc bnc" id="L54" title="All 2 branches missed.">            if ( info.hide() )</span>
+            {
+<span class="nc" id="L56">                return &quot;&lt;p&gt;&quot; + rb.getString( &quot;forminput.noneedtoshow&quot; ) + &quot;&lt;/p&gt;&quot;;</span>
+            }
+<span class="nc" id="L58">            previousValues = info.getSubmission();</span>
+        }
+
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if ( previousValues == null )</span>
+        {
+<span class="nc" id="L63">            previousValues = new HashMap&lt; String, String &gt;();</span>
+        }
+
+<span class="nc" id="L66">        Element field = buildSelect( params, previousValues, rb );</span>
+
+        // We should look for extra params, e.g. width, ..., here.
+<span class="nc" id="L69">        return XhtmlUtil.serialize(field); // ctx.getEngine().getContentEncoding()</span>
+    }
+
+
+    /**
+     * Builds a Select element.
+     */
+    private Element buildSelect(
+            Map&lt;String,String&gt; pluginParams,
+            Map&lt;String,String&gt; ctxValues, 
+            ResourceBundle rb )
+            throws PluginException
+    {
+<span class="nc" id="L82">        String inputName = pluginParams.get( PARAM_INPUTNAME );</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if ( inputName == null ) {</span>
+<span class="nc" id="L84">            throw new PluginException( rb.getString( &quot;formselect.namemissing&quot; ) );</span>
+        }
+    
+<span class="nc" id="L87">        String inputValue = pluginParams.get( PARAM_VALUE );</span>
+<span class="nc" id="L88">        String previousValue = ctxValues.get( inputName );</span>
+        //
+        // We provide several ways to override the separator, in case
+        // some input application the default value.
+        //
+<span class="nc" id="L93">        String optionSeparator = pluginParams.get( &quot;separator&quot; );</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if ( optionSeparator == null ) {</span>
+<span class="nc" id="L95">        	optionSeparator = ctxValues.get( &quot;separator.&quot; + inputName);</span>
+        }
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if ( optionSeparator == null ) {</span>
+<span class="nc" id="L98">        	optionSeparator = ctxValues.get( &quot;select.separator&quot; );</span>
+        }
+<span class="nc bnc" id="L100" title="All 2 branches missed.">        if ( optionSeparator == null ) {</span>
+<span class="nc" id="L101">        	optionSeparator = &quot;;&quot;;</span>
+        }
+        
+<span class="nc" id="L104">        String optionSelector = pluginParams.get( &quot;selector&quot; );</span>
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if ( optionSelector == null ) {</span>
+<span class="nc" id="L106">        	optionSelector = ctxValues.get( &quot;selector.&quot; + inputName );</span>
+        }
+<span class="nc bnc" id="L108" title="All 2 branches missed.">        if ( optionSelector == null ) {</span>
+<span class="nc" id="L109">        	optionSelector = ctxValues.get( &quot;select.selector&quot; );</span>
+        }
+<span class="nc bnc" id="L111" title="All 2 branches missed.">        if ( optionSelector == null ) {</span>
+<span class="nc" id="L112">        	optionSelector = &quot;*&quot;;</span>
+        }
+<span class="nc bnc" id="L114" title="All 2 branches missed.">        if ( optionSelector.equals( optionSeparator ) ) {</span>
+<span class="nc" id="L115">        	optionSelector = null;</span>
+        }
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if ( inputValue == null ) {</span>
+<span class="nc" id="L118">        	inputValue = &quot;&quot;;</span>
+        }
+
+        // If values from the context contain the separator, we assume
+        // that the plugin or something else has given us a better
+        // list to display.
+<span class="nc" id="L124">        boolean contextValueOverride = false;</span>
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if ( previousValue != null ) {</span>
+<span class="nc bnc" id="L126" title="All 2 branches missed.">            if ( previousValue.indexOf( optionSeparator ) != -1 ) {</span>
+<span class="nc" id="L127">                inputValue = previousValue;</span>
+<span class="nc" id="L128">                previousValue = null;</span>
+            } else {
+                // If a context value exists, but it's not a list,
+                // it'll just override any existing selector
+                // indications.
+<span class="nc" id="L133">                contextValueOverride = true;</span>
+            }
+        }
+
+<span class="nc" id="L137">        String[] options = inputValue.split( optionSeparator );</span>
+<span class="nc" id="L138">        int previouslySelected = -1;</span>
+        
+<span class="nc" id="L140">        Element[] optionElements = new Element[options.length];</span>
+        
+        //
+        //  Figure out which one of the options to select: prefer the one
+        //  that was previously selected, otherwise try to find the one
+        //  with the &quot;select&quot; marker.
+        //
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        for( int i = 0; i &lt; options.length; i++ ) {</span>
+<span class="nc" id="L148">            int indicated = -1;</span>
+<span class="nc" id="L149">            options[i] = options[i].trim();</span>
+            
+<span class="nc bnc" id="L151" title="All 4 branches missed.">            if ( optionSelector != null &amp;&amp; options[i].startsWith( optionSelector ) ) {</span>
+<span class="nc" id="L152">                options[i] = options[i].substring( optionSelector.length() );</span>
+<span class="nc" id="L153">                indicated = i;</span>
+            }
+<span class="nc bnc" id="L155" title="All 2 branches missed.">            if ( previouslySelected == -1 ) {</span>
+<span class="nc bnc" id="L156" title="All 4 branches missed.">                if ( !contextValueOverride &amp;&amp; indicated &gt; 0 ) {</span>
+<span class="nc" id="L157">                    previouslySelected = indicated;</span>
+<span class="nc bnc" id="L158" title="All 4 branches missed.">                } else if ( previousValue != null &amp;&amp; options[i].equals( previousValue ) ) {</span>
+<span class="nc" id="L159">                    previouslySelected = i;</span>
+                }
+            }
+            
+            // huh?
+//          optionElements[i] = new option( options[i] );
+//          optionElements[i].addElement( options[i] );
+            
+<span class="nc" id="L167">            optionElements[i] = XhtmlUtil.element(XHTML.option,options[i]);</span>
+        }
+
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if ( previouslySelected &gt; -1 ) {</span>
+<span class="nc" id="L171">        	optionElements[previouslySelected].setAttribute(XHTML.ATTR_selected,&quot;true&quot;);</span>
+        }
+
+<span class="nc" id="L174">        Element select = XhtmlUtil.element(XHTML.select);</span>
+<span class="nc" id="L175">        select.setAttribute(XHTML.ATTR_name,HANDLERPARAM_PREFIX + inputName);</span>
+<span class="nc bnc" id="L176" title="All 2 branches missed.">        for ( Element option : optionElements ) {</span>
+<span class="nc" id="L177">            select.addContent(option);</span>
+        }
+<span class="nc" id="L179">        return select;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

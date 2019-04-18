@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WorkflowBuilder.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">WorkflowBuilder.java</span></div><h1>WorkflowBuilder.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.security.Principal;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.WikiException;
+
+/**
+ * Factory class that creates common Workflow instances such as a standard approval workflow.
+ */
+public final class WorkflowBuilder
+{
+<span class="fc" id="L33">    private static final Map&lt;WikiEngine, WorkflowBuilder&gt; BUILDERS = new ConcurrentHashMap&lt;&gt;();</span>
+    private final WikiEngine m_engine;
+
+    /**
+     * Private constructor that creates a new WorkflowBuilder for the supplied WikiEngine.
+     * @param engine the wiki engine
+     */
+    private WorkflowBuilder( WikiEngine engine )
+<span class="fc" id="L41">    {</span>
+<span class="fc" id="L42">        m_engine = engine;</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * Returns the WorkflowBuilder instance for a WikiEngine. Only one WorkflowBuilder
+     * exists for a given engine.
+     * @param engine the wiki engine
+     * @return the workflow builder
+     */
+    public static WorkflowBuilder getBuilder( WikiEngine engine )
+    {
+<span class="fc" id="L53">        WorkflowBuilder builder = BUILDERS.get( engine );</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        if ( builder == null )</span>
+        {
+<span class="fc" id="L56">            builder = new WorkflowBuilder( engine );</span>
+<span class="fc" id="L57">            BUILDERS.put( engine, builder );</span>
+        }
+<span class="fc" id="L59">        return builder;</span>
+    }
+
+    /**
+     * &lt;p&gt;Builds an approval workflow that requests approval from a named
+     * user, {@link org.apache.wiki.auth.authorize.Group} or
+     * {@link org.apache.wiki.auth.authorize.Role} before running a Task.&lt;/p&gt;
+     * &lt;p&gt;The Principal who approves the activity is determined by looking up
+     * the property &lt;code&gt;jspwiki.approver.&lt;var&gt;workflowApproverKey&lt;/var&gt;&lt;/code&gt;
+     * in &lt;code&gt;jspwiki.properties&lt;/code&gt;. If that Principal resolves to a known user, Group
+     * Role, a Decision will be placed in the respective workflow queue (or multiple queues,
+     * if necessary). Only one approver needs to make the Decision, and if the request is
+     * approved, the completion task will be executed. If the request is denied, a
+     * {@link SimpleNotification} with a message corresponding to the &lt;code&gt;rejectedMessage&lt;/code&gt;
+     * message key will be placed in the submitter's workflow queue.&lt;/p&gt;
+     * &lt;p&gt;To help approvers determine how to make the Decision, callers can supply an
+     * array of Fact objects to this method, which will be added to the Decision in the order
+     * they appear in the array. These items will be displayed in the web UI.
+     * In addition, the value of the first Fact will also be added as the third message
+     * argument for the workflow (the first two are always the submitter and the approver).
+     * For example, the PageManager code that creates the &quot;save page approval&quot; workflow
+     * adds the name of the page as its first Fact; this results in the page name being
+     * substituted correctly into the resulting message:
+     * &quot;Save wiki page &amp;lt;strong&amp;gt;{2}&amp;lt;/strong&amp;gt;&quot;.&lt;/p&gt;
+     * @param submitter the user submitting the request
+     * @param workflowApproverKey the key that names the user, Group or Role who must approve
+     * the request. The key is looked up in &lt;code&gt;jspwiki.properties&lt;/code&gt;, and is derived
+     * by prepending &lt;code&gt;jspwiki.approver&lt;/code&gt; to the value of &lt;code&gt;workflowApproverKey&lt;/code&gt;
+     * @param prepTask the initial task that should run before the Decision step is processed.
+     * If this parameter is &lt;code&gt;null&lt;/code&gt;, the Decision will run as the first Step instead
+     * @param decisionKey the message key in &lt;code&gt;default.properties&lt;/code&gt; that contains
+     * the text that will appear in approvers' workflow queues indicating they need to make
+     * a Decision; for example, &lt;code&gt;decision.saveWikiPage&lt;/code&gt;. In the i18n message bundle
+     * file, this key might return text that reads &quot;Approve page &amp;lt;strong&amp;gt;{2}&amp;lt;/strong&amp;gt;&quot;
+     * @param facts an array of {@link Fact} objects that will be shown to the approver
+     * to aid decision-making. The facts will be displayed in the order supplied in the array
+     * @param completionTask the Task that will run if the Decision is approved
+     * @param rejectedMessageKey the message key in &lt;code&gt;default.properties&lt;/code&gt; that contains
+     * the text that will appear in the submitter's workflow queue if request was
+     * not approved; for example, &lt;code&gt;notification.saveWikiPage.reject&lt;/code&gt;. In the
+     * i18n message bundle file, this key might might return
+     * text that reads &quot;Your request to save page &amp;lt;strong&amp;gt;{2}&amp;lt;/strong&amp;gt; was rejected.&quot;
+     * If this parameter is &lt;code&gt;null&lt;/code&gt;, no message will be sent
+     * @return the created workflow
+     * @throws WikiException if the name of the approving user, Role or Group cannot be determined
+     */
+    public Workflow buildApprovalWorkflow( Principal submitter,
+                                           String workflowApproverKey,
+                                           Step prepTask,
+                                           String decisionKey,
+                                           Fact[] facts,
+                                           Step completionTask,
+                                           String rejectedMessageKey ) throws WikiException
+    {
+<span class="fc" id="L113">        WorkflowManager mgr = m_engine.getWorkflowManager();</span>
+<span class="fc" id="L114">        Workflow workflow = new Workflow( workflowApproverKey, submitter );</span>
+
+        // Is a Decision required to run the approve task?
+<span class="fc" id="L117">        boolean decisionRequired = mgr.requiresApproval( workflowApproverKey );</span>
+
+        // If Decision required, create a simple approval workflow
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if ( decisionRequired )</span>
+        {
+            // Look up the name of the approver (user or group) listed in jspwiki.properties;
+            // approvals go to the approver's decision cue
+<span class="fc" id="L124">            Principal approverPrincipal = mgr.getApprover( workflowApproverKey );</span>
+<span class="fc" id="L125">            Decision decision = new SimpleDecision( workflow, decisionKey, approverPrincipal );</span>
+
+            // Add facts to the Decision, if any were supplied
+<span class="pc bpc" id="L128" title="1 of 2 branches missed.">            if ( facts != null )</span>
+            {
+<span class="fc bfc" id="L130" title="All 2 branches covered.">                for ( Fact fact: facts )</span>
+                {
+<span class="fc" id="L132">                    decision.addFact( fact );</span>
+                }
+                // Add the first one as a message key
+<span class="pc bpc" id="L135" title="1 of 2 branches missed.">                if ( facts.length &gt; 0 )</span>
+                {
+<span class="fc" id="L137">                    workflow.addMessageArgument( facts[0].getValue() );</span>
+                }
+            }
+
+            // If rejected, sent a notification
+<span class="fc bfc" id="L142" title="All 2 branches covered.">            if ( rejectedMessageKey != null )</span>
+            {
+<span class="fc" id="L144">                SimpleNotification rejectNotification = new SimpleNotification( workflow, rejectedMessageKey, submitter );</span>
+<span class="fc" id="L145">                decision.addSuccessor( Outcome.DECISION_DENY, rejectNotification );</span>
+            }
+
+            // If approved, run the 'approved' task
+<span class="fc" id="L149">            decision.addSuccessor( Outcome.DECISION_APPROVE, completionTask );</span>
+
+            // Set the first step
+<span class="fc bfc" id="L152" title="All 2 branches covered.">            if ( prepTask == null )</span>
+            {
+<span class="fc" id="L154">                workflow.setFirstStep( decision );</span>
+            }
+            else
+            {
+<span class="fc" id="L158">                workflow.setFirstStep( prepTask );</span>
+<span class="fc" id="L159">                prepTask.addSuccessor( Outcome.STEP_COMPLETE, decision );</span>
+            }
+<span class="fc" id="L161">        }</span>
+
+        // If Decision not required, just run the prep + approved tasks in succession
+        else
+        {
+            // Set the first step
+<span class="fc bfc" id="L167" title="All 2 branches covered.">            if ( prepTask == null )</span>
+            {
+<span class="fc" id="L169">                workflow.setFirstStep( completionTask );</span>
+            }
+            else
+            {
+<span class="fc" id="L173">                workflow.setFirstStep( prepTask );</span>
+<span class="fc" id="L174">                prepTask.addSuccessor( Outcome.STEP_COMPLETE, completionTask );</span>
+            }
+        }
+
+        // Make sure our tasks have this workflow as the parent, then return
+<span class="fc bfc" id="L179" title="All 2 branches covered.">        if ( prepTask != null )</span>
+        {
+<span class="fc" id="L181">            prepTask.setWorkflow( workflow );</span>
+        }
+<span class="fc" id="L183">        completionTask.setWorkflow( workflow );</span>
+<span class="fc" id="L184">        return workflow;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

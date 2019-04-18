@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BasicSearchProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.search</a> &gt; <span class="el_source">BasicSearchProvider.java</span></div><h1>BasicSearchProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.search;
+
+import java.io.IOException;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.StringTokenizer;
+import java.util.TreeSet;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.providers.WikiPageProvider;
+
+/**
+ *  Interface for the search providers that handle searching the Wiki
+ *
+ *  @since 2.2.21.
+ */
+<span class="fc" id="L45">public class BasicSearchProvider implements SearchProvider</span>
+{
+<span class="fc" id="L47">    private static final Logger log = Logger.getLogger(BasicSearchProvider.class);</span>
+
+    private WikiEngine m_engine;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void initialize(WikiEngine engine, Properties props)
+            throws NoRequiredPropertyException, IOException
+    {
+<span class="fc" id="L57">        m_engine = engine;</span>
+<span class="fc" id="L58">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+<span class="fc" id="L63">    public void pageRemoved(WikiPage page) {}</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+<span class="fc" id="L68">    public void reindexPage(WikiPage page) {}</span>
+
+    /**
+     *  Parses a query into something that we can use.
+     *  
+     *  @param query A query string.
+     *  @return A parsed array.
+     */
+    public  QueryItem[] parseQuery(String query)
+    {
+<span class="nc" id="L78">        StringTokenizer st = new StringTokenizer( query, &quot; \t,&quot; );</span>
+
+<span class="nc" id="L80">        QueryItem[] items = new QueryItem[st.countTokens()];</span>
+<span class="nc" id="L81">        int word = 0;</span>
+
+<span class="nc" id="L83">        log.debug(&quot;Expecting &quot;+items.length+&quot; items&quot;);</span>
+
+        //
+        //  Parse incoming search string
+        //
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        while( st.hasMoreTokens() )</span>
+        {
+<span class="nc" id="L91">            log.debug(&quot;Item &quot;+word);</span>
+<span class="nc" id="L92">            String token = st.nextToken().toLowerCase();</span>
+
+<span class="nc" id="L94">            items[word] = new QueryItem();</span>
+
+<span class="nc bnc" id="L96" title="All 3 branches missed.">            switch( token.charAt(0) )</span>
+            {
+              case '+':
+<span class="nc" id="L99">                items[word].type = QueryItem.REQUIRED;</span>
+<span class="nc" id="L100">                token = token.substring(1);</span>
+<span class="nc" id="L101">                log.debug(&quot;Required word: &quot;+token);</span>
+<span class="nc" id="L102">                break;</span>
+
+              case '-':
+<span class="nc" id="L105">                items[word].type = QueryItem.FORBIDDEN;</span>
+<span class="nc" id="L106">                token = token.substring(1);</span>
+<span class="nc" id="L107">                log.debug(&quot;Forbidden word: &quot;+token);</span>
+<span class="nc" id="L108">                break;</span>
+
+              default:
+<span class="nc" id="L111">                items[word].type = QueryItem.REQUESTED;</span>
+<span class="nc" id="L112">                log.debug(&quot;Requested word: &quot;+token);</span>
+                break;
+            }
+
+<span class="nc" id="L116">            items[word++].word = token;</span>
+<span class="nc" id="L117">        }</span>
+
+<span class="nc" id="L119">        return items;</span>
+    }
+
+    private String attachmentNames(WikiPage page, String separator)
+    {
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        if(m_engine.getAttachmentManager().hasAttachments(page))</span>
+        {
+            List&lt; Attachment &gt; attachments;
+            try
+            {
+<span class="nc" id="L129">                attachments = m_engine.getAttachmentManager().listAttachments(page);</span>
+            }
+<span class="nc" id="L131">            catch (ProviderException e)</span>
+            {
+<span class="nc" id="L133">                log.error(&quot;Unable to get attachments for page&quot;, e);</span>
+<span class="nc" id="L134">                return &quot;&quot;;</span>
+<span class="nc" id="L135">            }</span>
+
+<span class="nc" id="L137">            StringBuilder attachmentNames = new StringBuilder();</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">            for( Iterator&lt; Attachment &gt; it = attachments.iterator(); it.hasNext(); )</span>
+            {
+<span class="nc" id="L140">                Attachment att = it.next();</span>
+<span class="nc" id="L141">                attachmentNames.append(att.getName());</span>
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                if(it.hasNext()) {</span>
+<span class="nc" id="L143">                    attachmentNames.append(separator);</span>
+                }
+<span class="nc" id="L145">            }</span>
+<span class="nc" id="L146">            return attachmentNames.toString();</span>
+        }
+
+<span class="nc" id="L149">        return &quot;&quot;;</span>
+    }
+
+    private Collection&lt; SearchResult &gt; findPages( QueryItem[] query, WikiContext wikiContext )
+    {
+<span class="nc" id="L154">        TreeSet&lt;SearchResult&gt; res = new TreeSet&lt;&gt;( new SearchResultComparator() );</span>
+<span class="nc" id="L155">        SearchMatcher matcher = new SearchMatcher( m_engine, query );</span>
+
+<span class="nc" id="L157">        Collection&lt; WikiPage &gt; allPages = null;</span>
+        try {
+<span class="nc" id="L159">            allPages = m_engine.getPageManager().getAllPages();</span>
+<span class="nc" id="L160">        } catch( ProviderException pe ) {</span>
+<span class="nc" id="L161">            log.error( &quot;Unable to retrieve page list&quot;, pe );</span>
+<span class="nc" id="L162">            return null;</span>
+<span class="nc" id="L163">        }</span>
+
+<span class="nc" id="L165">        AuthorizationManager mgr = m_engine.getAuthorizationManager();</span>
+
+<span class="nc" id="L167">        Iterator&lt; WikiPage &gt; it = allPages.iterator();</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        while( it.hasNext() ) {</span>
+            try {
+<span class="nc" id="L170">                WikiPage page = (WikiPage) it.next();</span>
+<span class="nc bnc" id="L171" title="All 2 branches missed.">                if (page != null) {</span>
+                	
+<span class="nc" id="L173">                    PagePermission pp = new PagePermission( page, PagePermission.VIEW_ACTION );</span>
+<span class="nc bnc" id="L174" title="All 4 branches missed.">                    if( wikiContext==null || mgr.checkPermission( wikiContext.getWikiSession(), pp ) ) {</span>
+<span class="nc" id="L175">	                    String pageName = page.getName();</span>
+<span class="nc" id="L176">	                    String pageContent = m_engine.getPageManager().getPageText(pageName, WikiPageProvider.LATEST_VERSION) +</span>
+<span class="nc" id="L177">	                                         attachmentNames(page, &quot; &quot;);</span>
+<span class="nc" id="L178">	                    SearchResult comparison = matcher.matchPageContent( pageName, pageContent );</span>
+	
+<span class="nc bnc" id="L180" title="All 2 branches missed.">	                    if( comparison != null ) {</span>
+<span class="nc" id="L181">	                        res.add( comparison );</span>
+	                    }
+	                }
+	            }
+<span class="nc" id="L185">            } catch( ProviderException pe ) {</span>
+<span class="nc" id="L186">                log.error( &quot;Unable to retrieve page from cache&quot;, pe );</span>
+<span class="nc" id="L187">            } catch( IOException ioe ) {</span>
+<span class="nc" id="L188">                log.error( &quot;Failed to search page&quot;, ioe );</span>
+<span class="nc" id="L189">            }</span>
+        }
+
+<span class="nc" id="L192">        return res;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public Collection&lt; SearchResult &gt; findPages(String query, WikiContext wikiContext) {
+<span class="nc" id="L199">        return findPages(parseQuery(query), wikiContext);</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String getProviderInfo() {
+<span class="nc" id="L206">        return &quot;BasicSearchProvider&quot;;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

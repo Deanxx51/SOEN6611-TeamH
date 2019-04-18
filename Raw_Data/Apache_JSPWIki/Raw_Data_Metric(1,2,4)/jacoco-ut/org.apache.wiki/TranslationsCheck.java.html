@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslationsCheck.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">TranslationsCheck.java</span></div><h1>TranslationsCheck.java</h1><pre class="source lang-java linenums">/*
+ * Licensed under the Apache License, Version 2.0 (the &quot;License&quot;);
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an &quot;AS IS&quot; BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.wiki;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.TreeSet;
+
+/**
+ * Simple utility that shows you a sorted list of property differences between
+ * the 'default en' and a given i18n file. It also warns if there are any duplicates.
+ * &lt;p&gt;
+ * The first argument is the language, and it is mandatory.
+ * The second argument is the path.  If the path is not defined, uses current path (.)
+ * &lt;p&gt;
+ * For example (if you're compiling your classes to &quot;classes&quot;):
+ * &lt;code&gt;
+ * java -cp classes TranslationsCheck fi
+ * &lt;/code&gt;
+ *
+ */
+<span class="nc" id="L41">public class TranslationsCheck</span>
+{
+<span class="nc" id="L43">    private static final TreeSet&lt;String&gt; allProps = new TreeSet&lt;String&gt;();  // sorted, no duplicates</span>
+<span class="nc" id="L44">    private static final TreeSet&lt;String&gt; duplProps = new TreeSet&lt;String&gt;();</span>
+
+    // Change these to your settings...
+<span class="nc" id="L47">    static String base = &quot;.&quot;;</span>
+<span class="nc" id="L48">    static String suffix = null;</span>
+
+    public static void main(String[] args) throws IOException
+    {
+<span class="nc bnc" id="L52" title="All 2 branches missed.">        if( args.length == 0 )</span>
+        {
+<span class="nc" id="L54">            System.out.println(&quot;Usage: java TranslationsCheck &lt;language&gt; [&lt;path&gt;]&quot;);</span>
+<span class="nc" id="L55">            System.out.println(&quot;Example: java TranslationsCheck nl [jspwiki-main/src/main/resources]&quot;);</span>
+<span class="nc" id="L56">            return;</span>
+        }
+
+<span class="nc" id="L59">        suffix = args[0];</span>
+
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        if( args.length &gt;= 2 )</span>
+        {
+<span class="nc" id="L63">            base = args[1];</span>
+        }
+
+<span class="nc" id="L66">        System.out.println(&quot;Using code base &quot; + Release.VERSTR);</span>
+<span class="nc" id="L67">        System.out.println(&quot;Internationalization property file differences between 'default en' and '&quot; + suffix + &quot;' following:\n&quot;);</span>
+
+        try
+        {
+<span class="nc" id="L71">            diff(&quot;/CoreResources.properties&quot;, &quot;/CoreResources_&quot; + suffix + &quot;.properties&quot;);</span>
+<span class="nc" id="L72">            detectDuplicates(&quot;/CoreResources_&quot; + suffix + &quot;.properties&quot;);</span>
+        }
+<span class="nc" id="L74">        catch( FileNotFoundException e )</span>
+        {
+<span class="nc" id="L76">            System.err.println(&quot;Unable to locate &quot;+&quot;/CoreResources_&quot; + suffix + &quot;.properties&quot;);</span>
+<span class="nc" id="L77">        }</span>
+
+        try
+        {
+<span class="nc" id="L81">            diff(&quot;/templates/default.properties&quot;, &quot;/templates/default_&quot; + suffix + &quot;.properties&quot;);</span>
+<span class="nc" id="L82">            detectDuplicates(&quot;/templates/default_&quot; + suffix + &quot;.properties&quot;);</span>
+        }
+<span class="nc" id="L84">        catch( FileNotFoundException e )</span>
+        {
+<span class="nc" id="L86">            System.err.println(&quot;Unable to locate &quot;+&quot;/templates/default_&quot; + suffix + &quot;.properties&quot;);</span>
+<span class="nc" id="L87">        }</span>
+
+        try
+        {
+<span class="nc" id="L91">            diff(&quot;/plugin/PluginResources.properties&quot;, &quot;/plugin/PluginResources_&quot; + suffix + &quot;.properties&quot;);</span>
+
+<span class="nc" id="L93">            detectDuplicates(&quot;/plugin/PluginResources_&quot; + suffix + &quot;.properties&quot;);</span>
+
+<span class="nc" id="L95">            System.out.println(&quot;Duplicates overall (two or more occurences):&quot;);</span>
+<span class="nc" id="L96">            System.out.println(&quot;--------------------------------------------&quot;);</span>
+<span class="nc" id="L97">            Iterator&lt; String &gt; iter = duplProps.iterator();</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">            if (duplProps.size() == 0)</span>
+<span class="nc" id="L99">                System.out.println(&quot;(none)&quot;);</span>
+            else
+<span class="nc bnc" id="L101" title="All 2 branches missed.">                while (iter.hasNext())</span>
+<span class="nc" id="L102">                    System.out.println(iter.next());</span>
+<span class="nc" id="L103">            System.out.println();</span>
+        }
+<span class="nc" id="L105">        catch( FileNotFoundException e )</span>
+        {
+<span class="nc" id="L107">            System.err.println(&quot;Unable to locate &quot;+&quot;/plugin/PluginResources_&quot; + suffix + &quot;.properties&quot;);</span>
+<span class="nc" id="L108">        }</span>
+
+<span class="nc" id="L110">        System.out.println(&quot;NOTE: Please remember that dependent on the usage of these i18n files, outdated &quot; +</span>
+                &quot;properties maybe should not be deleted, because they may be used by previous releases. &quot; +
+                &quot;Moving them to a special section in the file may be the better solution.&quot;);
+<span class="nc" id="L113">    }</span>
+
+    public static Map&lt; String, Integer &gt; diff(String source1, String source2) throws FileNotFoundException, IOException
+    {
+<span class="nc" id="L117">        int missing = 0, outdated = 0;</span>
+        // Standard Properties
+<span class="nc" id="L119">        Properties p1 = new Properties();</span>
+        
+<span class="nc" id="L121">        p1.load( TranslationsCheck.class.getClassLoader().getResourceAsStream( base + source1 ) );</span>
+
+<span class="nc" id="L123">        Properties p2 = new Properties();</span>
+<span class="nc" id="L124">        p2.load( TranslationsCheck.class.getClassLoader().getResourceAsStream( base + source2 ) );</span>
+
+<span class="nc" id="L126">        String msg = &quot;Checking &quot; + source2 + &quot;...&quot;;</span>
+<span class="nc" id="L127">        System.out.println(msg);</span>
+
+<span class="nc" id="L129">        Iterator&lt; String &gt; iter = sortedNames(p1).iterator();</span>
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        while (iter.hasNext())</span>
+        {
+<span class="nc" id="L132">            String name = iter.next();</span>
+<span class="nc" id="L133">            String value = p1.getProperty(name);</span>
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">            if (p2.get(name) == null)</span>
+            {
+<span class="nc" id="L137">                missing++;</span>
+<span class="nc bnc" id="L138" title="All 2 branches missed.">                if (missing == 1)</span>
+                {
+<span class="nc" id="L140">                    System.out.println(&quot;\nMissing:&quot;);</span>
+<span class="nc" id="L141">                    System.out.println(&quot;--------&quot;);</span>
+                }
+<span class="nc" id="L143">                System.out.println(name + &quot; = &quot; + value);</span>
+            }
+<span class="nc" id="L145">        }</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        if (missing &gt; 0)</span>
+        {
+<span class="nc" id="L148">            System.out.println();</span>
+        }
+
+<span class="nc" id="L151">        iter = sortedNames(p2).iterator();</span>
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        while (iter.hasNext())</span>
+        {
+<span class="nc" id="L154">            String name = iter.next();</span>
+<span class="nc" id="L155">            String value = p2.getProperty(name);</span>
+
+<span class="nc bnc" id="L157" title="All 2 branches missed.">            if (p1.get(name) == null)</span>
+            {
+<span class="nc" id="L159">                outdated++;</span>
+<span class="nc bnc" id="L160" title="All 2 branches missed.">                if (outdated == 1)</span>
+                {
+<span class="nc" id="L162">                    System.out.println(&quot;\nOutdated or superfluous:&quot;);</span>
+<span class="nc" id="L163">                    System.out.println(&quot;------------------------&quot;);</span>
+                }
+<span class="nc" id="L165">                System.out.println(name + &quot; = &quot; + value);</span>
+            }
+<span class="nc" id="L167">        }</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (outdated &gt; 0)</span>
+        {
+<span class="nc" id="L170">            System.out.println();</span>
+        }
+
+<span class="nc" id="L173">        Map&lt; String, Integer &gt; diff = new HashMap&lt; String, Integer &gt;( 2 );</span>
+<span class="nc" id="L174">        diff.put( &quot;missing&quot;, missing );</span>
+<span class="nc" id="L175">        diff.put( &quot;outdated&quot;, outdated );</span>
+<span class="nc" id="L176">        return diff;</span>
+    }
+
+    private static List&lt;String&gt; sortedNames(Properties p)
+    {
+<span class="nc" id="L181">        List&lt;String&gt; list = new ArrayList&lt;String&gt;();</span>
+<span class="nc" id="L182">        Enumeration&lt;?&gt; iter = p.propertyNames();</span>
+<span class="nc bnc" id="L183" title="All 2 branches missed.">        while (iter.hasMoreElements())</span>
+        {
+<span class="nc" id="L185">            list.add( (String)iter.nextElement() );</span>
+        }
+
+<span class="nc" id="L188">        Collections.sort(list);</span>
+<span class="nc" id="L189">        return list;</span>
+    }
+
+    public static int detectDuplicates(String source) throws IOException
+    {
+<span class="nc" id="L194">        Properties p = new Properties();</span>
+<span class="nc" id="L195">        p.load( TranslationsCheck.class.getClassLoader().getResourceAsStream( base + source ) );</span>
+
+<span class="nc" id="L197">        Enumeration&lt;?&gt; iter = p.propertyNames();</span>
+        String currentStr;
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        while (iter.hasMoreElements())</span>
+        {
+<span class="nc" id="L201">            currentStr = (String) iter.nextElement();</span>
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            if (!allProps.add(currentStr))</span>
+<span class="nc" id="L203">                duplProps.add(currentStr);</span>
+        }
+<span class="nc" id="L205">        return duplProps.size();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

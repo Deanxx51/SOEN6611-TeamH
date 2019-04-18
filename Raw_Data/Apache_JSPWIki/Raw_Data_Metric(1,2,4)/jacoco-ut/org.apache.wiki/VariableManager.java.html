@@ -1,0 +1,528 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>VariableManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">VariableManager.java</span></div><h1>VariableManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki;
+
+import java.lang.reflect.Method;
+import java.security.Principal;
+import java.util.Date;
+import java.util.List;
+import java.util.Properties;
+import java.util.ResourceBundle;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.api.engine.FilterManager;
+import org.apache.wiki.api.exceptions.NoSuchVariableException;
+import org.apache.wiki.api.filters.PageFilter;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.modules.InternalModule;
+import org.apache.wiki.parser.LinkParsingOperations;
+import org.apache.wiki.preferences.Preferences;
+
+/**
+ *  Manages variables.  Variables are case-insensitive.  A list of all
+ *  available variables is on a Wiki page called &quot;WikiVariables&quot;.
+ *
+ *  @since 1.9.20.
+ */
+public class VariableManager
+{
+<span class="fc" id="L48">    private static Logger log = Logger.getLogger( VariableManager.class );</span>
+
+    // FIXME: These are probably obsolete.
+    public static final String VAR_ERROR = &quot;error&quot;;
+    public static final String VAR_MSG   = &quot;msg&quot;;
+
+    /**
+     *  Contains a list of those properties that shall never be shown.
+     *  Put names here in lower case.
+     */
+
+<span class="fc" id="L59">    static final String[] THE_BIG_NO_NO_LIST = {</span>
+        &quot;jspwiki.auth.masterpassword&quot;
+    };
+
+    /**
+     *  Creates a VariableManager object using the property list given.
+     *  @param props The properties.
+     */
+    public VariableManager( Properties props )
+<span class="fc" id="L68">    {</span>
+<span class="fc" id="L69">    }</span>
+
+    /**
+     *  Returns true if the link is really command to insert
+     *  a variable.
+     *  &lt;P&gt;
+     *  Currently we just check if the link starts with &quot;{$&quot;.
+     *
+     *  @param link The link text
+     *  @return true, if this represents a variable link.
+     *  @deprecated Use {@link LinkParsingOperations#isVariableLink(String)}
+     */
+    @Deprecated
+    public static boolean isVariableLink( String link )
+    {
+<span class="nc" id="L84">        return new LinkParsingOperations( null ).isVariableLink( link );</span>
+    }
+
+    /**
+     *  Parses the link and finds a value.  This is essentially used once
+     *  {@link LinkParsingOperations#isVariableLink(String)} has found that
+     *  the link text actually contains a variable.  For example, you could
+     *  pass in &quot;{$username}&quot; and get back &quot;JanneJalkanen&quot;.
+     *
+     *  @param  context The WikiContext
+     *  @param  link    The link text containing the variable name.
+     *  @return The variable value.
+     *  @throws IllegalArgumentException If the format is not valid (does not
+     *          start with &quot;{$&quot;, is zero length, etc.)
+     *  @throws NoSuchVariableException If a variable is not known.
+     */
+    public String parseAndGetValue( WikiContext context,
+                                    String link )
+        throws IllegalArgumentException,
+               NoSuchVariableException
+    {
+<span class="fc bfc" id="L105" title="All 2 branches covered.">        if( !link.startsWith(&quot;{$&quot;) )</span>
+<span class="fc" id="L106">            throw new IllegalArgumentException( &quot;Link does not start with {$&quot; );</span>
+
+<span class="fc bfc" id="L108" title="All 2 branches covered.">        if( !link.endsWith(&quot;}&quot;) )</span>
+<span class="fc" id="L109">            throw new IllegalArgumentException( &quot;Link does not end with }&quot; );</span>
+
+<span class="fc" id="L111">        String varName = link.substring(2,link.length()-1);</span>
+
+<span class="fc" id="L113">        return getValue( context, varName.trim() );</span>
+    }
+
+    /**
+     *  This method does in-place expansion of any variables.  However,
+     *  the expansion is not done twice, that is, a variable containing text $variable
+     *  will not be expanded.
+     *  &lt;P&gt;
+     *  The variables should be in the same format ({$variablename} as in the web
+     *  pages.
+     *
+     *  @param context The WikiContext of the current page.
+     *  @param source  The source string.
+     *  @return The source string with variables expanded.
+     */
+    // FIXME: somewhat slow.
+    public String expandVariables( WikiContext context,
+                                   String      source )
+    {
+<span class="fc" id="L132">    	StringBuilder result = new StringBuilder();</span>
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        for( int i = 0; i &lt; source.length(); i++ )</span>
+        {
+<span class="fc bfc" id="L136" title="All 2 branches covered.">            if( source.charAt(i) == '{' )</span>
+            {
+<span class="fc bfc" id="L138" title="All 4 branches covered.">                if( i &lt; source.length()-2 &amp;&amp; source.charAt(i+1) == '$' )</span>
+                {
+<span class="fc" id="L140">                    int end = source.indexOf( '}', i );</span>
+
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">                    if( end != -1 )</span>
+                    {
+<span class="fc" id="L144">                        String varname = source.substring( i+2, end );</span>
+                        String value;
+
+                        try
+                        {
+<span class="fc" id="L149">                            value = getValue( context, varname );</span>
+                        }
+<span class="nc" id="L151">                        catch( NoSuchVariableException e )</span>
+                        {
+<span class="nc" id="L153">                            value = e.getMessage();</span>
+                        }
+<span class="nc" id="L155">                        catch( IllegalArgumentException e )</span>
+                        {
+<span class="nc" id="L157">                            value = e.getMessage();</span>
+<span class="pc" id="L158">                        }</span>
+
+<span class="fc" id="L160">                        result.append( value );</span>
+<span class="fc" id="L161">                        i = end;</span>
+<span class="fc" id="L162">                        continue;</span>
+                    }
+<span class="nc" id="L164">                }</span>
+                else
+                {
+<span class="fc" id="L167">                    result.append( '{' );</span>
+                }
+            }
+            else
+            {
+<span class="fc" id="L172">                result.append( source.charAt(i) );</span>
+            }
+        }
+
+<span class="fc" id="L176">        return result.toString();</span>
+    }
+
+    /**
+     *  Returns the value of a named variable.  See {@link #getValue(WikiContext, String)}.
+     *  The only difference is that this method does not throw an exception, but it
+     *  returns the given default value instead.
+     *
+     *  @param context WikiContext
+     *  @param varName The name of the variable
+     *  @param defValue A default value.
+     *  @return The variable value, or if not found, the default value.
+     */
+    public String getValue( WikiContext context, String varName, String defValue )
+    {
+        try
+        {
+<span class="nc" id="L193">            return getValue( context, varName );</span>
+        }
+<span class="fc" id="L195">        catch( NoSuchVariableException e )</span>
+        {
+<span class="fc" id="L197">            return defValue;</span>
+        }
+    }
+
+    /**
+     *  Returns a value of the named variable.  The resolving order is
+     *  &lt;ol&gt;
+     *    &lt;li&gt;Known &quot;constant&quot; name, such as &quot;pagename&quot;, etc.  This is so
+     *        that pages could not override certain constants.
+     *    &lt;li&gt;WikiContext local variable.  This allows a programmer to
+     *        set a parameter which cannot be overridden by user.
+     *    &lt;li&gt;HTTP Session
+     *    &lt;li&gt;HTTP Request parameters
+     *    &lt;li&gt;WikiPage variable.  As set by the user with the SET directive.
+     *    &lt;li&gt;jspwiki.properties
+     *  &lt;/ol&gt;
+     *
+     *  Use this method only whenever you really need to have a parameter that
+     *  can be overridden by anyone using the wiki.
+     *
+     *  @param context The WikiContext
+     *  @param varName Name of the variable.
+     *
+     *  @return The variable value.
+     *
+     *  @throws IllegalArgumentException If the name is somehow broken.
+     *  @throws NoSuchVariableException If a variable is not known.
+     */
+    public String getValue( WikiContext context,
+                            String      varName )
+        throws IllegalArgumentException,
+               NoSuchVariableException
+    {
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">        if( varName == null )</span>
+<span class="nc" id="L231">            throw new IllegalArgumentException( &quot;Null variable name.&quot; );</span>
+
+<span class="fc bfc" id="L233" title="All 2 branches covered.">        if( varName.length() == 0 )</span>
+<span class="fc" id="L234">            throw new IllegalArgumentException( &quot;Zero length variable name.&quot; );</span>
+
+        // Faster than doing equalsIgnoreCase()
+<span class="fc" id="L237">        String name = varName.toLowerCase();</span>
+
+<span class="fc bfc" id="L239" title="All 2 branches covered.">        for( int i = 0; i &lt; THE_BIG_NO_NO_LIST.length; i++ )</span>
+        {
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">            if( name.equals(THE_BIG_NO_NO_LIST[i]) )</span>
+<span class="nc" id="L242">                return &quot;&quot;; // FIXME: Should this be something different?</span>
+        }
+
+        try
+        {
+            //
+            //  Using reflection to get system variables adding a new system variable
+            //  now only involves creating a new method in the SystemVariables class
+            //  with a name starting with get and the first character of the name of
+            //  the variable capitalized. Example:
+            //    public String getMysysvar(){
+            //      return &quot;Hello World&quot;;
+            //    }
+            //
+<span class="fc" id="L256">            SystemVariables sysvars = new SystemVariables(context);</span>
+<span class="fc" id="L257">            String methodName = &quot;get&quot;+Character.toUpperCase(name.charAt(0))+name.substring(1);</span>
+<span class="fc" id="L258">            Method method = sysvars.getClass().getMethod(methodName);</span>
+<span class="fc" id="L259">            return (String)method.invoke(sysvars);</span>
+        }
+<span class="fc" id="L261">        catch( NoSuchMethodException e1 )</span>
+        {
+            //
+            //  It is not a system var. Time to handle the other cases.
+            //
+            //  Check if such a context variable exists,
+            //  returning its string representation.
+            //
+<span class="fc bfc" id="L269" title="All 2 branches covered.">            if( (context.getVariable( varName )) != null )</span>
+            {
+<span class="fc" id="L271">                return context.getVariable( varName ).toString();</span>
+            }
+
+            //
+            //  Well, I guess it wasn't a final straw.  We also allow
+            //  variables from the session and the request (in this order).
+            //
+
+<span class="fc" id="L279">            HttpServletRequest req = context.getHttpRequest();</span>
+<span class="pc bpc" id="L280" title="1 of 4 branches missed.">            if( req != null &amp;&amp; req.getSession() != null )</span>
+            {
+<span class="fc" id="L282">                HttpSession session = req.getSession();</span>
+
+                try
+                {
+                    String s;
+
+<span class="pc bpc" id="L288" title="1 of 2 branches missed.">                    if( (s = (String)session.getAttribute( varName )) != null )</span>
+<span class="nc" id="L289">                        return s;</span>
+
+<span class="pc bpc" id="L291" title="1 of 2 branches missed.">                    if( (s = context.getHttpParameter( varName )) != null )</span>
+<span class="nc" id="L292">                        return s;</span>
+                }
+<span class="pc" id="L294">                catch( ClassCastException e ) {}</span>
+            }
+
+            //
+            // And the final straw: see if the current page has named metadata.
+            //
+
+<span class="fc" id="L301">            WikiPage pg = context.getPage();</span>
+<span class="pc bpc" id="L302" title="1 of 2 branches missed.">            if( pg != null )</span>
+            {
+<span class="fc" id="L304">                Object metadata = pg.getAttribute( varName );</span>
+<span class="fc bfc" id="L305" title="All 2 branches covered.">                if( metadata != null )</span>
+<span class="fc" id="L306">                    return metadata.toString();</span>
+            }
+
+            //
+            // And the final straw part 2: see if the &quot;real&quot; current page has
+            // named metadata. This allows a parent page to control a inserted
+            // page through defining variables
+            //
+<span class="fc" id="L314">            WikiPage rpg = context.getRealPage();</span>
+<span class="pc bpc" id="L315" title="1 of 2 branches missed.">            if( rpg != null )</span>
+            {
+<span class="fc" id="L317">                Object metadata = rpg.getAttribute( varName );</span>
+<span class="pc bpc" id="L318" title="1 of 2 branches missed.">                if( metadata != null )</span>
+<span class="nc" id="L319">                    return metadata.toString();</span>
+            }
+
+            //
+            // Next-to-final straw: attempt to fetch using property name
+            // We don't allow fetching any other properties than those starting
+            // with &quot;jspwiki.&quot;.  I know my own code, but I can't vouch for bugs
+            // in other people's code... :-)
+            //
+
+<span class="fc bfc" id="L329" title="All 2 branches covered.">            if( varName.startsWith(&quot;jspwiki.&quot;) )</span>
+            {
+<span class="fc" id="L331">                Properties props = context.getEngine().getWikiProperties();</span>
+
+<span class="fc" id="L333">                String s = props.getProperty( varName );</span>
+<span class="fc bfc" id="L334" title="All 2 branches covered.">                if( s != null )</span>
+                {
+<span class="fc" id="L336">                    return s;</span>
+                }
+            }
+
+            //
+            //  Final defaults for some known quantities.
+            //
+
+<span class="pc bpc" id="L344" title="2 of 4 branches missed.">            if( varName.equals( VAR_ERROR ) || varName.equals( VAR_MSG ) )</span>
+<span class="nc" id="L345">                return &quot;&quot;;</span>
+
+<span class="fc" id="L347">            throw new NoSuchVariableException( &quot;No variable &quot;+varName+&quot; defined.&quot; );</span>
+        }
+<span class="nc" id="L349">        catch( Exception e )</span>
+        {
+<span class="nc" id="L351">            log.info(&quot;Interesting exception: cannot fetch variable value&quot;,e);</span>
+        }
+<span class="nc" id="L353">        return &quot;&quot;;</span>
+    }
+
+    /**
+     *  This class provides the implementation for the different system variables.
+     *  It is called via Reflection - any access to a variable called $xxx is mapped
+     *  to getXxx() on this class.
+     *  &lt;p&gt;
+     *  This is a lot neater than using a huge if-else if branching structure
+     *  that we used to have before.
+     *  &lt;p&gt;
+     *  Note that since we are case insensitive for variables, and VariableManager
+     *  calls var.toLowerCase(), the getters for the variables do not have
+     *  capitalization anywhere.  This may look a bit odd, but then again, this
+     *  is not meant to be a public class.
+     *
+     *  @since 2.7.0
+     */
+    @SuppressWarnings( &quot;unused&quot; )
+    private static class SystemVariables
+    {
+        private WikiContext m_context;
+
+        public SystemVariables(WikiContext context)
+<span class="fc" id="L377">        {</span>
+<span class="fc" id="L378">            m_context=context;</span>
+<span class="fc" id="L379">        }</span>
+
+        public String getPagename()
+        {
+<span class="fc" id="L383">            return m_context.getPage().getName();</span>
+        }
+
+        public String getApplicationname()
+        {
+<span class="fc" id="L388">            return m_context.getEngine().getApplicationName();</span>
+        }
+
+        public String getJspwikiversion()
+        {
+<span class="nc" id="L393">            return Release.getVersionString();</span>
+        }
+
+        public String getEncoding()
+        {
+<span class="fc" id="L398">            return m_context.getEngine().getContentEncoding();</span>
+        }
+
+        public String getTotalpages()
+        {
+<span class="nc" id="L403">            return Integer.toString(m_context.getEngine().getPageCount());</span>
+        }
+
+        public String getPageprovider()
+        {
+<span class="nc" id="L408">            return m_context.getEngine().getCurrentProvider();</span>
+        }
+
+        public String getPageproviderdescription()
+        {
+<span class="nc" id="L413">            return m_context.getEngine().getCurrentProviderInfo();</span>
+        }
+
+        public String getAttachmentprovider()
+        {
+<span class="nc" id="L418">            WikiProvider p = m_context.getEngine().getAttachmentManager().getCurrentProvider();</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">            return (p != null) ? p.getClass().getName() : &quot;-&quot;;</span>
+        }
+
+        public String getAttachmentproviderdescription()
+        {
+<span class="nc" id="L424">            WikiProvider p = m_context.getEngine().getAttachmentManager().getCurrentProvider();</span>
+
+<span class="nc bnc" id="L426" title="All 2 branches missed.">            return (p != null) ? p.getProviderInfo() : &quot;-&quot;;</span>
+        }
+
+        public String getInterwikilinks()
+        {
+<span class="nc" id="L431">        	StringBuilder res = new StringBuilder();</span>
+
+<span class="nc bnc" id="L433" title="All 2 branches missed.">            for( String link : m_context.getEngine().getAllInterWikiLinks() )</span>
+            {
+<span class="nc bnc" id="L435" title="All 2 branches missed.">                if( res.length() &gt; 0 ) {</span>
+<span class="nc" id="L436">                    res.append(&quot;, &quot;);</span>
+                }
+<span class="nc" id="L438">                res.append( link );</span>
+<span class="nc" id="L439">                res.append( &quot; --&gt; &quot; );</span>
+<span class="nc" id="L440">                res.append( m_context.getEngine().getInterWikiURL(link) );</span>
+<span class="nc" id="L441">            }</span>
+<span class="nc" id="L442">            return res.toString();</span>
+        }
+
+        public String getInlinedimages()
+        {
+<span class="nc" id="L447">        	StringBuilder res = new StringBuilder();</span>
+
+<span class="nc bnc" id="L449" title="All 2 branches missed.">            for( String ptrn : m_context.getEngine().getAllInlinedImagePatterns() )</span>
+            {
+<span class="nc bnc" id="L451" title="All 2 branches missed.">                if( res.length() &gt; 0 ) {</span>
+<span class="nc" id="L452">                    res.append(&quot;, &quot;);</span>
+                }
+
+<span class="nc" id="L455">                res.append(ptrn);</span>
+<span class="nc" id="L456">            }</span>
+
+<span class="nc" id="L458">            return res.toString();</span>
+        }
+
+        public String getPluginpath()
+        {
+<span class="nc" id="L463">            String s = m_context.getEngine().getPluginManager().getPluginSearchPath();</span>
+
+<span class="nc bnc" id="L465" title="All 2 branches missed.">            return (s == null) ? &quot;-&quot; : s;</span>
+        }
+
+        public String getBaseurl()
+        {
+<span class="nc" id="L470">            return m_context.getEngine().getBaseURL();</span>
+        }
+
+        public String getUptime()
+        {
+<span class="nc" id="L475">            Date now = new Date();</span>
+<span class="nc" id="L476">            long secondsRunning = (now.getTime() - m_context.getEngine().getStartTime().getTime()) / 1000L;</span>
+
+<span class="nc" id="L478">            long seconds = secondsRunning % 60;</span>
+<span class="nc" id="L479">            long minutes = (secondsRunning /= 60) % 60;</span>
+<span class="nc" id="L480">            long hours = (secondsRunning /= 60) % 24;</span>
+<span class="nc" id="L481">            long days = secondsRunning /= 24;</span>
+
+<span class="nc" id="L483">            return days + &quot;d, &quot; + hours + &quot;h &quot; + minutes + &quot;m &quot; + seconds + &quot;s&quot;;</span>
+        }
+
+        public String getLoginstatus()
+        {
+<span class="nc" id="L488">            WikiSession session = m_context.getWikiSession();</span>
+<span class="nc" id="L489">            return Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE ).getString( &quot;varmgr.&quot; + session.getStatus());</span>
+        }
+
+        public String getUsername()
+        {
+<span class="nc" id="L494">            Principal wup = m_context.getCurrentUser();</span>
+
+<span class="nc" id="L496">            ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+<span class="nc bnc" id="L497" title="All 2 branches missed.">            return wup != null ? wup.getName() : rb.getString( &quot;varmgr.not.logged.in&quot; );</span>
+        }
+
+        public String getRequestcontext()
+        {
+<span class="nc" id="L502">            return m_context.getRequestContext();</span>
+        }
+
+        public String getPagefilters()
+        {
+<span class="nc" id="L507">            FilterManager fm = m_context.getEngine().getFilterManager();</span>
+<span class="nc" id="L508">            List&lt;PageFilter&gt; filters = fm.getFilterList();</span>
+<span class="nc" id="L509">            StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc bnc" id="L511" title="All 2 branches missed.">            for (PageFilter pf : filters )</span>
+            {
+<span class="nc" id="L513">                String f = pf.getClass().getName();</span>
+
+<span class="nc bnc" id="L515" title="All 2 branches missed.">                if( pf instanceof InternalModule )</span>
+<span class="nc" id="L516">                    continue;</span>
+
+<span class="nc bnc" id="L518" title="All 2 branches missed.">                if( sb.length() &gt; 0 )</span>
+<span class="nc" id="L519">                    sb.append(&quot;, &quot;);</span>
+<span class="nc" id="L520">                sb.append(f);</span>
+<span class="nc" id="L521">            }</span>
+
+<span class="nc" id="L523">            return sb.toString();</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

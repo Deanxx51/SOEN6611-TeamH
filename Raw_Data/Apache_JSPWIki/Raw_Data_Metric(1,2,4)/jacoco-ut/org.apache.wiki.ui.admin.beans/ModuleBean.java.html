@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ModuleBean.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.admin.beans</a> &gt; <span class="el_source">ModuleBean.java</span></div><h1>ModuleBean.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+*/
+package org.apache.wiki.ui.admin.beans;
+
+import java.util.Collection;
+
+import javax.management.NotCompliantMBeanException;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.Release;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.ui.admin.SimpleAdminBean;
+import org.apache.wiki.util.XHTML;
+import org.apache.wiki.util.XhtmlUtil;
+import org.jdom2.Element;
+
+public abstract class ModuleBean extends SimpleAdminBean {
+
+    protected WikiEngine m_engine;
+
+    private static final String VER_WARNING = &quot;&lt;span class='warning'&gt;This module is not compatible with this version of JSPWiki.&lt;/span&gt;&quot;;
+
+<span class="fc" id="L41">    public ModuleBean( WikiEngine engine ) throws NotCompliantMBeanException {</span>
+<span class="fc" id="L42">        m_engine = engine;</span>
+<span class="fc" id="L43">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    public String[] getAttributeNames() {
+<span class="fc" id="L49">        return new String[0];</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String[] getMethodNames() {
+<span class="fc" id="L56">        return new String[0];</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String doGet( WikiContext context ) {
+<span class="fc" id="L63">        Collection&lt; WikiModuleInfo &gt; filters = modules();</span>
+<span class="fc" id="L64">        Element root = title();</span>
+<span class="fc" id="L65">        Element tb = containerForModuleDetail( root );</span>
+
+<span class="fc" id="L67">        Element trHead = heading();</span>
+<span class="fc" id="L68">        tb.addContent( trHead );</span>
+
+<span class="fc bfc" id="L70" title="All 2 branches covered.">        for( WikiModuleInfo info : filters ) {</span>
+<span class="fc" id="L71">            Element tr = rowBody( info );</span>
+<span class="fc" id="L72">            tb.addContent( tr );</span>
+<span class="fc" id="L73">        }</span>
+
+<span class="fc" id="L75">        return XhtmlUtil.serialize( root, XhtmlUtil.EXPAND_EMPTY_NODES );</span>
+    }
+
+    protected Element title() {
+<span class="fc" id="L79">        Element root = XhtmlUtil.element( XHTML.div );</span>
+<span class="fc" id="L80">        root.addContent( XhtmlUtil.element( XHTML.h4 ).addContent( getTitle() ) );</span>
+<span class="fc" id="L81">        return root;</span>
+    }
+
+    protected Element containerForModuleDetail( Element root ) {
+<span class="fc" id="L85">        Element tb = XhtmlUtil.element( XHTML.table ).setAttribute( &quot;border&quot;, &quot;1&quot; );</span>
+<span class="fc" id="L86">        root.addContent( tb );</span>
+<span class="fc" id="L87">        return tb;</span>
+    }
+
+    /**
+     * Obtains the collection of modules which is going to be inspected at {@link #doGet(WikiContext)}.
+     *
+     * @return a collection of {@link WikiModuleInfo}
+     */
+    protected abstract Collection&lt; WikiModuleInfo &gt; modules();
+
+    /**
+     * html blob describing the values of each {@link WikiModuleInfo} inspected.
+     *
+     * @return {@link Element} describing the values of each {@link WikiModuleInfo} inspected.
+     */
+    protected abstract Element heading();
+
+    /**
+     * html blob describing{@link Element} describing attributes
+     *
+     * @param module {@link WikiModuleInfo} inspected.
+     * @return {@link Element} describing the {@link Element} inspected.
+     */
+    protected abstract Element rowBody( WikiModuleInfo module );
+
+    protected String validModuleVersion( WikiModuleInfo info ) {
+<span class="pc bpc" id="L113" title="2 of 4 branches missed.">        return Release.isNewerOrEqual( info.getMinVersion() ) &amp;&amp; Release.isOlderOrEqual( info.getMaxVersion() )</span>
+               ? StringUtils.EMPTY
+               : VER_WARNING;
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

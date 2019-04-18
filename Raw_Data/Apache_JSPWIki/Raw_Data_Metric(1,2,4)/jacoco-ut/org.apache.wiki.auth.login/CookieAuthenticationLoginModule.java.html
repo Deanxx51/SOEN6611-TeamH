@@ -1,0 +1,349 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CookieAuthenticationLoginModule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">CookieAuthenticationLoginModule.java</span></div><h1>CookieAuthenticationLoginModule.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth.login;
+
+import java.io.*;
+import java.util.UUID;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.LoginException;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Logs in an user based on a cookie stored in the user's computer.  The cookie
+ *  information is stored in the &lt;code&gt;jspwiki.workDir&lt;/code&gt;, under the directory
+ *  {@value #COOKIE_DIR}.  For security purposes it is a very, very good idea
+ *  to prevent access to this directory by everyone except the web server process;
+ *  otherwise people having read access to this directory may be able to spoof
+ *  other users.
+ *  &lt;p&gt;
+ *  The cookie directory is scrubbed of old entries at regular intervals.
+ *  &lt;p&gt;
+ *   This module must be used with a CallbackHandler (such as
+ *   {@link WebContainerCallbackHandler}) that supports the following Callback
+ *   types:
+ *   &lt;/p&gt;
+ *   &lt;ol&gt;
+ *   &lt;li&gt;{@link HttpRequestCallback}- supplies the cookie, which should contain
+ *       an unique id for fetching the UID.&lt;/li&gt;
+ *   &lt;li&gt;{@link WikiEngineCallback} - allows access to the WikiEngine itself.
+ *   &lt;/ol&gt;
+ *  &lt;p&gt;
+ *  After authentication, a generic WikiPrincipal based on the username will be
+ *  created and associated with the Subject.
+ *  &lt;/p&gt;
+ *  @see javax.security.auth.spi.LoginModule#commit()
+ *  @see CookieAssertionLoginModule
+ *  @since  2.5.62
+ */
+<span class="fc" id="L65">public class CookieAuthenticationLoginModule extends AbstractLoginModule</span>
+{
+
+<span class="fc" id="L68">    private static final Logger log = Logger.getLogger( CookieAuthenticationLoginModule.class );</span>
+    private static final String LOGIN_COOKIE_NAME = &quot;JSPWikiUID&quot;;
+
+    /** The directory name under which the cookies are stored.  The value is {@value}. */
+    protected static final String COOKIE_DIR        = &quot;logincookies&quot;;
+
+    /**
+     *  User property for setting how long the cookie is stored on the user's computer.
+     *  The value is {@value}.  The default expiry time is 14 days.
+     */
+    public static final  String PROP_LOGIN_EXPIRY_DAYS  = &quot;jspwiki.cookieAuthentication.expiry&quot;;
+
+    /**
+     *  Built-in value for storing the cookie.
+     */
+    private static final int    DEFAULT_EXPIRY_DAYS = 14;
+
+<span class="fc" id="L85">    private static       long   c_lastScrubTime   = 0L;</span>
+
+    /** Describes how often we scrub the cookieDir directory.
+     */
+    private static final long   SCRUB_PERIOD      = 60*60*1000L; // In milliseconds
+
+    /**
+     * @see javax.security.auth.spi.LoginModule#login()
+     * 
+     * {@inheritDoc}
+     */
+    public boolean login() throws LoginException
+    {
+        // Otherwise, let's go and look for the cookie!
+<span class="fc" id="L99">        HttpRequestCallback hcb = new HttpRequestCallback();</span>
+        //UserDatabaseCallback ucb = new UserDatabaseCallback();
+<span class="fc" id="L101">        WikiEngineCallback wcb  = new WikiEngineCallback();</span>
+
+<span class="fc" id="L103">        Callback[] callbacks = new Callback[]</span>
+        { hcb, wcb };
+
+        try
+        {
+<span class="fc" id="L108">            m_handler.handle( callbacks );</span>
+
+<span class="fc" id="L110">            HttpServletRequest request = hcb.getRequest();</span>
+<span class="fc" id="L111">            String uid = getLoginCookie( request );</span>
+
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">            if( uid != null )</span>
+            {
+<span class="fc" id="L115">                WikiEngine engine = wcb.getEngine();</span>
+<span class="fc" id="L116">                File cookieFile = getCookieFile(engine, uid);</span>
+
+<span class="pc bpc" id="L118" title="3 of 6 branches missed.">                if( cookieFile != null &amp;&amp; cookieFile.exists() &amp;&amp; cookieFile.canRead() )</span>
+                {
+<span class="fc" id="L120">                    Reader in = null;</span>
+
+                    try
+                    {
+<span class="fc" id="L124">                        in = new BufferedReader( new InputStreamReader( new FileInputStream( cookieFile ), &quot;UTF-8&quot; ) );</span>
+<span class="fc" id="L125">                        String username = FileUtil.readContents( in );</span>
+
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">                        if ( log.isDebugEnabled() )</span>
+                        {
+<span class="nc" id="L129">                            log.debug( &quot;Logged in cookie authenticated name=&quot; + username );</span>
+                        }
+
+                        // If login succeeds, commit these principals/roles
+<span class="fc" id="L133">                        m_principals.add( new WikiPrincipal( username,  WikiPrincipal.LOGIN_NAME ) );</span>
+
+                        //
+                        //  Tag the file so that we know that it has been accessed recently.
+                        //
+<span class="fc" id="L138">                        cookieFile.setLastModified( System.currentTimeMillis() );</span>
+
+<span class="fc" id="L140">                        return true;</span>
+                    }
+<span class="nc" id="L142">                    catch( IOException e )</span>
+                    {
+<span class="nc" id="L144">                        return false;</span>
+                    }
+                    finally
+                    {
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">                        if( in != null ) in.close();</span>
+                    }
+                }
+            }
+        }
+<span class="nc" id="L153">        catch( IOException e )</span>
+        {
+<span class="nc" id="L155">            String message = &quot;IO exception; disallowing login.&quot;;</span>
+<span class="nc" id="L156">            log.error( message, e );</span>
+<span class="nc" id="L157">            throw new LoginException( message );</span>
+        }
+<span class="nc" id="L159">        catch( UnsupportedCallbackException e )</span>
+        {
+<span class="nc" id="L161">            String message = &quot;Unable to handle callback; disallowing login.&quot;;</span>
+<span class="nc" id="L162">            log.error( message, e );</span>
+<span class="nc" id="L163">            throw new LoginException( message );</span>
+<span class="nc" id="L164">        }</span>
+
+<span class="nc" id="L166">        return false;</span>
+    }
+
+    /**
+     *  Attempts to locate the cookie file.
+     *  @param engine WikiEngine
+     *  @param uid An unique ID fetched from the user cookie
+     *  @return A File handle, or null, if there was a problem.
+     */
+    private static File getCookieFile(WikiEngine engine, String uid)
+    {
+<span class="fc" id="L177">        File cookieDir = new File( engine.getWorkDir(), COOKIE_DIR );</span>
+
+<span class="fc bfc" id="L179" title="All 2 branches covered.">        if( !cookieDir.exists() )</span>
+        {
+<span class="fc" id="L181">            cookieDir.mkdirs();</span>
+        }
+
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if( !cookieDir.canRead() )</span>
+        {
+<span class="nc" id="L186">            log.error(&quot;Cannot read from cookie directory!&quot;+cookieDir.getAbsolutePath());</span>
+<span class="nc" id="L187">            return null;</span>
+        }
+
+<span class="pc bpc" id="L190" title="1 of 2 branches missed.">        if( !cookieDir.canWrite() )</span>
+        {
+<span class="nc" id="L192">            log.error(&quot;Cannot write to cookie directory!&quot;+cookieDir.getAbsolutePath());</span>
+<span class="nc" id="L193">            return null;</span>
+        }
+
+        //
+        //  Scrub away old files
+        //
+<span class="fc" id="L199">        long now = System.currentTimeMillis();</span>
+
+<span class="fc bfc" id="L201" title="All 2 branches covered.">        if( now &gt; (c_lastScrubTime+SCRUB_PERIOD ) )</span>
+        {
+<span class="fc" id="L203">            scrub( TextUtil.getIntegerProperty( engine.getWikiProperties(),</span>
+                                                PROP_LOGIN_EXPIRY_DAYS,
+                                                DEFAULT_EXPIRY_DAYS ),
+                                                cookieDir );
+<span class="fc" id="L207">            c_lastScrubTime = now;</span>
+        }
+
+        //
+        //  Find the cookie file
+        //
+<span class="fc" id="L213">        File cookieFile = new File( cookieDir, uid );</span>
+<span class="fc" id="L214">        return cookieFile;</span>
+    }
+
+    /**
+     *  Extracts the login cookie UID from the servlet request.
+     *
+     *  @param request The HttpServletRequest
+     *  @return The UID value from the cookie, or null, if no such cookie exists.
+     */
+    private static String getLoginCookie(HttpServletRequest request)
+    {
+<span class="fc" id="L225">        String cookie = HttpUtil.retrieveCookieValue( request, LOGIN_COOKIE_NAME );</span>
+
+<span class="fc" id="L227">        return cookie;</span>
+    }
+
+    /**
+     *  Sets a login cookie based on properties set by the user.  This method also
+     *  creates the cookie uid-username mapping in the work directory.
+     *
+     *  @param engine The WikiEngine
+     *  @param response The HttpServletResponse
+     *  @param username The username for whom to create the cookie.
+     */
+    // FIXME3.0: For 3.0, switch to using java.util.UUID so that we can
+    //           get rid of jug.jar
+    public static void setLoginCookie( WikiEngine engine, HttpServletResponse response, String username )
+    {
+<span class="fc" id="L242">        UUID uid = UUID.randomUUID();</span>
+
+<span class="fc" id="L244">        int days = TextUtil.getIntegerProperty( engine.getWikiProperties(),</span>
+                                                PROP_LOGIN_EXPIRY_DAYS,
+                                                DEFAULT_EXPIRY_DAYS );
+
+<span class="fc" id="L248">        Cookie userId = new Cookie( LOGIN_COOKIE_NAME, uid.toString() );</span>
+<span class="fc" id="L249">        userId.setMaxAge( days * 24 * 60 * 60 );</span>
+<span class="fc" id="L250">        response.addCookie( userId );</span>
+
+<span class="fc" id="L252">        File cf = getCookieFile( engine, uid.toString() );</span>
+<span class="fc" id="L253">        Writer out = null;</span>
+
+        try
+        {
+            //
+            //  Write the cookie content to the cookie store file.
+            //
+<span class="fc" id="L260">            out = new BufferedWriter( new OutputStreamWriter( new FileOutputStream(cf), &quot;UTF-8&quot; ) );</span>
+<span class="fc" id="L261">            FileUtil.copyContents( new StringReader(username), out );</span>
+
+<span class="pc bpc" id="L263" title="1 of 2 branches missed.">            if( log.isDebugEnabled() )</span>
+            {
+<span class="nc" id="L265">                log.debug( &quot;Created login cookie for user &quot;+username+&quot; for &quot;+days+&quot; days&quot; );</span>
+            }
+        }
+<span class="nc" id="L268">        catch( IOException ex )</span>
+        {
+<span class="nc" id="L270">            log.error(&quot;Unable to create cookie file to store user id: &quot;+uid);</span>
+        }
+        finally
+        {
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">            if( out != null )</span>
+            {
+                try
+                {
+<span class="fc" id="L278">                    out.close();</span>
+                }
+<span class="nc" id="L280">                catch( IOException ex )</span>
+                {
+<span class="nc" id="L282">                    log.error(&quot;Unable to close stream&quot;);</span>
+<span class="fc" id="L283">                }</span>
+            }
+        }
+<span class="fc" id="L286">    }</span>
+
+    /**
+     *  Clears away the login cookie, and removes the uid-username mapping file as well.
+     *
+     *  @param engine   WikiEngine
+     *  @param request  Servlet request
+     *  @param response Servlet response
+     */
+    public static void clearLoginCookie( WikiEngine engine, HttpServletRequest request, HttpServletResponse response )
+    {
+<span class="fc" id="L297">        Cookie userId = new Cookie( LOGIN_COOKIE_NAME, &quot;&quot; );</span>
+<span class="fc" id="L298">        userId.setMaxAge( 0 );</span>
+<span class="fc" id="L299">        response.addCookie( userId );</span>
+
+<span class="fc" id="L301">        String uid = getLoginCookie( request );</span>
+
+<span class="pc bpc" id="L303" title="1 of 2 branches missed.">        if( uid != null )</span>
+        {
+<span class="fc" id="L305">            File cf = getCookieFile( engine, uid );</span>
+
+<span class="pc bpc" id="L307" title="1 of 2 branches missed.">            if( cf != null )</span>
+            {
+<span class="fc" id="L309">                cf.delete();</span>
+            }
+        }
+<span class="fc" id="L312">    }</span>
+
+    /**
+     *  Goes through the cookie directory and removes any obsolete files.
+     *  The scrubbing takes place one day after the cookie was supposed to expire.
+     *  However, if the user has logged in during the expiry period, the expiry is
+     *  reset, and the cookie file left here.
+     *
+     *  @param days
+     *  @param cookieDir
+     */
+    private static synchronized void scrub( int days, File cookieDir )
+    {
+<span class="fc" id="L325">        log.debug(&quot;Scrubbing cookieDir...&quot;);</span>
+
+<span class="fc" id="L327">        File[] files = cookieDir.listFiles();</span>
+
+<span class="fc" id="L329">        long obsoleteDateLimit = System.currentTimeMillis() - ((long)days+1) * 24 * 60 * 60 * 1000L;</span>
+
+<span class="fc" id="L331">        int  deleteCount = 0;</span>
+
+<span class="pc bpc" id="L333" title="1 of 2 branches missed.">        for( int i = 0; i &lt; files.length; i++ )</span>
+        {
+<span class="nc" id="L335">            File f = files[i];</span>
+
+<span class="nc" id="L337">            long lastModified = f.lastModified();</span>
+
+<span class="nc bnc" id="L339" title="All 2 branches missed.">            if( lastModified &lt; obsoleteDateLimit )</span>
+            {
+<span class="nc" id="L341">                f.delete();</span>
+<span class="nc" id="L342">                deleteCount++;</span>
+            }
+        }
+
+<span class="fc" id="L346">        log.debug(&quot;Removed &quot;+deleteCount+&quot; obsolete cookie logins&quot;);</span>
+<span class="fc" id="L347">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CalendarTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">CalendarTag.java</span></div><h1>CalendarTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.util.Calendar;
+import java.util.Date;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
+
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  Provides a nice calendar.  Responds to the following HTTP parameters:
+ *  &lt;ul&gt;
+ *  &lt;li&gt;calendar.date - If this parameter exists, then the calendar
+ *  date is taken from the month and year.  The date must be in ddMMyy
+ *  format.
+ *  &lt;li&gt;weblog.startDate - If calendar.date parameter does not exist,
+ *  we then check this date.
+ *  &lt;/ul&gt;
+ *
+ *  If neither calendar.date nor weblog.startDate parameters exist,
+ *  then the calendar will default to the current month.
+ *
+ *
+ *  @since 2.0
+ */
+
+// FIXME: This class is extraordinarily lacking.
+<span class="nc" id="L56">public class CalendarTag extends WikiTagBase {</span>
+
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L59">    private static final Logger log = Logger.getLogger( CalendarTag.class );</span>
+    
+<span class="nc" id="L61">    private SimpleDateFormat m_pageFormat = null;</span>
+<span class="nc" id="L62">    private SimpleDateFormat m_urlFormat = null;</span>
+<span class="nc" id="L63">    private SimpleDateFormat m_monthUrlFormat = null;</span>
+<span class="nc" id="L64">    private SimpleDateFormat m_dateFormat = new SimpleDateFormat( &quot;ddMMyy&quot; );</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L72">        super.initTag();</span>
+<span class="nc" id="L73">        m_pageFormat = m_urlFormat = m_monthUrlFormat = null;</span>
+<span class="nc" id="L74">        m_dateFormat = new SimpleDateFormat( &quot;ddMMyy&quot; );</span>
+<span class="nc" id="L75">    }</span>
+
+    /*
+    public void setYear( String year )
+    {
+        m_year = year;
+    }
+
+    public void setMonth( String month )
+    {
+        m_month = month;
+    }
+    */
+
+    /**
+     *  Sets the page format.  If a page corresponding to the format is found when
+     *  the calendar is being rendered, a link to that page is created.  E.g. if the
+     *  format is set to &lt;tt&gt;'Main_blogentry_'ddMMyy&lt;/tt&gt;, it works nicely in
+     *  conjuction to the WeblogPlugin.
+     *  
+     *  @param format The format in the SimpleDateFormat fashion.
+     *  
+     *  @see SimpleDateFormat
+     *  @see org.apache.wiki.plugin.WeblogPlugin
+     */
+    public void setPageformat( String format )
+    {
+<span class="nc" id="L102">        m_pageFormat = new SimpleDateFormat(format);</span>
+<span class="nc" id="L103">    }</span>
+
+    /**
+     *  Set the URL format.  If the pageformat is not set, all dates are
+     *  links to pages according to this format.  The pageformat
+     *  takes precedence.
+     *  
+     *  @param format The URL format in the SimpleDateFormat fashion.
+     *  @see SimpleDateFormat
+     */
+    public void setUrlformat( String format )
+    {
+<span class="nc" id="L115">        m_urlFormat = new SimpleDateFormat(format);</span>
+<span class="nc" id="L116">    }</span>
+
+    /**
+     *  Set the format to be used for links for the months.
+     *  
+     *  @param format The format to set in the SimpleDateFormat fashion.
+     *  
+     *  @see SimpleDateFormat
+     */
+    public void setMonthurlformat( String format )
+    {
+<span class="nc" id="L127">        m_monthUrlFormat = new SimpleDateFormat( format );</span>
+<span class="nc" id="L128">    }</span>
+
+    private String format( String txt )
+    {
+<span class="nc" id="L132">        WikiPage p = m_wikiContext.getPage();</span>
+
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        if( p != null )</span>
+        {
+<span class="nc" id="L136">            return TextUtil.replaceString( txt, &quot;%p&quot;, p.getName() );</span>
+        }
+
+<span class="nc" id="L139">        return txt;</span>
+    }
+
+    /**
+     *  Returns a link to the given day.
+     */
+    private String getDayLink( Calendar day )
+    {
+<span class="nc" id="L147">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L148">        String result = &quot;&quot;;</span>
+
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if( m_pageFormat != null )</span>
+        {
+<span class="nc" id="L152">            String pagename = m_pageFormat.format( day.getTime() );</span>
+            
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            if( engine.pageExists( pagename ) )</span>
+            {
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                if( m_urlFormat != null )</span>
+                {
+<span class="nc" id="L158">                    String url = m_urlFormat.format( day.getTime() );</span>
+
+<span class="nc" id="L160">                    result = &quot;&lt;td class=\&quot;link\&quot;&gt;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;+day.get( Calendar.DATE )+&quot;&lt;/a&gt;&lt;/td&gt;&quot;;</span>
+<span class="nc" id="L161">                }</span>
+                else
+                {
+<span class="nc" id="L164">                    result = &quot;&lt;td class=\&quot;link\&quot;&gt;&lt;a href=\&quot;&quot;+m_wikiContext.getViewURL( pagename )+&quot;\&quot;&gt;&quot;+</span>
+<span class="nc" id="L165">                             day.get( Calendar.DATE )+&quot;&lt;/a&gt;&lt;/td&gt;&quot;;</span>
+                }
+            }
+            else
+            {
+<span class="nc" id="L170">                result = &quot;&lt;td class=\&quot;days\&quot;&gt;&quot;+day.get(Calendar.DATE)+&quot;&lt;/td&gt;&quot;;</span>
+            }
+<span class="nc" id="L172">        }</span>
+<span class="nc bnc" id="L173" title="All 2 branches missed.">        else if( m_urlFormat != null )</span>
+        {
+<span class="nc" id="L175">            String url = m_urlFormat.format( day.getTime() );</span>
+
+<span class="nc" id="L177">            result = &quot;&lt;td&gt;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;+day.get( Calendar.DATE )+&quot;&lt;/a&gt;&lt;/td&gt;&quot;;</span>
+<span class="nc" id="L178">        }</span>
+        else
+        {
+<span class="nc" id="L181">            result = &quot;&lt;td class=\&quot;days\&quot;&gt;&quot;+day.get(Calendar.DATE)+&quot;&lt;/td&gt;&quot;;</span>
+        }
+
+<span class="nc" id="L184">        return format(result);</span>
+    }
+
+    private String getMonthLink( Calendar day )
+    {
+<span class="nc" id="L189">        SimpleDateFormat monthfmt = new SimpleDateFormat( &quot;MMMM yyyy&quot; );</span>
+        String result;
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if( m_monthUrlFormat == null )</span>
+        {
+<span class="nc" id="L194">            result = monthfmt.format( day.getTime() );</span>
+        }
+        else
+        {
+<span class="nc" id="L198">            Calendar cal = (Calendar)day.clone();</span>
+<span class="nc" id="L199">            int firstDay = cal.getActualMinimum( Calendar.DATE );</span>
+<span class="nc" id="L200">            int lastDay  = cal.getActualMaximum( Calendar.DATE );</span>
+
+<span class="nc" id="L202">            cal.set( Calendar.DATE, lastDay );</span>
+<span class="nc" id="L203">            String url = m_monthUrlFormat.format( cal.getTime() );</span>
+
+<span class="nc" id="L205">            url = TextUtil.replaceString( url, &quot;%d&quot;, Integer.toString( lastDay-firstDay+1 ) );</span>
+
+<span class="nc" id="L207">            result = &quot;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;+monthfmt.format(cal.getTime())+&quot;&lt;/a&gt;&quot;;</span>
+        }
+
+<span class="nc" id="L210">        return format(result);</span>
+        
+    }
+    private String getMonthNaviLink( Calendar day, String txt, String queryString )
+    {
+<span class="nc" id="L215">        String result = &quot;&quot;;</span>
+<span class="nc" id="L216">        queryString = TextUtil.replaceEntities( queryString );</span>
+<span class="nc" id="L217">        Calendar nextMonth = Calendar.getInstance();</span>
+<span class="nc" id="L218">        nextMonth.set( Calendar.DATE, 1 );  </span>
+<span class="nc" id="L219">        nextMonth.add( Calendar.DATE, -1);</span>
+<span class="nc" id="L220">        nextMonth.add( Calendar.MONTH, 1 ); // Now move to 1st day of next month</span>
+
+<span class="nc bnc" id="L222" title="All 2 branches missed.">        if ( day.before(nextMonth) )</span>
+        {
+<span class="nc" id="L224">            WikiPage thePage = m_wikiContext.getPage();</span>
+<span class="nc" id="L225">            String pageName = thePage.getName();</span>
+
+<span class="nc" id="L227">            String calendarDate = m_dateFormat.format(day.getTime());</span>
+<span class="nc" id="L228">            String url = m_wikiContext.getURL( WikiContext.VIEW, pageName, </span>
+                                               &quot;calendar.date=&quot;+calendarDate );
+
+<span class="nc bnc" id="L231" title="All 4 branches missed.">            if ( (queryString != null) &amp;&amp; (queryString.length() &gt; 0) )</span>
+            {
+                //
+                // Ensure that the 'calendar.date=ddMMyy' has been removed 
+                // from the queryString
+                //
+
+                // FIXME: Might be useful to have an entire library of 
+                //        routines for this.  Will fail if it's not calendar.date 
+                //        but something else.
+
+<span class="nc" id="L242">                int pos1 = queryString.indexOf(&quot;calendar.date=&quot;);</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">                if (pos1 &gt;= 0)</span>
+                {
+<span class="nc" id="L245">                    String tmp = queryString.substring(0,pos1);</span>
+                    // FIXME: Will this fail when we use &amp; instead of &amp;amp?
+                    // FIXME: should use some parsing routine
+<span class="nc" id="L248">                    int pos2 = queryString.indexOf(&quot;&amp;&quot;,pos1) + 1;</span>
+<span class="nc bnc" id="L249" title="All 4 branches missed.">                    if ( (pos2 &gt; 0) &amp;&amp; (pos2 &lt; queryString.length()) )</span>
+                    {
+<span class="nc" id="L251">                        tmp = tmp + queryString.substring(pos2);</span>
+                    }
+<span class="nc" id="L253">                    queryString = tmp;</span>
+                }
+
+<span class="nc bnc" id="L256" title="All 4 branches missed.">                if( queryString != null &amp;&amp; queryString.length() &gt; 0 )</span>
+                {
+<span class="nc" id="L258">                    url = url + &quot;&amp;amp;&quot;+queryString;</span>
+                }
+            }
+<span class="nc" id="L261">            result = &quot;&lt;td&gt;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;+txt+&quot;&lt;/a&gt;&lt;/td&gt;&quot;;</span>
+<span class="nc" id="L262">        }</span>
+        else
+        {
+<span class="nc" id="L265">            result=&quot;&lt;td&gt; &lt;/td&gt;&quot;;</span>
+        }    
+
+<span class="nc" id="L268">        return format(result);</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+<span class="nc" id="L279">        WikiEngine       engine   = m_wikiContext.getEngine();</span>
+<span class="nc" id="L280">        JspWriter        out      = pageContext.getOut();</span>
+<span class="nc" id="L281">        Calendar         cal      = Calendar.getInstance();</span>
+<span class="nc" id="L282">        Calendar         prevCal  = Calendar.getInstance();</span>
+<span class="nc" id="L283">        Calendar         nextCal  = Calendar.getInstance();</span>
+
+        //
+        //  Check if there is a parameter in the request to set the date.
+        //
+<span class="nc" id="L288">        String calendarDate = pageContext.getRequest().getParameter( &quot;calendar.date&quot; );</span>
+<span class="nc bnc" id="L289" title="All 2 branches missed.">        if( calendarDate == null )</span>
+        {
+<span class="nc" id="L291">            calendarDate = pageContext.getRequest().getParameter( &quot;weblog.startDate&quot; );</span>
+        }
+        
+<span class="nc bnc" id="L294" title="All 2 branches missed.">        if( calendarDate != null )</span>
+        {
+            try
+            {
+<span class="nc" id="L298">                Date d = m_dateFormat.parse( calendarDate );</span>
+<span class="nc" id="L299">                cal.setTime( d );</span>
+<span class="nc" id="L300">                prevCal.setTime( d );</span>
+<span class="nc" id="L301">                nextCal.setTime( d );</span>
+            }
+<span class="nc" id="L303">            catch( ParseException e )</span>
+            {
+<span class="nc" id="L305">                log.warn( &quot;date format wrong: &quot;+calendarDate );</span>
+<span class="nc" id="L306">            }</span>
+        }
+
+<span class="nc" id="L309">        cal.set( Calendar.DATE, 1 );     // First, set to first day of month</span>
+<span class="nc" id="L310">        prevCal.set( Calendar.DATE, 1 );</span>
+<span class="nc" id="L311">        nextCal.set( Calendar.DATE, 1 );</span>
+
+<span class="nc" id="L313">        prevCal.add(Calendar.MONTH, -1); // Now move to first day of previous month</span>
+<span class="nc" id="L314">        nextCal.add(Calendar.MONTH, 1);  // Now move to first day of next month</span>
+
+<span class="nc" id="L316">        out.write( &quot;&lt;table class=\&quot;calendar\&quot;&gt;\n&quot; );</span>
+
+<span class="nc" id="L318">        HttpServletRequest httpServletRequest = m_wikiContext.getHttpRequest();</span>
+<span class="nc" id="L319">        String queryString = engine.safeGetQueryString( httpServletRequest );</span>
+<span class="nc" id="L320">        out.write( &quot;&lt;tr&gt;&quot;+</span>
+<span class="nc" id="L321">                   getMonthNaviLink(prevCal,&quot;&amp;lt;&amp;lt;&quot;, queryString)+</span>
+                   &quot;&lt;td colspan=5 class=\&quot;month\&quot;&gt;&quot;+
+<span class="nc" id="L323">                   getMonthLink( cal )+</span>
+                   &quot;&lt;/td&gt;&quot;+
+<span class="nc" id="L325">                   getMonthNaviLink(nextCal,&quot;&amp;gt;&amp;gt;&quot;, queryString)+ </span>
+                   &quot;&lt;/tr&gt;\n&quot;
+                 );
+
+<span class="nc" id="L329">        int month = cal.get( Calendar.MONTH );</span>
+<span class="nc" id="L330">        cal.set( Calendar.DAY_OF_WEEK, Calendar.MONDAY ); // Then, find the first day of the week.</span>
+
+<span class="nc" id="L332">        out.write( &quot;&lt;tr&gt;&lt;td class=\&quot;weekdays\&quot;&gt;Mon&lt;/td&gt;&quot;+</span>
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Tue&lt;/td&gt;&quot;+
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Wed&lt;/td&gt;&quot;+
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Thu&lt;/td&gt;&quot;+
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Fri&lt;/td&gt;&quot;+
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Sat&lt;/td&gt;&quot;+
+                   &quot;&lt;td class=\&quot;weekdays\&quot;&gt;Sun&lt;/td&gt;&lt;/tr&gt;\n&quot; );
+
+<span class="nc" id="L340">        boolean noMoreDates = false;</span>
+<span class="nc bnc" id="L341" title="All 2 branches missed.">        while( !noMoreDates )</span>
+        {
+<span class="nc" id="L343">            out.write( &quot;&lt;tr&gt;&quot; );</span>
+            
+<span class="nc bnc" id="L345" title="All 2 branches missed.">            for( int i = 0; i &lt; 7; i++ )</span>
+            {
+<span class="nc" id="L347">                int mth = cal.get( Calendar.MONTH );</span>
+
+<span class="nc bnc" id="L349" title="All 2 branches missed.">                if( mth != month )</span>
+                {
+<span class="nc" id="L351">                    out.write(&quot;&lt;td class=\&quot;othermonth\&quot;&gt;&quot;+cal.get(Calendar.DATE)+&quot;&lt;/td&gt;&quot;);</span>
+                }
+                else
+                {
+<span class="nc" id="L355">                    out.write( getDayLink(cal) );</span>
+                }
+
+<span class="nc" id="L358">                cal.add( Calendar.DATE, 1 );</span>
+            }
+
+<span class="nc bnc" id="L361" title="All 2 branches missed.">            if( cal.get( Calendar.MONTH ) != month )</span>
+            {
+<span class="nc" id="L363">                noMoreDates = true;</span>
+            }
+
+<span class="nc" id="L366">            out.write( &quot;&lt;/tr&gt;\n&quot; );</span>
+        }
+
+<span class="nc" id="L369">        out.write( &quot;&lt;/table&gt;\n&quot; );</span>
+
+<span class="nc" id="L371">        return EVAL_BODY_INCLUDE;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

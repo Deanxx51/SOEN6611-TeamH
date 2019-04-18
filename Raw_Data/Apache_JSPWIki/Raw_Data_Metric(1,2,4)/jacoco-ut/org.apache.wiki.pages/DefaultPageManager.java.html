@@ -1,0 +1,577 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultPageManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.pages</a> &gt; <span class="el_source">DefaultPageManager.java</span></div><h1>DefaultPageManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.pages;
+
+import java.io.IOException;
+import java.security.Permission;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiBackgroundThread;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.acl.Acl;
+import org.apache.wiki.auth.acl.AclEntry;
+import org.apache.wiki.auth.acl.AclEntryImpl;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.event.WikiSecurityEvent;
+import org.apache.wiki.modules.ModuleManager;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.providers.RepositoryModifiedException;
+import org.apache.wiki.providers.WikiPageProvider;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ * Manages the WikiPages.  This class functions as an unified interface towards
+ * the page providers.  It handles initialization and management of the providers,
+ * and provides utility methods for accessing the contents.
+ * &lt;p/&gt;
+ * Saving a page is a two-stage Task; first the pre-save operations and then the
+ * actual save.  See the descriptions of the tasks for further information.
+ *
+ * @since 2.0
+ */
+// FIXME: This class currently only functions just as an extra layer over providers,
+//        complicating things.  We need to move more provider-specific functionality
+//        from WikiEngine (which is too big now) into this class.
+public class DefaultPageManager extends ModuleManager implements PageManager {
+
+<span class="fc" id="L75">    private static final Logger LOG = Logger.getLogger(DefaultPageManager.class);</span>
+
+    private WikiPageProvider m_provider;
+
+<span class="fc" id="L79">    protected ConcurrentHashMap&lt;String, PageLock&gt; m_pageLocks = new ConcurrentHashMap&lt;&gt;();</span>
+
+    private WikiEngine m_engine;
+
+<span class="fc" id="L83">    private int m_expiryTime = 60;</span>
+
+<span class="fc" id="L85">    private LockReaper m_reaper = null;</span>
+
+<span class="fc" id="L87">    private PageSorter pageSorter = new PageSorter();</span>
+
+    /**
+     * Creates a new PageManager.
+     *
+     * @param engine WikiEngine instance
+     * @param props  Properties to use for initialization
+     * @throws WikiException If anything goes wrong, you get this.
+     */
+    public DefaultPageManager(WikiEngine engine, Properties props) throws WikiException {
+<span class="fc" id="L97">        super(engine);</span>
+        String classname;
+<span class="fc" id="L99">        m_engine = engine;</span>
+<span class="fc" id="L100">        boolean useCache = &quot;true&quot;.equals(props.getProperty(PROP_USECACHE));</span>
+
+<span class="fc" id="L102">        m_expiryTime = TextUtil.parseIntParameter(props.getProperty(PROP_LOCKEXPIRY), 60);</span>
+
+        //
+        //  If user wants to use a cache, then we'll use the CachingProvider.
+        //
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if (useCache) {</span>
+<span class="fc" id="L108">            classname = &quot;org.apache.wiki.providers.CachingProvider&quot;;</span>
+        } else {
+<span class="fc" id="L110">            classname = m_engine.getRequiredProperty(props, PROP_PAGEPROVIDER);</span>
+        }
+
+<span class="fc" id="L113">        pageSorter.initialize( props );</span>
+
+        try {
+<span class="fc" id="L116">            LOG.debug(&quot;Page provider class: '&quot; + classname + &quot;'&quot;);</span>
+<span class="fc" id="L117">            Class&lt;?&gt; providerclass = ClassUtil.findClass(&quot;org.apache.wiki.providers&quot;, classname);</span>
+<span class="fc" id="L118">            m_provider = (WikiPageProvider) providerclass.newInstance();</span>
+
+<span class="fc" id="L120">            LOG.debug(&quot;Initializing page provider class &quot; + m_provider);</span>
+<span class="fc" id="L121">            m_provider.initialize(m_engine, props);</span>
+<span class="nc" id="L122">        } catch (ClassNotFoundException e) {</span>
+<span class="nc" id="L123">            LOG.error(&quot;Unable to locate provider class '&quot; + classname + &quot;' (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L124">            throw new WikiException(&quot;No provider class. (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L125">        } catch (InstantiationException e) {</span>
+<span class="nc" id="L126">            LOG.error(&quot;Unable to create provider class '&quot; + classname + &quot;' (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L127">            throw new WikiException(&quot;Faulty provider class. (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L128">        } catch (IllegalAccessException e) {</span>
+<span class="nc" id="L129">            LOG.error(&quot;Illegal access to provider class '&quot; + classname + &quot;' (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L130">            throw new WikiException(&quot;Illegal provider class. (&quot; + e.getMessage() + &quot;)&quot;, e);</span>
+<span class="nc" id="L131">        } catch (NoRequiredPropertyException e) {</span>
+<span class="nc" id="L132">            LOG.error(&quot;Provider did not found a property it was looking for: &quot; + e.getMessage(), e);</span>
+<span class="nc" id="L133">            throw e;  // Same exception works.</span>
+<span class="nc" id="L134">        } catch (IOException e) {</span>
+<span class="nc" id="L135">            LOG.error(&quot;An I/O exception occurred while trying to create a new page provider: &quot; + classname, e);</span>
+<span class="nc" id="L136">            throw new WikiException(&quot;Unable to start page provider: &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L137">        }</span>
+
+<span class="fc" id="L139">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getProvider()
+     */
+    @Override
+    public WikiPageProvider getProvider() {
+<span class="fc" id="L146">        return m_provider;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getAllPages()
+     */
+    @Override
+    public Collection&lt; WikiPage &gt; getAllPages() throws ProviderException {
+<span class="fc" id="L154">        return m_provider.getAllPages();</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getPageText(java.lang.String, int)
+     */
+    @Override
+    public String getPageText(String pageName, int version) throws ProviderException {
+<span class="pc bpc" id="L162" title="2 of 4 branches missed.">        if (pageName == null || pageName.length() == 0) {</span>
+<span class="nc" id="L163">            throw new ProviderException(&quot;Illegal page name&quot;);</span>
+        }
+<span class="fc" id="L165">        String text = null;</span>
+
+        try {
+<span class="fc" id="L168">            text = m_provider.getPageText(pageName, version);</span>
+<span class="nc" id="L169">        } catch (RepositoryModifiedException e) {</span>
+            //
+            //  This only occurs with the latest version.
+            //
+<span class="nc" id="L173">            LOG.info(&quot;Repository has been modified externally while fetching page &quot; + pageName);</span>
+
+            //
+            //  Empty the references and yay, it shall be recalculated
+            //
+            //WikiPage p = new WikiPage( pageName );
+<span class="nc" id="L179">            WikiPage p = m_provider.getPageInfo(pageName, version);</span>
+
+<span class="nc" id="L181">            m_engine.updateReferences(p);</span>
+
+<span class="nc bnc" id="L183" title="All 2 branches missed.">            if (p != null) {</span>
+<span class="nc" id="L184">                m_engine.getSearchManager().reindexPage(p);</span>
+<span class="nc" id="L185">                text = m_provider.getPageText(pageName, version);</span>
+            } else {
+                //
+                //  Make sure that it no longer exists in internal data structures either.
+                //
+<span class="nc" id="L190">                WikiPage dummy = new WikiPage(m_engine, pageName);</span>
+<span class="nc" id="L191">                m_engine.getSearchManager().pageRemoved(dummy);</span>
+<span class="nc" id="L192">                m_engine.getReferenceManager().pageRemoved(dummy);</span>
+            }
+<span class="fc" id="L194">        }</span>
+
+<span class="fc" id="L196">        return text;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getEngine()
+     */
+    @Override
+    public WikiEngine getEngine() {
+<span class="fc" id="L204">        return m_engine;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#putPageText(org.apache.wiki.WikiPage, java.lang.String)
+     */
+    @Override
+    public void putPageText(WikiPage page, String content) throws ProviderException {
+<span class="pc bpc" id="L212" title="3 of 6 branches missed.">        if (page == null || page.getName() == null || page.getName().length() == 0) {</span>
+<span class="nc" id="L213">            throw new ProviderException(&quot;Illegal page name&quot;);</span>
+        }
+
+<span class="fc" id="L216">        m_provider.putPageText(page, content);</span>
+<span class="fc" id="L217">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#lockPage(org.apache.wiki.WikiPage, java.lang.String)
+     */
+    @Override
+    public PageLock lockPage(WikiPage page, String user) {
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if (m_reaper == null) {</span>
+            //
+            //  Start the lock reaper lazily.  We don't want to start it in
+            //  the constructor, because starting threads in constructors
+            //  is a bad idea when it comes to inheritance.  Besides,
+            //  laziness is a virtue.
+            //
+<span class="nc" id="L231">            m_reaper = new LockReaper(m_engine);</span>
+<span class="nc" id="L232">            m_reaper.start();</span>
+        }
+
+<span class="nc" id="L235">        fireEvent(WikiPageEvent.PAGE_LOCK, page.getName()); // prior to or after actual lock?</span>
+<span class="nc" id="L236">        PageLock lock = m_pageLocks.get(page.getName());</span>
+
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if (lock == null) {</span>
+            //
+            //  Lock is available, so make a lock.
+            //
+<span class="nc" id="L242">            Date d = new Date();</span>
+<span class="nc" id="L243">            lock = new PageLock(page, user, d, new Date(d.getTime() + m_expiryTime * 60 * 1000L));</span>
+<span class="nc" id="L244">            m_pageLocks.put(page.getName(), lock);</span>
+<span class="nc" id="L245">            LOG.debug(&quot;Locked page &quot; + page.getName() + &quot; for &quot; + user);</span>
+<span class="nc" id="L246">        } else {</span>
+<span class="nc" id="L247">            LOG.debug(&quot;Page &quot; + page.getName() + &quot; already locked by &quot; + lock.getLocker());</span>
+<span class="nc" id="L248">            lock = null; // Nothing to return</span>
+        }
+
+<span class="nc" id="L251">        return lock;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#unlockPage(org.apache.wiki.pages.PageLock)
+     */
+    @Override
+    public void unlockPage(PageLock lock) {
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if (lock == null) {</span>
+<span class="nc" id="L260">            return;</span>
+        }
+
+<span class="nc" id="L263">        m_pageLocks.remove(lock.getPage());</span>
+<span class="nc" id="L264">        LOG.debug(&quot;Unlocked page &quot; + lock.getPage());</span>
+
+<span class="nc" id="L266">        fireEvent(WikiPageEvent.PAGE_UNLOCK, lock.getPage());</span>
+<span class="nc" id="L267">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getCurrentLock(org.apache.wiki.WikiPage)
+     */
+    @Override
+    public PageLock getCurrentLock(WikiPage page) {
+<span class="fc" id="L274">        return m_pageLocks.get(page.getName());</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getActiveLocks()
+     */
+    @Override
+    public List&lt;PageLock&gt; getActiveLocks() {
+<span class="nc" id="L282">        ArrayList&lt;PageLock&gt; result = new ArrayList&lt;&gt;();</span>
+
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        for (PageLock lock : m_pageLocks.values()) {</span>
+<span class="nc" id="L285">            result.add(lock);</span>
+<span class="nc" id="L286">        }</span>
+
+<span class="nc" id="L288">        return result;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getPageInfo(java.lang.String, int)
+     */
+    @Override
+    public WikiPage getPageInfo(String pageName, int version) throws ProviderException {
+<span class="pc bpc" id="L296" title="2 of 4 branches missed.">        if (pageName == null || pageName.length() == 0) {</span>
+<span class="nc" id="L297">            throw new ProviderException(&quot;Illegal page name '&quot; + pageName + &quot;'&quot;);</span>
+        }
+
+<span class="fc" id="L300">        WikiPage page = null;</span>
+
+        try {
+<span class="fc" id="L303">            page = m_provider.getPageInfo(pageName, version);</span>
+<span class="nc" id="L304">        } catch (RepositoryModifiedException e) {</span>
+            //
+            //  This only occurs with the latest version.
+            //
+<span class="nc" id="L308">            LOG.info(&quot;Repository has been modified externally while fetching info for &quot; + pageName);</span>
+<span class="nc" id="L309">            page = m_provider.getPageInfo(pageName, version);</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            if (page != null) {</span>
+<span class="nc" id="L311">                m_engine.updateReferences(page);</span>
+            } else {
+<span class="nc" id="L313">                m_engine.getReferenceManager().pageRemoved(new WikiPage(m_engine, pageName));</span>
+            }
+<span class="fc" id="L315">        }</span>
+
+        //
+        //  Should update the metadata.
+        //
+        /*
+        if( page != null &amp;&amp; !page.hasMetadata() )
+        {
+            WikiContext ctx = new WikiContext(m_engine,page);
+            m_engine.textToHTML( ctx, getPageText(pageName,version) );
+        }
+        */
+<span class="fc" id="L327">        return page;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getVersionHistory(java.lang.String)
+     */
+    @Override
+    public List&lt; WikiPage &gt; getVersionHistory(String pageName) throws ProviderException {
+<span class="pc bpc" id="L335" title="1 of 2 branches missed.">        if (pageExists(pageName)) {</span>
+<span class="fc" id="L336">            return m_provider.getVersionHistory(pageName);</span>
+        }
+
+<span class="nc" id="L339">        return null;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getProviderDescription()
+     */
+    @Override
+    public String getProviderDescription() {
+<span class="nc" id="L347">        return m_provider.getProviderInfo();</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getTotalPageCount()
+     */
+    @Override
+    public int getTotalPageCount() {
+        try {
+<span class="fc" id="L356">            return m_provider.getAllPages().size();</span>
+<span class="nc" id="L357">        } catch (ProviderException e) {</span>
+<span class="nc" id="L358">            LOG.error(&quot;Unable to count pages: &quot;, e);</span>
+<span class="nc" id="L359">            return -1;</span>
+        }
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#pageExists(java.lang.String)
+     */
+    @Override
+    public boolean pageExists(String pageName) throws ProviderException {
+<span class="pc bpc" id="L368" title="2 of 4 branches missed.">        if (pageName == null || pageName.length() == 0) {</span>
+<span class="nc" id="L369">            throw new ProviderException(&quot;Illegal page name&quot;);</span>
+        }
+
+<span class="fc" id="L372">        return m_provider.pageExists(pageName);</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#pageExists(java.lang.String, int)
+     */
+    @Override
+    public boolean pageExists(String pageName, int version) throws ProviderException {
+<span class="pc bpc" id="L380" title="2 of 4 branches missed.">        if (pageName == null || pageName.length() == 0) {</span>
+<span class="nc" id="L381">            throw new ProviderException(&quot;Illegal page name&quot;);</span>
+        }
+
+<span class="fc bfc" id="L384" title="All 2 branches covered.">        if (version == WikiProvider.LATEST_VERSION) {</span>
+<span class="fc" id="L385">            return pageExists(pageName);</span>
+        }
+
+<span class="fc" id="L388">        return m_provider.pageExists(pageName, version);</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#deleteVersion(org.apache.wiki.WikiPage)
+     */
+    @Override
+    public void deleteVersion(WikiPage page) throws ProviderException {
+<span class="fc" id="L396">        m_provider.deleteVersion(page.getName(), page.getVersion());</span>
+
+        // FIXME: If this was the latest, reindex Lucene
+        // FIXME: Update RefMgr
+<span class="fc" id="L400">    }</span>
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#deletePage(org.apache.wiki.WikiPage)
+     */
+    @Override
+    public void deletePage(WikiPage page) throws ProviderException {
+<span class="fc" id="L407">        fireEvent(WikiPageEvent.PAGE_DELETE_REQUEST, page.getName());</span>
+<span class="fc" id="L408">        m_provider.deletePage(page.getName());</span>
+<span class="fc" id="L409">        fireEvent(WikiPageEvent.PAGE_DELETED, page.getName());</span>
+<span class="fc" id="L410">    }</span>
+
+    /**
+     * This is a simple reaper thread that runs roughly every minute
+     * or so (it's not really that important, as long as it runs),
+     * and removes all locks that have expired.
+     */
+    private class LockReaper extends WikiBackgroundThread {
+        /**
+         * Create a LockReaper for a given engine.
+         *
+         * @param engine WikiEngine to own this thread.
+         */
+<span class="nc" id="L423">        public LockReaper(WikiEngine engine) {</span>
+<span class="nc" id="L424">            super(engine, 60);</span>
+<span class="nc" id="L425">            setName(&quot;JSPWiki Lock Reaper&quot;);</span>
+<span class="nc" id="L426">        }</span>
+
+        @Override
+        public void backgroundTask() throws Exception {
+<span class="nc" id="L430">            Collection&lt;PageLock&gt; entries = m_pageLocks.values();</span>
+<span class="nc bnc" id="L431" title="All 2 branches missed.">            for (Iterator&lt;PageLock&gt; i = entries.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L432">                PageLock p = i.next();</span>
+
+<span class="nc bnc" id="L434" title="All 2 branches missed.">                if ( p.isExpired() ) {</span>
+<span class="nc" id="L435">                    i.remove();</span>
+
+<span class="nc" id="L437">                    LOG.debug(&quot;Reaped lock: &quot; + p.getPage() +</span>
+<span class="nc" id="L438">                              &quot; by &quot; + p.getLocker() +</span>
+<span class="nc" id="L439">                              &quot;, acquired &quot; + p.getAcquisitionTime() +</span>
+<span class="nc" id="L440">                              &quot;, and expired &quot; + p.getExpiryTime());</span>
+                }
+<span class="nc" id="L442">            }</span>
+<span class="nc" id="L443">        }</span>
+    }
+
+    // events processing .......................................................
+
+    /**
+     * Fires a WikiPageEvent of the provided type and page name
+     * to all registered listeners.
+     *
+     * @param type     the event type to be fired
+     * @param pagename the wiki page name as a String
+     * @see org.apache.wiki.event.WikiPageEvent
+     */
+    protected final void fireEvent(int type, String pagename) {
+<span class="pc bpc" id="L457" title="1 of 2 branches missed.">        if (WikiEventManager.isListening(this)) {</span>
+<span class="fc" id="L458">            WikiEventManager.fireEvent(this, new WikiPageEvent(m_engine, type, pagename));</span>
+        }
+<span class="fc" id="L460">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiModuleInfo &gt; modules() {
+<span class="nc" id="L467">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    /**
+     * Returns null!
+     *  {@inheritDoc}
+     */
+    @Override
+    public WikiModuleInfo getModuleInfo(String moduleName) {
+<span class="nc" id="L476">    	return null;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#actionPerformed(org.apache.wiki.event.WikiEvent)
+     */
+    @Override
+    public void actionPerformed(WikiEvent event) {
+<span class="pc bpc" id="L484" title="1 of 2 branches missed.">        if (!(event instanceof WikiSecurityEvent)) {</span>
+<span class="nc" id="L485">            return;</span>
+        }
+
+<span class="fc" id="L488">        WikiSecurityEvent se = (WikiSecurityEvent) event;</span>
+<span class="fc bfc" id="L489" title="All 2 branches covered.">        if (se.getType() == WikiSecurityEvent.PROFILE_NAME_CHANGED) {</span>
+<span class="fc" id="L490">            UserProfile[] profiles = (UserProfile[]) se.getTarget();</span>
+<span class="fc" id="L491">            Principal[] oldPrincipals = new Principal[]</span>
+<span class="fc" id="L492">                    {new WikiPrincipal(profiles[0].getLoginName()),</span>
+<span class="fc" id="L493">                            new WikiPrincipal(profiles[0].getFullname()),</span>
+<span class="fc" id="L494">                            new WikiPrincipal(profiles[0].getWikiName())};</span>
+<span class="fc" id="L495">            Principal newPrincipal = new WikiPrincipal(profiles[1].getFullname());</span>
+
+            // Examine each page ACL
+            try {
+<span class="fc" id="L499">                int pagesChanged = 0;</span>
+<span class="fc" id="L500">                Collection&lt; WikiPage &gt; pages = getAllPages();</span>
+<span class="fc bfc" id="L501" title="All 2 branches covered.">                for (Iterator&lt; WikiPage &gt; it = pages.iterator(); it.hasNext(); ) {</span>
+<span class="fc" id="L502">                    WikiPage page = it.next();</span>
+<span class="fc" id="L503">                    boolean aclChanged = changeAcl(page, oldPrincipals, newPrincipal);</span>
+<span class="fc bfc" id="L504" title="All 2 branches covered.">                    if (aclChanged) {</span>
+                        // If the Acl needed changing, change it now
+                        try {
+<span class="fc" id="L507">                            m_engine.getAclManager().setPermissions(page, page.getAcl());</span>
+<span class="nc" id="L508">                        } catch (WikiSecurityException e) {</span>
+<span class="nc" id="L509">                            LOG.error(&quot;Could not change page ACL for page &quot; + page.getName() + &quot;: &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L510">                        }</span>
+<span class="fc" id="L511">                        pagesChanged++;</span>
+                    }
+<span class="fc" id="L513">                }</span>
+<span class="fc" id="L514">                LOG.info(&quot;Profile name change for '&quot; + newPrincipal.toString() +</span>
+                        &quot;' caused &quot; + pagesChanged + &quot; page ACLs to change also.&quot;);
+<span class="nc" id="L516">            } catch (ProviderException e) {</span>
+                // Oooo! This is really bad...
+<span class="nc" id="L518">                LOG.error(&quot;Could not change user name in Page ACLs because of Provider error:&quot; + e.getMessage(), e);</span>
+<span class="fc" id="L519">            }</span>
+        }
+<span class="fc" id="L521">    }</span>
+
+    /**
+     * For a single wiki page, replaces all Acl entries matching a supplied array of Principals
+     * with a new Principal.
+     *
+     * @param page          the wiki page whose Acl is to be modified
+     * @param oldPrincipals an array of Principals to replace; all AclEntry objects whose
+     *                      {@link AclEntry#getPrincipal()} method returns one of these Principals will be replaced
+     * @param newPrincipal  the Principal that should receive the old Principals' permissions
+     * @return &lt;code&gt;true&lt;/code&gt; if the Acl was actually changed; &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    protected boolean changeAcl(WikiPage page, Principal[] oldPrincipals, Principal newPrincipal) {
+<span class="fc" id="L534">        Acl acl = page.getAcl();</span>
+<span class="fc" id="L535">        boolean pageChanged = false;</span>
+<span class="fc bfc" id="L536" title="All 2 branches covered.">        if (acl != null) {</span>
+<span class="fc" id="L537">            Enumeration&lt;AclEntry&gt; entries = acl.entries();</span>
+<span class="fc" id="L538">            Collection&lt;AclEntry&gt; entriesToAdd = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L539">            Collection&lt;AclEntry&gt; entriesToRemove = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L540" title="All 2 branches covered.">            while (entries.hasMoreElements()) {</span>
+<span class="fc" id="L541">                AclEntry entry = entries.nextElement();</span>
+<span class="fc bfc" id="L542" title="All 2 branches covered.">                if (ArrayUtils.contains(oldPrincipals, entry.getPrincipal())) {</span>
+                    // Create new entry
+<span class="fc" id="L544">                    AclEntry newEntry = new AclEntryImpl();</span>
+<span class="fc" id="L545">                    newEntry.setPrincipal(newPrincipal);</span>
+<span class="fc" id="L546">                    Enumeration&lt;Permission&gt; permissions = entry.permissions();</span>
+<span class="fc bfc" id="L547" title="All 2 branches covered.">                    while (permissions.hasMoreElements()) {</span>
+<span class="fc" id="L548">                        Permission permission = permissions.nextElement();</span>
+<span class="fc" id="L549">                        newEntry.addPermission(permission);</span>
+<span class="fc" id="L550">                    }</span>
+<span class="fc" id="L551">                    pageChanged = true;</span>
+<span class="fc" id="L552">                    entriesToRemove.add(entry);</span>
+<span class="fc" id="L553">                    entriesToAdd.add(newEntry);</span>
+                }
+<span class="fc" id="L555">            }</span>
+<span class="fc bfc" id="L556" title="All 2 branches covered.">            for (Iterator&lt;AclEntry&gt; ix = entriesToRemove.iterator(); ix.hasNext(); ) {</span>
+<span class="fc" id="L557">                AclEntry entry = ix.next();</span>
+<span class="fc" id="L558">                acl.removeEntry(entry);</span>
+<span class="fc" id="L559">            }</span>
+<span class="fc bfc" id="L560" title="All 2 branches covered.">            for (Iterator&lt;AclEntry&gt; ix = entriesToAdd.iterator(); ix.hasNext(); ) {</span>
+<span class="fc" id="L561">                AclEntry entry = ix.next();</span>
+<span class="fc" id="L562">                acl.addEntry(entry);</span>
+<span class="fc" id="L563">            }</span>
+        }
+<span class="fc" id="L565">        return pageChanged;</span>
+    }
+
+    /* (non-Javadoc)
+     * @see org.apache.wiki.pages.PageManager#getPageSorter()
+     */
+    @Override
+    public PageSorter getPageSorter() {
+<span class="fc" id="L573">        return pageSorter;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

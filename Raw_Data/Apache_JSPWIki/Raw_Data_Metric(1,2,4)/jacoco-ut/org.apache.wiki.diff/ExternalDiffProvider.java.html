@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ExternalDiffProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.diff</a> &gt; <span class="el_source">ExternalDiffProvider.java</span></div><h1>ExternalDiffProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+*/
+
+package org.apache.wiki.diff;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.io.StringReader;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * This DiffProvider allows external command line tools to be used to generate
+ * the diff.
+ */
+public class ExternalDiffProvider implements DiffProvider
+{
+<span class="nc" id="L41">    private static final Logger log = Logger.getLogger(ExternalDiffProvider.class);</span>
+
+    /**
+     * Determines the command to be used for 'diff'. This program must be able
+     * to output diffs in the unified format. For example 'diff -u %s1 %s2'.
+     */
+    public static final String PROP_DIFFCOMMAND    = &quot;jspwiki.diffCommand&quot;;
+
+<span class="nc" id="L49">    private String m_diffCommand = null;</span>
+    private String m_encoding;
+
+    private static final char DIFF_ADDED_SYMBOL    = '+';
+    private static final char DIFF_REMOVED_SYMBOL  = '-';
+
+    private static final String CSS_DIFF_ADDED     = &quot;&lt;tr&gt;&lt;td bgcolor=\&quot;#99FF99\&quot; class=\&quot;diffadd\&quot;&gt;&quot;;
+    private static final String CSS_DIFF_REMOVED   = &quot;&lt;tr&gt;&lt;td bgcolor=\&quot;#FF9933\&quot; class=\&quot;diffrem\&quot;&gt;&quot;;
+    private static final String CSS_DIFF_UNCHANGED = &quot;&lt;tr&gt;&lt;td class=\&quot;diff\&quot;&gt;&quot;;
+    private static final String CSS_DIFF_CLOSE     = &quot;&lt;/td&gt;&lt;/tr&gt;&quot;;
+
+    //FIXME This could/should be a property for this provider, there is not guarentee that
+    //the external program generates a format suitible for the colorization code of the
+    //TraditionalDiffProvider, currently set to true for legacy compatibility.
+    //I don't think this 'feature' ever worked right, did it?...
+<span class="nc" id="L64">    private boolean m_traditionalColorization = true;</span>
+
+    /**
+     *  Creates a new ExternalDiffProvider.
+     */
+    public ExternalDiffProvider()
+<span class="nc" id="L70">    {</span>
+<span class="nc" id="L71">    }</span>
+
+    /**
+     * @see org.apache.wiki.WikiProvider#getProviderInfo()
+     * {@inheritDoc}
+     */
+    public String getProviderInfo()
+    {
+<span class="nc" id="L79">        return &quot;ExternalDiffProvider&quot;;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.WikiProvider#initialize(org.apache.wiki.WikiEngine, java.util.Properties)
+     */
+    public void initialize( WikiEngine engine, Properties properties )
+        throws NoRequiredPropertyException, IOException
+    {
+<span class="nc" id="L89">        m_diffCommand = properties.getProperty( PROP_DIFFCOMMAND );</span>
+
+<span class="nc bnc" id="L91" title="All 4 branches missed.">        if( (null == m_diffCommand) || (m_diffCommand.trim().equals( &quot;&quot; )) )</span>
+        {
+<span class="nc" id="L93">            throw new NoRequiredPropertyException( &quot;ExternalDiffProvider missing required property&quot;, PROP_DIFFCOMMAND );</span>
+        }
+
+<span class="nc" id="L96">        m_encoding = engine.getContentEncoding();</span>
+<span class="nc" id="L97">    }</span>
+
+
+    /**
+     * Makes the diff by calling &quot;diff&quot; program.
+     * {@inheritDoc}
+     */
+    public String makeDiffHtml( WikiContext ctx, String p1, String p2 )
+    {
+<span class="nc" id="L106">        File f1 = null;</span>
+<span class="nc" id="L107">        File f2 = null;</span>
+<span class="nc" id="L108">        String diff = null;</span>
+
+        try
+        {
+<span class="nc" id="L112">            f1 = FileUtil.newTmpFile(p1, m_encoding);</span>
+<span class="nc" id="L113">            f2 = FileUtil.newTmpFile(p2, m_encoding);</span>
+
+<span class="nc" id="L115">            String cmd = TextUtil.replaceString(m_diffCommand, &quot;%s1&quot;, f1.getPath());</span>
+<span class="nc" id="L116">            cmd = TextUtil.replaceString(cmd, &quot;%s2&quot;, f2.getPath());</span>
+
+<span class="nc" id="L118">            String output = FileUtil.runSimpleCommand(cmd, f1.getParent());</span>
+
+            // FIXME: Should this rely on the system default encoding?
+<span class="nc" id="L121">            String rawWikiDiff = new String(output.getBytes(&quot;ISO-8859-1&quot;), m_encoding);</span>
+
+<span class="nc" id="L123">            String htmlWikiDiff = TextUtil.replaceEntities( rawWikiDiff );</span>
+
+<span class="nc bnc" id="L125" title="All 2 branches missed.">            if (m_traditionalColorization) //FIXME, see comment near declaration...</span>
+<span class="nc" id="L126">                diff = colorizeDiff(htmlWikiDiff);</span>
+            else
+<span class="nc" id="L128">                diff = htmlWikiDiff;</span>
+
+        }
+<span class="nc" id="L131">        catch (IOException e)</span>
+        {
+<span class="nc" id="L133">            log.error(&quot;Failed to do file diff&quot;, e);</span>
+        }
+<span class="nc" id="L135">        catch (InterruptedException e)</span>
+        {
+<span class="nc" id="L137">            log.error(&quot;Interrupted&quot;, e);</span>
+        }
+        finally
+        {
+<span class="nc bnc" id="L141" title="All 2 branches missed.">            if( f1 != null )</span>
+<span class="nc" id="L142">                f1.delete();</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">            if( f2 != null )</span>
+<span class="nc" id="L144">                f2.delete();</span>
+        }
+
+<span class="nc" id="L147">        return diff;</span>
+    }
+
+
+    /**
+     * Goes through output provided by a diff command and inserts HTML tags to
+     * make the result more legible. Currently colors lines starting with a +
+     * green, those starting with - reddish (hm, got to think of color blindness
+     * here...).
+     */
+    static String colorizeDiff(String diffText) throws IOException
+    {
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if( diffText == null )</span>
+<span class="nc" id="L160">            return &quot;Invalid diff - probably something wrong with server setup.&quot;;</span>
+
+<span class="nc" id="L162">        String line = null;</span>
+<span class="nc" id="L163">        String start = null;</span>
+<span class="nc" id="L164">        String stop = null;</span>
+
+<span class="nc" id="L166">        BufferedReader in = new BufferedReader( new StringReader( diffText ) );</span>
+<span class="nc" id="L167">        StringBuilder out = new StringBuilder();</span>
+
+<span class="nc" id="L169">        out.append(&quot;&lt;table class=\&quot;diff\&quot; border=\&quot;0\&quot; cellspacing=\&quot;0\&quot; cellpadding=\&quot;0\&quot;&gt;\n&quot;);</span>
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        while( (line = in.readLine()) != null )</span>
+        {
+<span class="nc" id="L172">            stop = CSS_DIFF_CLOSE;</span>
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            if( line.length() &gt; 0 )</span>
+            {
+<span class="nc bnc" id="L176" title="All 3 branches missed.">                switch( line.charAt( 0 ) )</span>
+                {
+                    case DIFF_ADDED_SYMBOL:
+<span class="nc" id="L179">                        start = CSS_DIFF_ADDED;</span>
+<span class="nc" id="L180">                        break;</span>
+                    case DIFF_REMOVED_SYMBOL:
+<span class="nc" id="L182">                        start = CSS_DIFF_REMOVED;</span>
+<span class="nc" id="L183">                        break;</span>
+                    default:
+<span class="nc" id="L185">                        start = CSS_DIFF_UNCHANGED;</span>
+                }
+            }
+            else
+            {
+<span class="nc" id="L190">                start = CSS_DIFF_UNCHANGED;</span>
+            }
+
+<span class="nc" id="L193">            out.append( start );</span>
+<span class="nc" id="L194">            out.append( line.trim() );</span>
+<span class="nc" id="L195">            out.append( stop + &quot;\n&quot; );</span>
+        }
+
+<span class="nc" id="L198">        out.append( &quot;&lt;/table&gt;\n&quot; );</span>
+<span class="nc" id="L199">        return out.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

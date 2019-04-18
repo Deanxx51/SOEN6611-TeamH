@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CheckLockTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">CheckLockTag.java</span></div><h1>CheckLockTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.pages.PageLock;
+import org.apache.wiki.pages.PageManager;
+
+import javax.servlet.http.HttpSession;
+
+/**
+ *  Checks whether the page is locked for editing.  If the mode matches,
+ *  the tag body is included.  The &quot;mode&quot; can be any of the following:
+ *  
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;locked&lt;/b&gt; - The page is currently locked, but the lock is owned by someone else.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;owned&lt;/b&gt; - The page is currently locked and the current user is the owner of the lock.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;unlocked&lt;/b&gt; - Nobody has locked the page.&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *  
+ *  @since 2.0
+ */
+<span class="nc" id="L43">public class CheckLockTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 1L;
+    
+<span class="nc" id="L48">    private static enum LockState</span>
+    {
+<span class="nc" id="L50">        LOCKED, NOTLOCKED, OWNED</span>
+    }
+
+    private LockState m_mode;
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L61">        super.initTag();</span>
+<span class="nc" id="L62">        m_mode = LockState.NOTLOCKED;</span>
+<span class="nc" id="L63">    }</span>
+
+    /**
+     *  Sets the mode to check for.
+     *  
+     *  @param arg A String for the mode.
+     */
+    public void setMode( String arg )
+    {
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if( &quot;locked&quot;.equals(arg) )</span>
+        {
+<span class="nc" id="L74">            m_mode = LockState.LOCKED;</span>
+        }
+<span class="nc bnc" id="L76" title="All 2 branches missed.">        else if(&quot;owned&quot;.equals(arg) )</span>
+        {
+<span class="nc" id="L78">            m_mode = LockState.OWNED;</span>
+        }
+        else
+        {
+<span class="nc" id="L82">            m_mode = LockState.NOTLOCKED;</span>
+        }
+<span class="nc" id="L84">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+<span class="nc" id="L94">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L95">        WikiPage   page   = m_wikiContext.getPage();</span>
+
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if( page != null )</span>
+        {
+<span class="nc" id="L99">            PageManager mgr = engine.getPageManager();</span>
+
+<span class="nc" id="L101">            PageLock lock = mgr.getCurrentLock( page );</span>
+
+<span class="nc" id="L103">            HttpSession session = pageContext.getSession();</span>
+
+<span class="nc" id="L105">            PageLock userLock = (PageLock) session.getAttribute(&quot;lock-&quot;+page.getName());</span>
+
+<span class="nc bnc" id="L107" title="All 16 branches missed.">            if( (lock != null &amp;&amp; m_mode == LockState.LOCKED &amp;&amp; lock != userLock ) ||</span>
+                (lock != null &amp;&amp; m_mode == LockState.OWNED &amp;&amp; lock == userLock ) ||
+                (lock == null &amp;&amp; m_mode == LockState.NOTLOCKED) )
+            {
+<span class="nc" id="L111">                String tid = getId();</span>
+
+<span class="nc bnc" id="L113" title="All 4 branches missed.">                if( tid != null &amp;&amp; lock != null )</span>
+                {
+<span class="nc" id="L115">                    pageContext.setAttribute( tid, lock );</span>
+                }
+
+<span class="nc" id="L118">                return EVAL_BODY_INCLUDE;</span>
+            }
+        }
+
+<span class="nc" id="L122">        return SKIP_BODY;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

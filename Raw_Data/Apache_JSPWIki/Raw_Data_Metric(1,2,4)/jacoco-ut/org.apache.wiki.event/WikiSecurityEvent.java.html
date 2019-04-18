@@ -1,0 +1,278 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiSecurityEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">WikiSecurityEvent.java</span></div><h1>WikiSecurityEvent.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.event;
+
+import java.security.Principal;
+
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+/**
+ * &lt;p&gt;Event class for security events: login/logout, wiki group adds/changes, and
+ * authorization decisions. When a WikiSecurityEvent is constructed, the
+ * security logger {@link #log} is notified.&lt;/p&gt;
+ * &lt;p&gt;These events are logged with priority &lt;code&gt;ERROR&lt;/code&gt;:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;login failed - bad credential or password&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;These events are logged with priority &lt;code&gt;WARN&lt;/code&gt;:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;access denied&lt;/li&gt;
+ *   &lt;li&gt;login failed - credential expired&lt;/li&gt;
+ *   &lt;li&gt;login failed - account expired&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;These events are logged with priority &lt;code&gt;INFO&lt;/code&gt;:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;login succeeded&lt;/li&gt;
+ *   &lt;li&gt;logout&lt;/li&gt;
+ *   &lt;li&gt;user profile name changed&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;These events are logged with priority &lt;code&gt;DEBUG&lt;/code&gt;:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;access allowed&lt;/li&gt;
+ *   &lt;li&gt;add group&lt;/li&gt;
+ *   &lt;li&gt;remove group&lt;/li&gt;
+ *   &lt;li&gt;clear all groups&lt;/li&gt;
+ *   &lt;li&gt;add group member&lt;/li&gt;
+ *   &lt;li&gt;remove group member&lt;/li&gt;
+ *   &lt;li&gt;clear all members from group&lt;/li&gt;
+ * &lt;/ul&gt;
+ * @since 2.3.79
+ */
+public final class WikiSecurityEvent extends WikiEvent
+{
+
+    private static final long serialVersionUID    = -6751950399721334496L;
+
+    /** When a user's attempts to log in as guest, via cookies, using a password or otherwise. */
+    public static final int   LOGIN_INITIATED          = 30;
+    
+    /** When a user first accesses JSPWiki, but before logging in or setting a cookie. */
+    public static final int   LOGIN_ANONYMOUS          = 31;
+    
+    /** When a user sets a cookie to assert their identity. */
+    public static final int   LOGIN_ASSERTED           = 32;
+    
+    /** When a user authenticates with a username and password, or via container auth. */
+    public static final int   LOGIN_AUTHENTICATED      = 40;
+
+    /** When a login fails due to account expiration. */
+    public static final int   LOGIN_ACCOUNT_EXPIRED    = 41;
+    
+    /** When a login fails due to credential expiration. */
+    public static final int   LOGIN_CREDENTIAL_EXPIRED = 42;
+    
+    /** When a login fails due to wrong username or password. */
+    public static final int   LOGIN_FAILED             = 43;
+    
+    /** When a user logs out. */
+    public static final int   LOGOUT                   = 44;
+
+    /** When a Principal should be added to the WikiSession */
+    public static final int PRINCIPAL_ADD               = 35;
+
+    /** When a session expires. */
+    public static final int   SESSION_EXPIRED          = 45;
+
+    /** When a new wiki group is added. */
+    public static final int   GROUP_ADD                = 46;
+
+    /** When a wiki group is deleted. */
+    public static final int   GROUP_REMOVE             = 47;
+
+    /** When all wiki groups are removed from GroupDatabase. */
+    public static final int   GROUP_CLEAR_GROUPS       = 48;
+
+    /** When access to a resource is allowed. */
+    public static final int   ACCESS_ALLOWED           = 51;
+    
+    /** When access to a resource is allowed. */
+    public static final int   ACCESS_DENIED            = 52;
+    
+    /** When a user profile is saved. */
+    public static final int   PROFILE_SAVE             = 53;
+    
+    /** When a user profile name changes. */
+    public static final int   PROFILE_NAME_CHANGED     = 54;
+    
+    /** The security logging service. */
+<span class="fc" id="L116">    protected static final Logger log = Logger.getLogger( &quot;SecurityLog&quot; );</span>
+    
+    private final Principal m_principal;
+    
+    private final Object      m_target;
+
+<span class="fc" id="L122">    private static final int[] ERROR_EVENTS = { LOGIN_FAILED };</span>
+    
+<span class="fc" id="L124">    private static final int[] WARN_EVENTS  = { LOGIN_ACCOUNT_EXPIRED,</span>
+                                                LOGIN_CREDENTIAL_EXPIRED };
+    
+<span class="fc" id="L127">    private static final int[] INFO_EVENTS  = { LOGIN_AUTHENTICATED,</span>
+                                                SESSION_EXPIRED, LOGOUT, PROFILE_NAME_CHANGED };
+    
+    /**
+     * Constructs a new instance of this event type, which signals a security
+     * event has occurred. The &lt;code&gt;source&lt;/code&gt; parameter is required, and
+     * may not be &lt;code&gt;null&lt;/code&gt;. When the WikiSecurityEvent is
+     * constructed, the security logger {@link #log} is notified.
+     * @param src the source of the event, which can be any object: a wiki
+     *            page, group or authentication/authentication/group manager.
+     * @param type the type of event
+     * @param principal the subject of the event, which may be &lt;code&gt;null&lt;/code&gt;
+     * @param target the changed Object, which may be &lt;code&gt;null&lt;/code&gt;
+     */
+    public WikiSecurityEvent( Object src, int type, Principal principal, Object target )
+    {
+<span class="fc" id="L143">        super( src, type );</span>
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">        if ( src == null )</span>
+        {
+<span class="nc" id="L146">            throw new IllegalArgumentException( &quot;Argument(s) cannot be null.&quot; );</span>
+        }
+<span class="fc" id="L148">        this.m_principal = principal;</span>
+<span class="fc" id="L149">        this.m_target = target;</span>
+<span class="pc bpc" id="L150" title="2 of 4 branches missed.">        if ( log.isEnabledFor( Level.ERROR ) &amp;&amp; ArrayUtils.contains( ERROR_EVENTS, type ) )</span>
+        {
+<span class="nc" id="L152">            log.error( this );</span>
+        }
+<span class="pc bpc" id="L154" title="2 of 4 branches missed.">        else if ( log.isEnabledFor( Level.WARN ) &amp;&amp; ArrayUtils.contains( WARN_EVENTS, type ) )</span>
+        {
+<span class="nc" id="L156">            log.warn( this );</span>
+        }
+<span class="pc bpc" id="L158" title="1 of 4 branches missed.">        else if ( log.isEnabledFor( Level.INFO ) &amp;&amp; ArrayUtils.contains( INFO_EVENTS, type ) )</span>
+        {
+<span class="fc" id="L160">            log.info( this );</span>
+        }
+<span class="fc" id="L162">        log.debug( this );</span>
+<span class="fc" id="L163">    }</span>
+
+    /**
+     * Constructs a new instance of this event type, which signals a security
+     * event has occurred. The &lt;code&gt;source&lt;/code&gt; parameter is required, and
+     * may not be &lt;code&gt;null&lt;/code&gt;. When the WikiSecurityEvent is
+     * constructed, the security logger {@link #log} is notified.
+     * @param src the source of the event, which can be any object: a wiki
+     *            page, group or authentication/authentication/group manager.
+     * @param type the type of event
+     * @param target the changed Object, which may be &lt;code&gt;null&lt;/code&gt;.
+     */
+    public WikiSecurityEvent( Object src, int type, Object target )
+    {
+<span class="fc" id="L177">        this( src, type, null, target );</span>
+<span class="fc" id="L178">    }</span>
+
+    /**
+     * Returns the principal to whom the opeation applied, if supplied. This
+     * method may return &lt;code&gt;null&lt;/code&gt;
+     * &lt;em&gt;&amp;#8212; and calling methods should check for this condition&lt;/em&gt;.
+     * @return the changed object
+     */
+    public Object getPrincipal()
+    {
+<span class="fc" id="L188">        return m_principal;</span>
+    }
+    
+    /**
+     * Returns the object that was operated on, if supplied. This method may
+     * return &lt;code&gt;null&lt;/code&gt;
+     * &lt;em&gt;&amp;#8212; and calling methods should check for this condition&lt;/em&gt;.
+     * @return the changed object
+     */
+    public Object getTarget()
+    {
+<span class="fc" id="L199">        return m_target;</span>
+    }
+
+    /**
+     * Prints a String (human-readable) representation of this object.
+     * @see java.lang.Object#toString()
+     */
+    public String toString()
+    {
+<span class="fc" id="L208">    	StringBuilder msg = new StringBuilder();</span>
+<span class="fc" id="L209">        msg.append( &quot;WikiSecurityEvent.&quot; );</span>
+<span class="fc" id="L210">        msg.append(  eventName( getType() ) );</span>
+<span class="fc" id="L211">        Object obj = getSrc(); // cfr. https://forums.oracle.com/forums/thread.jspa?threadID=1184115</span>
+<span class="fc" id="L212">        msg.append( &quot; [source=&quot; + obj.toString() );</span>
+<span class="fc bfc" id="L213" title="All 2 branches covered.">        if( m_principal != null )</span>
+        {
+<span class="fc" id="L215">            msg.append( &quot;, princpal=&quot; + m_principal.getClass().getName() );</span>
+<span class="fc" id="L216">            msg.append( &quot; &quot; + m_principal.getName() );</span>
+        }
+<span class="fc" id="L218">        msg.append( &quot;, target=&quot; + m_target );</span>
+<span class="fc" id="L219">        msg.append( &quot;]&quot; );</span>
+<span class="fc" id="L220">        return msg.toString();</span>
+    }
+    
+    /**
+     * Returns a textual representation of an event type.
+     * @param type the type
+     * @return the string representation
+     */
+    public String eventName( int type )
+    {
+<span class="pc bpc" id="L230" title="13 of 15 branches missed.">        switch( type )</span>
+        {
+<span class="fc" id="L232">            case LOGIN_AUTHENTICATED:       return &quot;LOGIN_AUTHENTICATED&quot;;</span>
+<span class="nc" id="L233">            case LOGIN_ACCOUNT_EXPIRED:     return &quot;LOGIN_ACCOUNT_EXPIRED&quot;;</span>
+<span class="nc" id="L234">            case LOGIN_CREDENTIAL_EXPIRED:  return &quot;LOGIN_ACCOUNT_EXPIRED&quot;;</span>
+<span class="nc" id="L235">            case LOGIN_FAILED:              return &quot;LOGIN_FAILED&quot;;</span>
+<span class="nc" id="L236">            case LOGOUT:                    return &quot;LOGOUT&quot;;</span>
+<span class="nc" id="L237">            case PRINCIPAL_ADD:             return &quot;PRINCIPAL_ADD&quot;;</span>
+<span class="nc" id="L238">            case SESSION_EXPIRED:           return &quot;SESSION_EXPIRED&quot;;</span>
+<span class="nc" id="L239">            case GROUP_ADD:                 return &quot;GROUP_ADD&quot;;</span>
+<span class="nc" id="L240">            case GROUP_REMOVE:              return &quot;GROUP_REMOVE&quot;;</span>
+<span class="nc" id="L241">            case GROUP_CLEAR_GROUPS:        return &quot;GROUP_CLEAR_GROUPS&quot;;</span>
+<span class="nc" id="L242">            case ACCESS_ALLOWED:            return &quot;ACCESS_ALLOWED&quot;;</span>
+<span class="nc" id="L243">            case ACCESS_DENIED:             return &quot;ACCESS_DENIED&quot;;</span>
+<span class="fc" id="L244">            case PROFILE_NAME_CHANGED:      return &quot;PROFILE_NAME_CHANGED&quot;;</span>
+<span class="nc" id="L245">            case PROFILE_SAVE:              return &quot;PROFILE_SAVE&quot;;</span>
+<span class="nc" id="L246">            default:                        return super.eventName();</span>
+        }
+    }
+
+    /**
+     *  Returns a human-readable description of the event type.
+     *
+     * @return a String description of the type
+     */
+    public String getTypeDescription()
+    {
+<span class="nc bnc" id="L257" title="All 15 branches missed.">        switch ( getType() )</span>
+        {
+<span class="nc" id="L259">            case LOGIN_AUTHENTICATED:       return &quot;login authenticated&quot;;</span>
+<span class="nc" id="L260">            case LOGIN_ACCOUNT_EXPIRED:     return &quot;login failed: expired account&quot;;</span>
+<span class="nc" id="L261">            case LOGIN_CREDENTIAL_EXPIRED:  return &quot;login failed: credential expired&quot;;</span>
+<span class="nc" id="L262">            case LOGIN_FAILED:              return &quot;login failed&quot;;</span>
+<span class="nc" id="L263">            case LOGOUT:                    return &quot;user logged out&quot;;</span>
+<span class="nc" id="L264">            case PRINCIPAL_ADD:             return &quot;new principal added&quot;;</span>
+<span class="nc" id="L265">            case SESSION_EXPIRED:           return &quot;session expired&quot;;</span>
+<span class="nc" id="L266">            case GROUP_ADD:                 return &quot;new group added&quot;;</span>
+<span class="nc" id="L267">            case GROUP_REMOVE:              return &quot;group removed&quot;;</span>
+<span class="nc" id="L268">            case GROUP_CLEAR_GROUPS:        return &quot;all groups cleared&quot;;</span>
+<span class="nc" id="L269">            case ACCESS_ALLOWED:            return &quot;access allowed&quot;;</span>
+<span class="nc" id="L270">            case ACCESS_DENIED:             return &quot;access denied&quot;;</span>
+<span class="nc" id="L271">            case PROFILE_NAME_CHANGED:      return &quot;user profile name changed&quot;;</span>
+<span class="nc" id="L272">            case PROFILE_SAVE:              return &quot;user profile saved&quot;;</span>
+<span class="nc" id="L273">            default:                        return super.getTypeDescription();</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

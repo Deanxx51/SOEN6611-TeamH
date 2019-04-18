@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WysiwygEditingRenderer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.render</a> &gt; <span class="el_source">WysiwygEditingRenderer.java</span></div><h1>WysiwygEditingRenderer.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.render;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.util.Iterator;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.htmltowiki.XHtmlToWikiConfig;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.parser.WikiDocument;
+import org.jdom2.Attribute;
+import org.jdom2.Element;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
+
+/**
+ *  Implements a WikiRendered that outputs XHTML in a format that is suitable
+ *  for use by a WYSIWYG XHTML editor.
+ *
+ *  @since  2.5
+ */
+public class WysiwygEditingRenderer
+    extends WikiRenderer
+{
+
+    private static final String A_ELEMENT = &quot;a&quot;;
+    private static final String IMG_ELEMENT = &quot;img&quot;;
+//    private static final String PRE_ELEMENT = &quot;pre&quot;;
+    private static final String CLASS_ATTRIBUTE = &quot;class&quot;;
+    private static final String HREF_ATTRIBUTE = &quot;href&quot;;
+    private static final String TITLE_ATTRIBUTE = &quot;title&quot;;
+    private static final String LINEBREAK = &quot;\n&quot;;
+
+    /**
+     *  Creates a WYSIWYG editing renderer.
+     *
+     *  @param context A WikiContext in which the rendering will take place.
+     *  @param doc The WikiDocument which shall be rendered.
+     */
+    public WysiwygEditingRenderer( WikiContext context, WikiDocument doc )
+    {
+<span class="fc" id="L60">        super( context, doc );</span>
+<span class="fc" id="L61">    }</span>
+
+    /*
+     * Recursively walk the XHTML DOM tree and manipulate specific elements to
+     * make them better for WYSIWYG editing.
+     */
+    private void processChildren(Element baseElement)
+    {
+<span class="fc bfc" id="L69" title="All 2 branches covered.">        for( Iterator&lt; Element &gt; itr = baseElement.getChildren().iterator(); itr.hasNext(); )</span>
+        {
+<span class="fc" id="L71">            Element element = itr.next();</span>
+<span class="fc" id="L72">            String elementName = element.getName().toLowerCase();</span>
+<span class="fc" id="L73">            Attribute classAttr = element.getAttribute( CLASS_ATTRIBUTE );</span>
+
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">            if( elementName.equals( A_ELEMENT ) )</span>
+            {
+<span class="pc bpc" id="L77" title="1 of 2 branches missed.">                if( classAttr != null )</span>
+                {
+<span class="fc" id="L79">                    String classValue = classAttr.getValue();</span>
+<span class="fc" id="L80">                    Attribute hrefAttr = element.getAttribute( HREF_ATTRIBUTE );</span>
+
+<span class="fc" id="L82">                    XHtmlToWikiConfig wikiConfig = new XHtmlToWikiConfig( m_context );</span>
+
+                    // Get the url for wiki page link - it's typically &quot;Wiki.jsp?page=MyPage&quot;
+                    // or when using the ShortURLConstructor option, it's &quot;wiki/MyPage&quot; .
+<span class="fc" id="L86">                    String wikiPageLinkUrl = wikiConfig.getWikiJspPage();</span>
+<span class="fc" id="L87">                    String editPageLinkUrl = wikiConfig.getEditJspPage();</span>
+
+                    //if( classValue.equals( WIKIPAGE )
+                    //    || ( hrefAttr != null &amp;&amp; hrefAttr.getValue().startsWith( wikiPageLinkUrl ) ) )
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">                    if( //classValue.equals( WIKIPAGE ) &amp;&amp;</span>
+                        ( hrefAttr != null )
+<span class="fc bfc" id="L93" title="All 2 branches covered.">                    &amp;&amp;  ( hrefAttr.getValue().startsWith( wikiPageLinkUrl ) ) )</span>
+                    {
+                        // Remove the leading url string so that users will only see the
+                        // wikipage's name when editing an existing wiki link.
+                        // For example, change &quot;Wiki.jsp?page=MyPage&quot; to just &quot;MyPage&quot;.
+
+<span class="fc" id="L99">                        String newHref = hrefAttr.getValue().substring( wikiPageLinkUrl.length() );</span>
+
+                        // Convert &quot;This%20Pagename%20Has%20Spaces&quot; to &quot;This Pagename Has Spaces&quot;
+<span class="fc" id="L102">                        newHref = m_context.getEngine().decodeName( newHref );</span>
+
+                        // Handle links with section anchors.
+                        // For example, we need to translate the html string &quot;TargetPage#section-TargetPage-Heading2&quot;
+                        // to this wiki string: &quot;TargetPage#Heading2&quot;.
+<span class="fc" id="L107">                        hrefAttr.setValue( newHref.replaceFirst( LINKS_SOURCE, LINKS_TRANSLATION ) );</span>
+
+<span class="fc" id="L109">                    }</span>
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">                    else if( //classValue.equals( EDITPAGE ) &amp;&amp;</span>
+                            ( hrefAttr != null )
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">                         &amp;&amp; ( hrefAttr.getValue().startsWith( editPageLinkUrl ) ) )</span>
+                    {
+
+<span class="fc" id="L115">                        Attribute titleAttr = element.getAttribute( TITLE_ATTRIBUTE );</span>
+<span class="pc bpc" id="L116" title="1 of 2 branches missed.">                        if( titleAttr != null )</span>
+                        {
+                                // remove the title since we don't want to eventually save the default undefined page title.
+<span class="fc" id="L119">                                titleAttr.detach();</span>
+                        }
+
+<span class="fc" id="L122">                        String newHref = hrefAttr.getValue().substring( editPageLinkUrl.length() );</span>
+<span class="fc" id="L123">                        newHref = m_context.getEngine().decodeName( newHref );</span>
+
+<span class="fc" id="L125">                        hrefAttr.setValue( newHref );</span>
+<span class="fc" id="L126">                    }</span>
+
+<span class="nc bnc" id="L128" title="All 2 branches missed.">                    else if( classValue.equals( MarkupParser.HASHLINK ) )</span>
+                    {
+<span class="nc" id="L130">                        itr.remove(); //remove element without disturbing the ongoing iteration</span>
+<span class="nc" id="L131">                        continue;  //take next iteration of the for loop</span>
+                    }
+<span class="fc" id="L133">                }</span>
+            } // end of check for &quot;a&quot; element
+
+<span class="nc bnc" id="L136" title="All 2 branches missed.">            else if ( elementName.equals( IMG_ELEMENT ) )</span>
+            {
+<span class="nc bnc" id="L138" title="All 2 branches missed.">                if( classAttr != null )</span>
+                {
+<span class="nc" id="L140">                    String classValue = classAttr.getValue();</span>
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">                    if( classValue.equals( MarkupParser.OUTLINK ) )</span>
+                    {
+<span class="nc" id="L144">                        itr.remove(); //remove element without disturbing the ongoing iteration</span>
+<span class="nc" id="L145">                        continue; //take next iteration of the for loop</span>
+                    }
+
+                }
+
+            }
+
+<span class="fc" id="L152">            processChildren( element );</span>
+<span class="fc" id="L153">        }</span>
+<span class="fc" id="L154">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String getString()
+        throws IOException
+    {
+<span class="fc" id="L162">        Element rootElement = m_document.getRootElement();</span>
+<span class="fc" id="L163">        processChildren( rootElement );</span>
+
+<span class="fc" id="L165">        m_document.setContext( m_context );</span>
+
+<span class="fc" id="L167">        XMLOutputter output = new XMLOutputter();</span>
+
+<span class="fc" id="L169">        StringWriter out = new StringWriter();</span>
+
+<span class="fc" id="L171">        Format fmt = Format.getRawFormat();</span>
+<span class="fc" id="L172">        fmt.setExpandEmptyElements( false );</span>
+<span class="fc" id="L173">        fmt.setLineSeparator( LINEBREAK );</span>
+
+<span class="fc" id="L175">        output.setFormat( fmt );</span>
+<span class="fc" id="L176">        output.outputElementContent( m_document.getRootElement(), out );</span>
+
+<span class="fc" id="L178">        return out.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

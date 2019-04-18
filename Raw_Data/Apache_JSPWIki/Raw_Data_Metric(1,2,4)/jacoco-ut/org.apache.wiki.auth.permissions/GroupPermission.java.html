@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GroupPermission.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.permissions</a> &gt; <span class="el_source">GroupPermission.java</span></div><h1>GroupPermission.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.permissions;
+
+import java.io.Serializable;
+import java.security.AccessControlContext;
+import java.security.AccessController;
+import java.security.DomainCombiner;
+import java.security.Permission;
+import java.security.Principal;
+import java.util.Arrays;
+import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.auth.SubjectDomainCombiner;
+
+import org.apache.wiki.auth.GroupPrincipal;
+
+/**
+ * &lt;p&gt;
+ * Permission to perform an operation on a group in a given wiki. Permission
+ * actions include: &lt;code&gt;view&lt;/code&gt;, &lt;code&gt;edit&lt;/code&gt;, &lt;code&gt;delete&lt;/code&gt;.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * The target of a permission is a single group or collection in a given wiki.
+ * The syntax for the target is the wiki name, followed by a colon (:) and the
+ * name of the group. &amp;#8220;All wikis&amp;#8221; can be specified using a wildcard (*). Group
+ * collections may also be specified using a wildcard. For groups, the wildcard
+ * may be a prefix, suffix, or all by itself. Examples of targets include:
+ * &lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;*:*&lt;br/&gt;
+ * *:TestPlanners&lt;br/&gt;
+ * *:*Planners&lt;br/&gt;
+ * *:Test*&lt;br/&gt;
+ * mywiki:TestPlanners&lt;br/&gt;
+ * mywiki:*Planners&lt;br/&gt;
+ * mywiki:Test*&lt;/code&gt;
+ * &lt;/blockquote&gt;
+ * &lt;p&gt;
+ * For a given target, certain permissions imply others:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;code&gt;edit&lt;/code&gt;&amp;nbsp;implies&amp;nbsp;&lt;code&gt;view&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;delete&lt;/code&gt;&amp;nbsp;implies&amp;nbsp;&lt;code&gt;edit&lt;/code&gt; and
+ * &lt;code&gt;view&lt;/code&gt;&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;P&gt;Targets that do not include a wiki prefix &lt;em&gt;never &lt;/em&gt; imply others.&lt;/p&gt;
+ * &lt;p&gt;
+ * GroupPermission accepts a special target called
+ * &lt;code&gt;&amp;lt;groupmember&amp;gt;&lt;/code&gt; that means &amp;#8220;all groups that a user is a
+ * member of.&amp;#8221; When included in a policy file &lt;code&gt;grant&lt;/code&gt; block, it
+ * functions like a wildcard. Thus, this block:
+ *
+ * &lt;pre&gt;
+ *  grant signedBy &amp;quot;jspwiki&amp;quot;,
+ *    principal org.apache.wiki.auth.authorize.Role &amp;quot;Authenticated&amp;quot; {
+ *      permission org.apache.wiki.auth.permissions.GroupPermission &amp;quot;*:&amp;lt;groupmember&amp;gt;&amp;quot;, &amp;quot;edit&amp;quot;;
+ * &lt;/pre&gt;
+ *
+ * means, &amp;#8220;allow Authenticated users to edit any groups they are members of.&amp;#8221;
+ * The wildcard target (*) does &lt;em&gt;not&lt;/em&gt; imply &lt;code&gt;&amp;lt;groupmember&amp;gt;&lt;/code&gt;; it
+ * must be granted explicitly.
+ * @since 2.4.17
+ */
+public final class GroupPermission extends Permission implements Serializable
+{
+    /** Special target token that denotes all groups that a Subject's Principals are members of. */
+    public static final String         MEMBER_TOKEN     = &quot;&lt;groupmember&gt;&quot;;
+
+    private static final long           serialVersionUID = 1L;
+
+    /** Action for deleting a group or collection of groups. */
+    public static final String          DELETE_ACTION    = &quot;delete&quot;;
+
+    /** Action for editing a group or collection of groups. */
+    public static final String          EDIT_ACTION      = &quot;edit&quot;;
+
+    /** Action for viewing a group or collection of groups. */
+    public static final String          VIEW_ACTION      = &quot;view&quot;;
+
+    protected static final int          DELETE_MASK      = 0x4;
+
+    protected static final int          EDIT_MASK        = 0x2;
+
+    protected static final int          VIEW_MASK        = 0x1;
+
+    /** Convenience constant that denotes &lt;code&gt;GroupPermission( &quot;*:*, &quot;delete&quot; )&lt;/code&gt;. */
+<span class="fc" id="L104">    public static final GroupPermission DELETE           = new GroupPermission( DELETE_ACTION );</span>
+
+    /** Convenience constant that denotes &lt;code&gt;GroupPermission( &quot;*:*, &quot;edit&quot; )&lt;/code&gt;. */
+<span class="fc" id="L107">    public static final GroupPermission EDIT             = new GroupPermission( EDIT_ACTION );</span>
+
+    /** Convenience constant that denotes &lt;code&gt;GroupPermission( &quot;*:*, &quot;view&quot; )&lt;/code&gt;. */
+<span class="fc" id="L110">    public static final GroupPermission VIEW             = new GroupPermission( VIEW_ACTION );</span>
+
+    private static final String         ACTION_SEPARATOR = &quot;,&quot;;
+
+    private static final String         WILDCARD         = &quot;*&quot;;
+
+    private static final String         WIKI_SEPARATOR   = &quot;:&quot;;
+
+    private final String                m_actionString;
+
+    private final int                   m_mask;
+
+    private final String                m_group;
+
+    private final String                m_wiki;
+
+    /** For serialization purposes */
+    protected GroupPermission()
+    {
+<span class="nc" id="L129">        this(&quot;&quot;);</span>
+<span class="nc" id="L130">    }</span>
+    
+    /**
+     * Private convenience constructor that creates a new GroupPermission for
+     * all wikis and groups (*:*) and set of actions.
+     * @param actions
+     */
+    private GroupPermission( String actions )
+    {
+<span class="fc" id="L139">        this( WILDCARD + WIKI_SEPARATOR + WILDCARD, actions );</span>
+<span class="fc" id="L140">    }</span>
+
+    /**
+     * Creates a new GroupPermission for a specified group and set of actions.
+     * Group should include a prepended wiki name followed by a colon (:). If
+     * the wiki name is not supplied or starts with a colon, the group refers to
+     * all wikis.
+     * @param group the wiki group
+     * @param actions the allowed actions for this group
+     */
+    public GroupPermission( String group, String actions )
+    {
+<span class="fc" id="L152">        super( group );</span>
+
+        // Parse wiki and group (which may include wiki name and group)
+        // Strip out attachment separator; it is irrelevant.
+<span class="fc" id="L156">        String[] pathParams = group.split( WIKI_SEPARATOR );</span>
+        String groupName;
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        if ( pathParams.length &gt;= 2 )</span>
+        {
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">            m_wiki = pathParams[0].length() &gt; 0 ? pathParams[0] : null;</span>
+<span class="fc" id="L161">            groupName = pathParams[1];</span>
+        }
+        else
+        {
+<span class="fc" id="L165">            m_wiki = WILDCARD;</span>
+<span class="fc" id="L166">            groupName = pathParams[0];</span>
+        }
+<span class="fc" id="L168">        m_group = groupName;</span>
+
+        // Parse actions
+<span class="fc" id="L171">        String[] groupActions = actions.toLowerCase().split( ACTION_SEPARATOR );</span>
+<span class="fc" id="L172">        Arrays.sort( groupActions, String.CASE_INSENSITIVE_ORDER );</span>
+<span class="fc" id="L173">        m_mask = createMask( actions );</span>
+<span class="fc" id="L174">        StringBuilder buffer = new StringBuilder();</span>
+<span class="fc bfc" id="L175" title="All 2 branches covered.">        for( int i = 0; i &lt; groupActions.length; i++ )</span>
+        {
+<span class="fc" id="L177">            buffer.append( groupActions[i] );</span>
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">            if ( i &lt; ( groupActions.length - 1 ) )</span>
+            {
+<span class="nc" id="L180">                buffer.append( ACTION_SEPARATOR );</span>
+            }
+        }
+<span class="fc" id="L183">        m_actionString = buffer.toString();</span>
+<span class="fc" id="L184">    }</span>
+
+    /**
+     * Two PagePermission objects are considered equal if their actions (after
+     * normalization), wiki and target are equal.
+     * @param obj the object to compare
+     * @return the result of the comparison
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L195" title="1 of 2 branches missed.">        if ( !( obj instanceof GroupPermission ) )</span>
+        {
+<span class="nc" id="L197">            return false;</span>
+        }
+<span class="fc" id="L199">        GroupPermission p = (GroupPermission) obj;</span>
+<span class="pc bpc" id="L200" title="4 of 8 branches missed.">        return  p.m_mask == m_mask &amp;&amp; p.m_group.equals( m_group ) &amp;&amp; p.m_wiki != null &amp;&amp; p.m_wiki.equals( m_wiki );</span>
+    }
+
+    /**
+     * Returns the actions for this permission: &amp;#8220;view&amp;#8221;, &amp;#8220;edit&amp;#8221;, or &amp;#8220;delete&amp;#8221;. The
+     * actions will always be sorted in alphabetic order, and will always appear
+     * in lower case.
+     * @return the actions
+     * @see java.security.Permission#getActions()
+     */
+    public String getActions()
+    {
+<span class="nc" id="L212">        return m_actionString;</span>
+    }
+
+    /**
+     * Returns the name of the wiki group represented by this permission.
+     * @return the page name
+     */
+    public String getGroup()
+    {
+<span class="nc" id="L221">        return m_group;</span>
+    }
+
+    /**
+     * Returns the name of the wiki containing the group represented by this
+     * permission; may return the wildcard string.
+     * @return the wiki
+     */
+    public String getWiki()
+    {
+<span class="nc" id="L231">        return m_wiki;</span>
+    }
+
+    /**
+     * Returns the hash code for this GroupPermission.
+     * @return the hash code
+     * @see java.lang.Object#hashCode()
+     */
+    public int hashCode()
+    {
+        // If the wiki has not been set, uses a dummy value for the hashcode
+        // calculation. This may occur if the page given does not refer
+        // to any particular wiki
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">        String wiki =  m_wiki != null ? m_wiki : &quot;dummy_value&quot;;</span>
+<span class="fc" id="L245">        return m_mask + ( ( 13 * m_actionString.hashCode() ) * 23 * wiki.hashCode() );</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * GroupPermissions can only imply other GroupPermissions; no other
+     * permission types are implied. One GroupPermission implies another if its
+     * actions if three conditions are met:
+     * &lt;/p&gt;
+     * &lt;ol&gt;
+     * &lt;li&gt;The other GroupPermission&amp;#8217;s wiki is equal to, or a subset of, that
+     * of this permission. This permission&amp;#8217;s wiki is considered a superset of
+     * the other if it contains a matching prefix plus a wildcard, or a wildcard
+     * followed by a matching suffix.&lt;/li&gt;
+     * &lt;li&gt;The other GroupPermission&amp;#8217;s target is equal to, or a subset of, the
+     * target specified by this permission. This permission&amp;#8217;s target is
+     * considered a superset of the other if it contains a matching prefix plus
+     * a wildcard, or a wildcard followed by a matching suffix.&lt;/li&gt;
+     * &lt;li&gt;All of other GroupPermission&amp;#8217;s actions are equal to, or a subset of,
+     * those of this permission&lt;/li&gt;
+     * &lt;/ol&gt;
+     * @param permission the Permission to examine
+     * @return &lt;code&gt;true&lt;/code&gt; if the GroupPermission implies the
+     * supplied Permission; &lt;code&gt;false&lt;/code&gt; otherwise
+     * @see java.security.Permission#implies(java.security.Permission)
+     */
+    public boolean implies( Permission permission )
+    {
+        // Permission must be a GroupPermission
+<span class="nc bnc" id="L274" title="All 2 branches missed.">        if ( !( permission instanceof GroupPermission ) )</span>
+        {
+<span class="nc" id="L276">            return false;</span>
+        }
+
+        // Build up an &quot;implied mask&quot;
+<span class="nc" id="L280">        GroupPermission p = (GroupPermission) permission;</span>
+<span class="nc" id="L281">        int impliedMask = impliedMask( m_mask );</span>
+
+        // If actions aren't a proper subset, return false
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        if ( ( impliedMask &amp; p.m_mask ) != p.m_mask )</span>
+        {
+<span class="nc" id="L286">            return false;</span>
+        }
+
+        // See if the tested permission's wiki is implied
+<span class="nc" id="L290">        boolean impliedWiki = PagePermission.isSubset( m_wiki, p.m_wiki );</span>
+
+        // If this page is &quot;*&quot;, the tested permission's
+        // group is implied, unless implied permission has &lt;groupmember&gt; token
+        boolean impliedGroup;
+<span class="nc bnc" id="L295" title="All 2 branches missed.">        if ( MEMBER_TOKEN.equals( p.m_group ) )</span>
+        {
+<span class="nc" id="L297">            impliedGroup = MEMBER_TOKEN.equals( m_group );</span>
+        }
+        else
+        {
+<span class="nc" id="L301">            impliedGroup = PagePermission.isSubset( m_group, p.m_group );</span>
+        }
+
+        // See if this permission is &lt;groupmember&gt; and Subject possesses
+        // GroupPrincipal matching the implied GroupPermission's group
+<span class="nc" id="L306">        boolean impliedMember = impliesMember( p );</span>
+
+<span class="nc bnc" id="L308" title="All 6 branches missed.">        return  impliedWiki &amp;&amp; ( impliedGroup || impliedMember );</span>
+    }
+
+    /**
+     * Prints a human-readable representation of this permission.
+     * @return the string
+     * @see java.lang.Object#toString()
+     */
+    public String toString()
+    {
+<span class="nc bnc" id="L318" title="All 2 branches missed.">        String wiki = ( m_wiki == null ) ? &quot;&quot; : m_wiki;</span>
+<span class="nc" id="L319">        return &quot;(\&quot;&quot; + this.getClass().getName() + &quot;\&quot;,\&quot;&quot; + wiki + WIKI_SEPARATOR + m_group + &quot;\&quot;,\&quot;&quot; + getActions()</span>
+                + &quot;\&quot;)&quot;;
+    }
+
+    /**
+     * Creates an &amp;#8220;implied mask&amp;#8221; based on the actions originally assigned: for
+     * example, delete implies edit; edit implies view.
+     * @param mask binary mask for actions
+     * @return binary mask for implied actions
+     */
+    protected static int impliedMask( int mask )
+    {
+<span class="nc bnc" id="L331" title="All 2 branches missed.">        if ( ( mask &amp; DELETE_MASK ) &gt; 0 )</span>
+        {
+<span class="nc" id="L333">            mask |= EDIT_MASK;</span>
+        }
+<span class="nc bnc" id="L335" title="All 2 branches missed.">        if ( ( mask &amp; EDIT_MASK ) &gt; 0 )</span>
+        {
+<span class="nc" id="L337">            mask |= VIEW_MASK;</span>
+        }
+<span class="nc" id="L339">        return mask;</span>
+    }
+
+    /**
+     * Protected method that creates a binary mask based on the actions specified.
+     * This is used by {@link #implies(Permission)}.
+     * @param actions the actions for this permission, separated by commas
+     * @return the binary actions mask
+     */
+    protected static int createMask( String actions )
+    {
+<span class="pc bpc" id="L350" title="2 of 4 branches missed.">        if ( actions == null || actions.length() == 0 )</span>
+        {
+<span class="nc" id="L352">            throw new IllegalArgumentException( &quot;Actions cannot be blank or null&quot; );</span>
+        }
+<span class="fc" id="L354">        int mask = 0;</span>
+<span class="fc" id="L355">        String[] actionList = actions.split( ACTION_SEPARATOR );</span>
+<span class="fc bfc" id="L356" title="All 2 branches covered.">        for( String action : actionList )</span>
+        {
+<span class="fc bfc" id="L358" title="All 2 branches covered.">            if ( action.equalsIgnoreCase( VIEW_ACTION ) )</span>
+            {
+<span class="fc" id="L360">                mask |= VIEW_MASK;</span>
+            }
+<span class="fc bfc" id="L362" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( EDIT_ACTION ) )</span>
+            {
+<span class="fc" id="L364">                mask |= EDIT_MASK;</span>
+            }
+<span class="pc bpc" id="L366" title="1 of 2 branches missed.">            else if ( action.equalsIgnoreCase( DELETE_ACTION ) )</span>
+            {
+<span class="fc" id="L368">                mask |= DELETE_MASK;</span>
+            }
+            else
+            {
+<span class="nc" id="L372">                throw new IllegalArgumentException( &quot;Unrecognized action: &quot; + action );</span>
+            }
+        }
+<span class="fc" id="L375">        return mask;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns &lt;code&gt;true&lt;/code&gt; if this GroupPermission was created with the
+     * token &lt;code&gt;&amp;lt;groupmember&amp;gt;&lt;/code&gt;
+     * &lt;em&gt;and&lt;/em&gt; the current
+     * thread&amp;#8217;s Subject is a member of the Group indicated by the implied
+     * GroupPermission. Thus, a GroupPermission with the group
+     * &lt;code&gt;&amp;lt;groupmember&amp;gt;&lt;/code&gt; implies GroupPermission for group
+     * &quot;TestGroup&quot; only if the Subject is a member of TestGroup.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * We make this determination by obtaining the current {@link Thread}&amp;#8217;s
+     * {@link java.security.AccessControlContext} and requesting the
+     * {@link javax.security.auth.SubjectDomainCombiner}. If the combiner is
+     * not &lt;code&gt;null&lt;/code&gt;, then we know that the access check was
+     * requested using a {@link javax.security.auth.Subject}; that is, that an
+     * upstream caller caused a Subject to be associated with the Thread&amp;#8217;s
+     * ProtectionDomain by executing a
+     * {@link javax.security.auth.Subject#doAs(Subject, java.security.PrivilegedAction)}
+     * operation.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * If a SubjectDomainCombiner exists, determining group membership is
+     * simple: just iterate through the Subject&amp;#8217;s Principal set and look for all
+     * Principals of type {@link org.apache.wiki.auth.GroupPrincipal}. If the
+     * name of any Principal matches the value of the implied Permission&amp;#8217;s
+     * {@link GroupPermission#getGroup()} value, then the Subject is a member of
+     * this group -- and therefore this &lt;code&gt;impliesMember&lt;/code&gt; call
+     * returns &lt;code&gt;true&lt;/code&gt;.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This may sound complicated, but it really isn&amp;#8217;t. Consider the following
+     * examples:
+     * &lt;/p&gt;
+     * &lt;table border=&quot;1&quot;&gt; &lt;thead&gt;
+     * &lt;tr&gt;
+     * &lt;th width=&quot;25%&quot;&gt;This object&lt;/th&gt;
+     * &lt;th width=&quot;25%&quot;&gt;&lt;code&gt;impliesMember&lt;/code&gt; parameter&lt;/th&gt;
+     * &lt;th width=&quot;25%&quot;&gt;Calling Subject&amp;#8217;s Principals
+     * &lt;th width=&quot;25%&quot;&gt;Result&lt;/th&gt;
+     * &lt;/tr&gt;
+     * &lt;tr&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;&amp;lt;groupmember&amp;gt;&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;*:TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;WikiPrincipal (&quot;Biff&quot;),&lt;br/&gt;GroupPrincipal (&quot;TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;true&lt;/code&gt;&lt;/td&gt;
+     * &lt;/tr&gt;
+     * &lt;tr&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;*:TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;*:TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;WikiPrincipal (&quot;Biff&quot;),&lt;br/&gt;GroupPrincipal (&quot;TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;false&lt;/code&gt; - this object does not contain
+     * &lt;code&gt;&amp;lt;groupmember&amp;gt;&lt;/code&gt;&lt;/td&gt;
+     * &lt;/tr&gt;
+     * &lt;tr&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;&amp;lt;groupmember&amp;gt;&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;*:TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;WikiPrincipal (&quot;Biff&quot;),&lt;br/&gt;GroupPrincipal (&quot;FooGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;false&lt;/code&gt; - Subject does not contain GroupPrincipal
+     * matching implied Permission&amp;#8217;s group (TestGroup)&lt;/td&gt;
+     * &lt;/tr&gt;
+     * &lt;tr&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;&amp;lt;groupmember&amp;gt;&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;WikiPermission (&quot;*:createGroups&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;WikiPrincipal (&quot;Biff&quot;),&lt;br/&gt;GroupPrincipal (&quot;TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;false&lt;/code&gt; - implied permission not of type
+     * GroupPermission&lt;/td&gt;
+     * &lt;/tr&gt;
+     * &lt;tr&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;&amp;lt;groupmember&amp;gt;&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;GroupPermission (&quot;*:TestGroup&quot;)&lt;/code&gt;&lt;/td&gt;
+     * &lt;td&gt;-&lt;/td&gt;
+     * &lt;td&gt;&lt;code&gt;false&lt;/code&gt; - &lt;code&gt;Subject.doAs()&lt;/code&gt; not called
+     * upstream&lt;/td&gt;
+     * &lt;/tr&gt;
+     * &lt;/table&gt;
+     * &lt;p&gt;
+     * Note that JSPWiki&amp;#8217;s access control checks are made inside of
+     * {@link org.apache.wiki.auth.AuthorizationManager#checkPermission(org.apache.wiki.WikiSession, Permission)},
+     * which performs a &lt;code&gt;Subject.doAs()&lt;/code&gt; call. Thus, this
+     * Permission functions exactly the way it should during normal
+     * operations.
+     * &lt;/p&gt;
+     * @param permission the implied permission
+     * @return &lt;code&gt;true&lt;/code&gt; if the calling Thread&amp;#8217;s Subject contains a
+     *         GroupPrincipal matching the implied GroupPermission&amp;#8217;s group;
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    protected boolean impliesMember( Permission permission )
+    {
+<span class="nc bnc" id="L468" title="All 2 branches missed.">        if ( !( permission instanceof GroupPermission ) )</span>
+        {
+<span class="nc" id="L470">            return false;</span>
+        }
+<span class="nc" id="L472">        GroupPermission gp = (GroupPermission) permission;</span>
+<span class="nc bnc" id="L473" title="All 2 branches missed.">        if ( !MEMBER_TOKEN.equals( m_group ) )</span>
+        {
+<span class="nc" id="L475">            return false;</span>
+        }
+
+        // For the current thread, retrieve the SubjectDomainCombiner
+        // (if one was used to create current AccessControlContext )
+<span class="nc" id="L480">        AccessControlContext acc = AccessController.getContext();</span>
+<span class="nc" id="L481">        DomainCombiner dc = acc.getDomainCombiner();</span>
+<span class="nc bnc" id="L482" title="All 4 branches missed.">        if ( dc != null &amp;&amp; dc instanceof SubjectDomainCombiner )</span>
+        {
+            // &lt;member&gt; implies permission if subject possesses
+            // GroupPrincipal with same name as target
+<span class="nc" id="L486">            Subject subject = ( (SubjectDomainCombiner) dc ).getSubject();</span>
+<span class="nc" id="L487">            Set&lt;GroupPrincipal&gt; principals = subject.getPrincipals( GroupPrincipal.class );</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">            for( Principal principal : principals )</span>
+            {
+<span class="nc bnc" id="L490" title="All 2 branches missed.">                if ( principal.getName().equals( gp.m_group ) )</span>
+                {
+<span class="nc" id="L492">                    return true;</span>
+                }
+<span class="nc" id="L494">            }</span>
+        }
+<span class="nc" id="L496">        return false;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

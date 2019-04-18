@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WeblogEntryPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">WeblogEntryPlugin.java</span></div><h1>WeblogEntryPlugin.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.text.SimpleDateFormat;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.pages.PageLock;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.preferences.Preferences;
+
+/**
+ * Builds a simple weblog.
+ * &lt;p/&gt;
+ * &lt;p&gt;Parameters : &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;b&gt;entrytext&lt;/b&gt; - text of the link &lt;/li&gt;
+ * &lt;li&gt;&lt;b&gt;page&lt;/b&gt; - if set, the entry is added to the named blog page. The default is the current page. &lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ * @since 1.9.21
+ */
+<span class="fc" id="L50">public class WeblogEntryPlugin implements WikiPlugin {</span>
+<span class="fc" id="L51">    private static Logger log = Logger.getLogger(WeblogEntryPlugin.class);</span>
+
+    private static final int MAX_BLOG_ENTRIES = 10000; // Just a precaution.
+
+    /**
+     * Parameter name for setting the entrytext  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PARAM_ENTRYTEXT = &quot;entrytext&quot;;
+    /**
+     * Optional parameter: page that actually contains the blog.
+     * This lets us provide a &quot;new entry&quot; link for a blog page 
+     * somewhere else than on the page itself.
+     */
+    // &quot;page&quot; for uniform naming with WeblogPlugin...
+    /**
+     * Parameter name for setting the page Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PARAM_BLOGNAME = &quot;page&quot;;
+
+    /**
+     * Returns a new page name for entries.  It goes through the list of
+     * all blog pages, and finds out the next in line.
+     *
+     * @param engine   A WikiEngine
+     * @param blogName The page (or blog) name.
+     * @return A new name.
+     * @throws ProviderException If something goes wrong.
+     */
+    public String getNewEntryPage(WikiEngine engine, String blogName)
+            throws ProviderException {
+<span class="fc" id="L81">        SimpleDateFormat fmt = new SimpleDateFormat(WeblogPlugin.DEFAULT_DATEFORMAT);</span>
+<span class="fc" id="L82">        String today = fmt.format(new Date());</span>
+
+<span class="fc" id="L84">        int entryNum = findFreeEntry(engine.getPageManager(),</span>
+                blogName,
+                today);
+
+
+<span class="fc" id="L89">        String blogPage = WeblogPlugin.makeEntryPage(blogName,</span>
+                today,
+                &quot;&quot; + entryNum);
+
+<span class="fc" id="L93">        return blogPage;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String execute(WikiContext context, Map&lt;String, String&gt; params)
+            throws PluginException {
+<span class="nc" id="L101">        ResourceBundle rb = Preferences.getBundle(context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE);</span>
+
+<span class="nc" id="L103">        String weblogName = params.get(PARAM_BLOGNAME);</span>
+<span class="nc bnc" id="L104" title="All 2 branches missed.">        if (weblogName == null) {</span>
+<span class="nc" id="L105">            weblogName = context.getPage().getName();</span>
+        }
+<span class="nc" id="L107">        WikiEngine engine = context.getEngine();</span>
+
+<span class="nc" id="L109">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc" id="L111">        String entryText = params.get(PARAM_ENTRYTEXT);</span>
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if (entryText == null) {</span>
+<span class="nc" id="L113">            entryText = rb.getString(&quot;weblogentryplugin.newentry&quot;);</span>
+        }
+
+<span class="nc" id="L116">        String url = context.getURL(WikiContext.NONE, &quot;NewBlogEntry.jsp&quot;, &quot;page=&quot; + engine.encodeName(weblogName));</span>
+
+<span class="nc" id="L118">        sb.append(&quot;&lt;a href=\&quot;&quot; + url + &quot;\&quot;&gt;&quot; + entryText + &quot;&lt;/a&gt;&quot;);</span>
+
+<span class="nc" id="L120">        return sb.toString();</span>
+    }
+
+    private int findFreeEntry(PageManager mgr,
+                              String baseName,
+                              String date)
+            throws ProviderException {
+<span class="fc" id="L127">        Collection&lt; WikiPage &gt; everyone = mgr.getAllPages();</span>
+<span class="fc" id="L128">        int max = 0;</span>
+
+<span class="fc" id="L130">        String startString = WeblogPlugin.makeEntryPage(baseName, date, &quot;&quot;);</span>
+
+<span class="fc bfc" id="L132" title="All 2 branches covered.">        for (Iterator&lt; WikiPage &gt; i = everyone.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L133">            WikiPage p = i.next();</span>
+
+<span class="fc bfc" id="L135" title="All 2 branches covered.">            if (p.getName().startsWith(startString)) {</span>
+                try {
+<span class="fc" id="L137">                    String probableId = p.getName().substring(startString.length());</span>
+
+<span class="fc" id="L139">                    int id = Integer.parseInt(probableId);</span>
+
+<span class="pc bpc" id="L141" title="1 of 2 branches missed.">                    if (id &gt; max) {</span>
+<span class="fc" id="L142">                        max = id;</span>
+                    }
+<span class="nc" id="L144">                } catch (NumberFormatException e) {</span>
+<span class="nc" id="L145">                    log.debug(&quot;Was not a log entry: &quot; + p.getName());</span>
+<span class="fc" id="L146">                }</span>
+            }
+<span class="fc" id="L148">        }</span>
+
+        //
+        //  Find the first page that has no page lock.
+        //
+<span class="fc" id="L153">        int idx = max + 1;</span>
+
+<span class="pc bpc" id="L155" title="1 of 2 branches missed.">        while (idx &lt; MAX_BLOG_ENTRIES) {</span>
+<span class="fc" id="L156">            WikiPage page = new WikiPage(mgr.getEngine(),</span>
+<span class="fc" id="L157">                    WeblogPlugin.makeEntryPage(baseName,</span>
+                            date,
+<span class="fc" id="L159">                            Integer.toString(idx)));</span>
+<span class="fc" id="L160">            PageLock lock = mgr.getCurrentLock(page);</span>
+
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">            if (lock == null) {</span>
+<span class="fc" id="L163">                break;</span>
+            }
+
+<span class="nc" id="L166">            idx++;</span>
+<span class="nc" id="L167">        }</span>
+
+<span class="fc" id="L169">        return idx;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

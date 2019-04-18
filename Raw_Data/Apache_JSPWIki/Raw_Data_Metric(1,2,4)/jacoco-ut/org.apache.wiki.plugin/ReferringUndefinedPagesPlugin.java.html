@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReferringUndefinedPagesPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">ReferringUndefinedPagesPlugin.java</span></div><h1>ReferringUndefinedPagesPlugin.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.plugin;
+
+import java.text.MessageFormat;
+import java.util.Collection;
+import java.util.Map;
+import java.util.ResourceBundle;
+import java.util.TreeMap;
+
+import org.apache.wiki.ReferenceManager;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.TextUtil;
+/**
+ *  &lt;p&gt;Lists all pages containing links to Undefined Pages (pages containing dead links).&lt;/p&gt;
+ *
+ *  An original idea from Gregor Hagedorn.
+ *
+ *  @since 2.10.0
+ */
+<span class="fc" id="L40">public class ReferringUndefinedPagesPlugin extends AbstractReferralPlugin {</span>
+
+    /** Parameter name for setting the maximum items to show.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_MAX = &quot;max&quot;;
+
+    /** Parameter name for setting the text to show when the maximum items is overruled. Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_EXTRAS = &quot;extras&quot;;
+
+    public String execute(WikiContext context, Map&lt;String, String&gt; params) throws PluginException {
+<span class="fc" id="L49">        ResourceBundle rb = Preferences.getBundle(context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE);</span>
+
+<span class="fc" id="L51">        ReferenceManager referenceManager = context.getEngine().getReferenceManager();</span>
+
+<span class="fc" id="L53">        int items = TextUtil.parseIntParameter(params.get(PARAM_MAX), ALL_ITEMS);</span>
+<span class="fc" id="L54">        String extras = params.get(PARAM_EXTRAS);</span>
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">        if (extras == null) {</span>
+<span class="fc" id="L56">            extras = rb.getString(&quot;referringundefinedpagesplugin.more&quot;);</span>
+        }
+
+<span class="fc" id="L59">        StringBuilder resultHTML = new StringBuilder();</span>
+
+<span class="fc" id="L61">        Collection&lt;String&gt; uncreatedPages = referenceManager.findUncreated();</span>
+
+<span class="fc" id="L63">        super.initialize(context, params);</span>
+
+<span class="fc" id="L65">        Collection&lt;String&gt; result = null;</span>
+
+<span class="fc" id="L67">        TreeMap&lt; String, String &gt; sortedMap = new TreeMap&lt;&gt;();</span>
+<span class="pc bpc" id="L68" title="1 of 2 branches missed.">        if (uncreatedPages != null) {</span>
+<span class="fc bfc" id="L69" title="All 2 branches covered.">            for (String uncreatedPageName : uncreatedPages) {</span>
+<span class="fc" id="L70">                Collection&lt;String&gt; referrers = referenceManager.findReferrers(uncreatedPageName);</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">                if (referrers != null) {</span>
+<span class="fc bfc" id="L72" title="All 2 branches covered.">                    for (String referringPage : referrers) {</span>
+<span class="fc" id="L73">                        sortedMap.put(referringPage, &quot;&quot;);</span>
+<span class="fc" id="L74">                    }</span>
+                }
+<span class="fc" id="L76">            }</span>
+<span class="fc" id="L77">            result = sortedMap.keySet();</span>
+        }
+
+<span class="fc" id="L80">        result = super.filterAndSortCollection(result);</span>
+
+<span class="fc" id="L82">        String wikitext = wikitizeCollection(result, m_separator, items);</span>
+
+<span class="fc" id="L84">        resultHTML.append(makeHTML(context, wikitext));</span>
+
+        // add the more.... text
+<span class="pc bpc" id="L87" title="1 of 4 branches missed.">        if (items &lt; result.size() &amp;&amp; items &gt; 0) {</span>
+<span class="fc" id="L88">            Object[] args = {&quot;&quot; + (result.size() - items)};</span>
+<span class="fc" id="L89">            extras = MessageFormat.format(extras, args);</span>
+
+<span class="fc" id="L91">            resultHTML.append(&quot;&lt;br/&gt;&quot; + extras + &quot;&lt;br/&gt;&quot;);</span>
+        }
+<span class="fc" id="L93">        return resultHTML.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

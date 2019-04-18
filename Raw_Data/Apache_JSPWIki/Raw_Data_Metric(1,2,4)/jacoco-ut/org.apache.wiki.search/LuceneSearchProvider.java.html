@@ -1,0 +1,799 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LuceneSearchProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.search</a> &gt; <span class="el_source">LuceneSearchProvider.java</span></div><h1>LuceneSearchProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.search;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.lang.reflect.Constructor;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.lucene.analysis.Analyzer;
+import org.apache.lucene.analysis.TokenStream;
+import org.apache.lucene.document.Document;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.document.StringField;
+import org.apache.lucene.document.TextField;
+import org.apache.lucene.index.CorruptIndexException;
+import org.apache.lucene.index.DirectoryReader;
+import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.IndexWriter;
+import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.index.IndexWriterConfig.OpenMode;
+import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
+import org.apache.lucene.search.highlight.Highlighter;
+import org.apache.lucene.search.highlight.InvalidTokenOffsetsException;
+import org.apache.lucene.search.highlight.QueryScorer;
+import org.apache.lucene.search.highlight.SimpleHTMLEncoder;
+import org.apache.lucene.search.highlight.SimpleHTMLFormatter;
+import org.apache.lucene.store.Directory;
+import org.apache.lucene.store.LockObtainFailedException;
+import org.apache.lucene.store.SimpleFSDirectory;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WatchDog;
+import org.apache.wiki.WikiBackgroundThread;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.attachment.AttachmentManager;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.providers.WikiPageProvider;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  Interface for the search providers that handle searching the Wiki
+ *
+ *  @since 2.2.21.
+ */
+<span class="fc" id="L92">public class LuceneSearchProvider implements SearchProvider {</span>
+
+<span class="fc" id="L94">    protected static final Logger log = Logger.getLogger(LuceneSearchProvider.class);</span>
+
+    private WikiEngine m_engine;
+
+    // Lucene properties.
+
+    /** Which analyzer to use.  Default is StandardAnalyzer. */
+    public static final String PROP_LUCENE_ANALYZER      = &quot;jspwiki.lucene.analyzer&quot;;
+
+    private static final String PROP_LUCENE_INDEXDELAY   = &quot;jspwiki.lucene.indexdelay&quot;;
+    private static final String PROP_LUCENE_INITIALDELAY = &quot;jspwiki.lucene.initialdelay&quot;;
+
+<span class="fc" id="L106">    private String m_analyzerClass = &quot;org.apache.lucene.analysis.standard.ClassicAnalyzer&quot;;</span>
+
+    private static final String LUCENE_DIR             = &quot;lucene&quot;;
+
+    /** These attachment file suffixes will be indexed. */
+<span class="fc" id="L111">    public static final String[] SEARCHABLE_FILE_SUFFIXES = new String[] { &quot;.txt&quot;, &quot;.ini&quot;, &quot;.xml&quot;, &quot;.html&quot;, &quot;htm&quot;, &quot;.mm&quot;, &quot;.htm&quot;,</span>
+                                                                          &quot;.xhtml&quot;, &quot;.java&quot;, &quot;.c&quot;, &quot;.cpp&quot;, &quot;.php&quot;, &quot;.asm&quot;, &quot;.sh&quot;,
+                                                                          &quot;.properties&quot;, &quot;.kml&quot;, &quot;.gpx&quot;, &quot;.loc&quot; };
+
+    protected static final String LUCENE_ID            = &quot;id&quot;;
+    protected static final String LUCENE_PAGE_CONTENTS = &quot;contents&quot;;
+    protected static final String LUCENE_AUTHOR        = &quot;author&quot;;
+    protected static final String LUCENE_ATTACHMENTS   = &quot;attachment&quot;;
+    protected static final String LUCENE_PAGE_NAME     = &quot;name&quot;;
+
+    private String           m_luceneDirectory;
+<span class="fc" id="L122">    protected List&lt;Object[]&gt; m_updates = Collections.synchronizedList( new ArrayList&lt;&gt;() ); </span>
+
+    /** Maximum number of fragments from search matches. */
+    private static final int MAX_FRAGMENTS = 3;
+
+    /** The maximum number of hits to return from searches. */
+    public static final int MAX_SEARCH_HITS = 99_999;
+    
+<span class="fc" id="L130">    private static String c_punctuationSpaces = StringUtils.repeat(&quot; &quot;, MarkupParser.PUNCTUATION_CHARS_ALLOWED.length() );</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initialize(WikiEngine engine, Properties props)
+            throws NoRequiredPropertyException, IOException
+    {
+<span class="fc" id="L139">        m_engine = engine;</span>
+
+<span class="fc" id="L141">        m_luceneDirectory = engine.getWorkDir()+File.separator+LUCENE_DIR;</span>
+
+<span class="fc" id="L143">        int initialDelay = TextUtil.getIntegerProperty( props, PROP_LUCENE_INITIALDELAY, LuceneUpdater.INITIAL_DELAY );</span>
+<span class="fc" id="L144">        int indexDelay   = TextUtil.getIntegerProperty( props, PROP_LUCENE_INDEXDELAY, LuceneUpdater.INDEX_DELAY );</span>
+
+<span class="fc" id="L146">        m_analyzerClass = TextUtil.getStringProperty( props, PROP_LUCENE_ANALYZER, m_analyzerClass );</span>
+        // FIXME: Just to be simple for now, we will do full reindex
+        // only if no files are in lucene directory.
+
+<span class="fc" id="L150">        File dir = new File(m_luceneDirectory);</span>
+
+<span class="fc" id="L152">        log.info(&quot;Lucene enabled, cache will be in: &quot;+dir.getAbsolutePath());</span>
+
+        try
+        {
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">            if( !dir.exists() )</span>
+            {
+<span class="fc" id="L158">                dir.mkdirs();</span>
+            }
+
+<span class="pc bpc" id="L161" title="3 of 6 branches missed.">            if( !dir.exists() || !dir.canWrite() || !dir.canRead() )</span>
+            {
+<span class="nc" id="L163">                log.error(&quot;Cannot write to Lucene directory, disabling Lucene: &quot;+dir.getAbsolutePath());</span>
+<span class="nc" id="L164">                throw new IOException( &quot;Invalid Lucene directory.&quot; );</span>
+            }
+
+<span class="fc" id="L167">            String[] filelist = dir.list();</span>
+
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">            if( filelist == null )</span>
+            {
+<span class="nc" id="L171">                throw new IOException( &quot;Invalid Lucene directory: cannot produce listing: &quot;+dir.getAbsolutePath());</span>
+            }
+        }
+<span class="nc" id="L174">        catch ( IOException e )</span>
+        {
+<span class="nc" id="L176">            log.error(&quot;Problem while creating Lucene index - not using Lucene.&quot;, e);</span>
+<span class="fc" id="L177">        }</span>
+
+        // Start the Lucene update thread, which waits first
+        // for a little while before starting to go through
+        // the Lucene &quot;pages that need updating&quot;.
+<span class="fc" id="L182">        LuceneUpdater updater = new LuceneUpdater( m_engine, this, initialDelay, indexDelay );</span>
+<span class="fc" id="L183">        updater.start();</span>
+<span class="fc" id="L184">    }</span>
+
+    /**
+     *  Returns the handling engine.
+     *
+     *  @return Current WikiEngine
+     */
+    protected WikiEngine getEngine()
+    {
+<span class="nc" id="L193">        return m_engine;</span>
+    }
+
+    /**
+     *  Performs a full Lucene reindex, if necessary.
+     *
+     *  @throws IOException If there's a problem during indexing
+     */
+    protected void doFullLuceneReindex() throws IOException {
+<span class="fc" id="L202">        File dir = new File(m_luceneDirectory);</span>
+
+<span class="fc" id="L204">        String[] filelist = dir.list();</span>
+
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if( filelist == null ) {</span>
+<span class="nc" id="L207">            throw new IOException( &quot;Invalid Lucene directory: cannot produce listing: &quot;+dir.getAbsolutePath());</span>
+        }
+
+        try {
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">            if( filelist.length == 0 ) {</span>
+                //
+                //  No files? Reindex!
+                //
+<span class="fc" id="L215">                Date start = new Date();</span>
+
+<span class="fc" id="L217">                log.info(&quot;Starting Lucene reindexing, this can take a couple of minutes...&quot;);</span>
+
+<span class="fc" id="L219">                Directory luceneDir = new SimpleFSDirectory( dir.toPath() );</span>
+<span class="fc" id="L220">                try( IndexWriter writer = getIndexWriter( luceneDir ) )</span>
+                {
+<span class="fc" id="L222">                    Collection&lt; WikiPage &gt; allPages = m_engine.getPageManager().getAllPages();</span>
+<span class="fc bfc" id="L223" title="All 2 branches covered.">                    for( WikiPage page : allPages ) {</span>
+                        
+                        try {
+<span class="fc" id="L226">                            String text = m_engine.getPageManager().getPageText( page.getName(), WikiProvider.LATEST_VERSION );</span>
+<span class="fc" id="L227">                            luceneIndexPage( page, text, writer );</span>
+<span class="nc" id="L228">                        } catch( IOException e ) {</span>
+<span class="nc" id="L229">                            log.warn( &quot;Unable to index page &quot; + page.getName() + &quot;, continuing to next &quot;, e );</span>
+<span class="fc" id="L230">                        }</span>
+<span class="fc" id="L231">                    }</span>
+
+<span class="fc" id="L233">                    Collection&lt; Attachment &gt; allAttachments = m_engine.getAttachmentManager().getAllAttachments();</span>
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">                    for( Attachment att : allAttachments ) {</span>
+                        try {
+<span class="nc" id="L236">                            String text = getAttachmentContent( att.getName(), WikiProvider.LATEST_VERSION );</span>
+<span class="nc" id="L237">                            luceneIndexPage( att, text, writer );</span>
+<span class="nc" id="L238">                        } catch( IOException e ) {</span>
+<span class="nc" id="L239">                            log.warn( &quot;Unable to index attachment &quot; + att.getName() + &quot;, continuing to next&quot;, e );</span>
+<span class="nc" id="L240">                        }</span>
+<span class="nc" id="L241">                    }</span>
+
+                }
+
+<span class="fc" id="L245">                Date end = new Date();</span>
+<span class="fc" id="L246">                log.info( &quot;Full Lucene index finished in &quot; + (end.getTime() - start.getTime()) + &quot; milliseconds.&quot; );</span>
+<span class="fc" id="L247">            } else {</span>
+<span class="nc" id="L248">                log.info(&quot;Files found in Lucene directory, not reindexing.&quot;);</span>
+            }
+<span class="nc" id="L250">        } catch ( IOException e ) {</span>
+<span class="nc" id="L251">            log.error(&quot;Problem while creating Lucene index - not using Lucene.&quot;, e);</span>
+<span class="nc" id="L252">        } catch ( ProviderException e ) {</span>
+<span class="nc" id="L253">            log.error(&quot;Problem reading pages while creating Lucene index (JSPWiki won't start.)&quot;, e);</span>
+<span class="nc" id="L254">            throw new IllegalArgumentException(&quot;unable to create Lucene index&quot;);</span>
+<span class="nc" id="L255">        } catch( Exception e ) {</span>
+<span class="nc" id="L256">            log.error(&quot;Unable to start lucene&quot;,e);</span>
+<span class="pc" id="L257">        }</span>
+
+<span class="fc" id="L259">    }</span>
+
+    /**
+     *  Fetches the attachment content from the repository.
+     *  Content is flat text that can be used for indexing/searching or display
+     *  
+     *  @param attachmentName Name of the attachment.
+     *  @param version The version of the attachment.
+     *  
+     *  @return the content of the Attachment as a String.
+     */
+    protected String getAttachmentContent( String attachmentName, int version )
+    {
+<span class="nc" id="L272">        AttachmentManager mgr = m_engine.getAttachmentManager();</span>
+
+        try
+        {
+<span class="nc" id="L276">            Attachment att = mgr.getAttachmentInfo( attachmentName, version );</span>
+            //FIXME: Find out why sometimes att is null
+<span class="nc bnc" id="L278" title="All 2 branches missed.">            if(att != null)</span>
+            {
+<span class="nc" id="L280">                return getAttachmentContent( att );</span>
+            }
+        }
+<span class="nc" id="L283">        catch (ProviderException e)</span>
+        {
+<span class="nc" id="L285">            log.error(&quot;Attachment cannot be loaded&quot;, e);</span>
+<span class="nc" id="L286">        }</span>
+        // Something was wrong, no result is returned.
+<span class="nc" id="L288">        return null;</span>
+    }
+
+    /**
+     * @param att Attachment to get content for. Filename extension is used to determine the type of the attachment.
+     * @return String representing the content of the file.
+     * FIXME This is a very simple implementation of some text-based attachment, mainly used for testing.
+     * This should be replaced /moved to Attachment search providers or some other 'pluggable' wat to search attachments
+     */
+    protected String getAttachmentContent( Attachment att )
+    {
+<span class="nc" id="L299">        AttachmentManager mgr = m_engine.getAttachmentManager();</span>
+        //FIXME: Add attachment plugin structure
+
+<span class="nc" id="L302">        String filename = att.getFileName();</span>
+
+<span class="nc" id="L304">        boolean searchSuffix = false;</span>
+<span class="nc bnc" id="L305" title="All 2 branches missed.">        for( String suffix : SEARCHABLE_FILE_SUFFIXES )</span>
+        {
+<span class="nc bnc" id="L307" title="All 2 branches missed.">            if( filename.endsWith( suffix ) )</span>
+            {
+<span class="nc" id="L309">                searchSuffix = true;</span>
+            }
+        }
+
+<span class="nc" id="L313">        String out = null;</span>
+<span class="nc bnc" id="L314" title="All 2 branches missed.">        if( searchSuffix )</span>
+        {
+<span class="nc" id="L316">            InputStream attStream = null;</span>
+<span class="nc" id="L317">            StringWriter sout = new StringWriter();</span>
+            
+            try
+            {
+<span class="nc" id="L321">                attStream = mgr.getAttachmentStream( att );</span>
+<span class="nc" id="L322">                FileUtil.copyContents( new InputStreamReader(attStream), sout );</span>
+<span class="nc" id="L323">                out = sout.toString();</span>
+            }
+<span class="nc" id="L325">            catch (ProviderException e)</span>
+            {
+<span class="nc" id="L327">                log.error(&quot;Attachment cannot be loaded&quot;, e);</span>
+            }
+<span class="nc" id="L329">            catch (IOException e)</span>
+            {
+<span class="nc" id="L331">                log.error(&quot;Attachment cannot be loaded&quot;, e);</span>
+            }
+            finally 
+            {
+<span class="nc" id="L335">            	IOUtils.closeQuietly( attStream );</span>
+<span class="nc" id="L336">            	IOUtils.closeQuietly( sout );</span>
+            }
+        }
+
+<span class="nc" id="L340">        return out;</span>
+    }
+
+    /**
+     *  Updates the lucene index for a single page.
+     *
+     *  @param page The WikiPage to check
+     *  @param text The page text to index.
+     */
+    protected synchronized void updateLuceneIndex( WikiPage page, String text )
+    {
+<span class="fc" id="L351">        IndexWriter writer = null;</span>
+
+<span class="fc" id="L353">        log.debug(&quot;Updating Lucene index for page '&quot; + page.getName() + &quot;'...&quot;);</span>
+
+<span class="fc" id="L355">        Directory luceneDir = null;</span>
+        try
+        {
+<span class="fc" id="L358">            pageRemoved( page );</span>
+
+            // Now add back the new version.
+<span class="fc" id="L361">            luceneDir = new SimpleFSDirectory( new File( m_luceneDirectory ).toPath() );</span>
+<span class="fc" id="L362">            writer = getIndexWriter( luceneDir );</span>
+            
+<span class="fc" id="L364">            luceneIndexPage( page, text, writer );</span>
+        }
+<span class="nc" id="L366">        catch ( IOException e )</span>
+        {
+<span class="nc" id="L368">            log.error(&quot;Unable to update page '&quot; + page.getName() + &quot;' from Lucene index&quot;, e);</span>
+            // reindexPage( page );
+        }
+<span class="fc" id="L371">        catch( Exception e )</span>
+        {
+<span class="fc" id="L373">            log.error(&quot;Unexpected Lucene exception - please check configuration!&quot;,e);</span>
+            // reindexPage( page );
+        }
+        finally
+        {
+<span class="fc" id="L378">            close( writer );</span>
+        }
+
+<span class="fc" id="L381">        log.debug(&quot;Done updating Lucene index for page '&quot; + page.getName() + &quot;'.&quot;);</span>
+<span class="fc" id="L382">    }</span>
+
+
+    private Analyzer getLuceneAnalyzer() throws ProviderException
+    {
+        try
+        {
+<span class="fc" id="L389">            Class&lt; ? &gt; clazz = ClassUtil.findClass( &quot;&quot;, m_analyzerClass );</span>
+<span class="fc" id="L390">            Constructor&lt; ? &gt; constructor = clazz.getConstructor();</span>
+<span class="fc" id="L391">            Analyzer analyzer = (Analyzer) constructor.newInstance();</span>
+<span class="fc" id="L392">            return analyzer;</span>
+        }
+<span class="nc" id="L394">        catch( Exception e )</span>
+        {
+<span class="nc" id="L396">            String msg = &quot;Could not get LuceneAnalyzer class &quot; + m_analyzerClass + &quot;, reason: &quot;;</span>
+<span class="nc" id="L397">            log.error( msg, e );</span>
+<span class="nc" id="L398">            throw new ProviderException( msg + e );</span>
+        }
+    }
+
+    /**
+     *  Indexes page using the given IndexWriter.
+     *
+     *  @param page WikiPage
+     *  @param text Page text to index
+     *  @param writer The Lucene IndexWriter to use for indexing
+     *  @return the created index Document
+     *  @throws IOException If there's an indexing problem
+     */
+    protected Document luceneIndexPage( WikiPage page, String text, IndexWriter writer )
+        throws IOException
+    {
+<span class="pc bpc" id="L414" title="1 of 2 branches missed.">        if( log.isDebugEnabled() ) log.debug( &quot;Indexing &quot;+page.getName()+&quot;...&quot; );</span>
+        
+        // make a new, empty document
+<span class="fc" id="L417">        Document doc = new Document();</span>
+
+<span class="pc bpc" id="L419" title="1 of 2 branches missed.">        if( text == null ) return doc;</span>
+
+        // Raw name is the keyword we'll use to refer to this document for updates.
+<span class="fc" id="L422">        Field field = new Field( LUCENE_ID, page.getName(), StringField.TYPE_STORED );</span>
+<span class="fc" id="L423">        doc.add( field );</span>
+
+        // Body text.  It is stored in the doc for search contexts.
+<span class="fc" id="L426">        field = new Field( LUCENE_PAGE_CONTENTS, text, TextField.TYPE_STORED );</span>
+<span class="fc" id="L427">        doc.add( field );</span>
+
+        // Allow searching by page name. Both beautified and raw
+<span class="fc" id="L430">        String unTokenizedTitle = StringUtils.replaceChars( page.getName(),</span>
+                                                            MarkupParser.PUNCTUATION_CHARS_ALLOWED,
+                                                            c_punctuationSpaces );
+
+<span class="fc" id="L434">        field = new Field( LUCENE_PAGE_NAME,</span>
+<span class="fc" id="L435">                           TextUtil.beautifyString( page.getName() ) + &quot; &quot; + unTokenizedTitle,</span>
+                           TextField.TYPE_STORED );
+<span class="fc" id="L437">        doc.add( field );</span>
+
+        // Allow searching by authorname
+
+<span class="pc bpc" id="L441" title="1 of 2 branches missed.">        if( page.getAuthor() != null )</span>
+        {
+<span class="fc" id="L443">            field = new Field( LUCENE_AUTHOR, page.getAuthor(), TextField.TYPE_STORED );</span>
+<span class="fc" id="L444">            doc.add( field );</span>
+        }
+
+        // Now add the names of the attachments of this page
+        try
+        {
+<span class="fc" id="L450">            List&lt; Attachment &gt; attachments = m_engine.getAttachmentManager().listAttachments(page);</span>
+<span class="fc" id="L451">            String attachmentNames = &quot;&quot;;</span>
+
+<span class="pc bpc" id="L453" title="1 of 2 branches missed.">            for( Iterator&lt; Attachment &gt; it = attachments.iterator(); it.hasNext(); )</span>
+            {
+<span class="nc" id="L455">                Attachment att = it.next();</span>
+<span class="nc" id="L456">                attachmentNames += att.getName() + &quot;;&quot;;</span>
+<span class="nc" id="L457">            }</span>
+<span class="fc" id="L458">            field = new Field( LUCENE_ATTACHMENTS, attachmentNames, TextField.TYPE_STORED );</span>
+<span class="fc" id="L459">            doc.add( field );</span>
+
+        }
+<span class="nc" id="L462">        catch(ProviderException e)</span>
+        {
+            // Unable to read attachments
+<span class="nc" id="L465">            log.error(&quot;Failed to get attachments for page&quot;, e);</span>
+<span class="fc" id="L466">        }</span>
+<span class="fc" id="L467">        writer.addDocument(doc);</span>
+
+<span class="fc" id="L469">        return doc;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void pageRemoved( WikiPage page )
+    {
+<span class="fc" id="L478">        IndexWriter writer = null;</span>
+        try
+        {
+<span class="fc" id="L481">            Directory luceneDir = new SimpleFSDirectory( new File( m_luceneDirectory ).toPath() );</span>
+<span class="fc" id="L482">            writer = getIndexWriter( luceneDir );</span>
+<span class="fc" id="L483">            Query query = new TermQuery( new Term( LUCENE_ID, page.getName() ) );</span>
+<span class="fc" id="L484">            writer.deleteDocuments( query );</span>
+        }
+<span class="nc" id="L486">        catch ( Exception e )</span>
+        {
+<span class="nc" id="L488">            log.error(&quot;Unable to remove page '&quot; + page.getName() + &quot;' from Lucene index&quot;, e);</span>
+        }
+        finally
+        {
+<span class="fc" id="L492">            close( writer );</span>
+        }
+<span class="fc" id="L494">    }</span>
+    
+    IndexWriter getIndexWriter( Directory luceneDir ) throws CorruptIndexException, 
+            LockObtainFailedException, IOException, ProviderException 
+    {
+<span class="fc" id="L499">        IndexWriter writer = null;</span>
+<span class="fc" id="L500">        IndexWriterConfig writerConfig = new IndexWriterConfig( getLuceneAnalyzer() );</span>
+<span class="fc" id="L501">        writerConfig.setOpenMode( OpenMode.CREATE_OR_APPEND );</span>
+<span class="fc" id="L502">        writer = new IndexWriter( luceneDir, writerConfig );</span>
+        
+        // writer.setInfoStream( System.out );
+<span class="fc" id="L505">        return writer;</span>
+    }
+    
+    void close( IndexWriter writer ) 
+    {
+        try
+        {
+<span class="pc bpc" id="L512" title="1 of 2 branches missed.">            if( writer != null ) </span>
+            {
+<span class="fc" id="L514">                writer.close();</span>
+            }
+        }
+<span class="nc" id="L517">        catch( IOException e )</span>
+        {
+<span class="nc" id="L519">            log.error( e );</span>
+<span class="fc" id="L520">        }</span>
+<span class="fc" id="L521">    }</span>
+
+
+    /**
+     *  Adds a page-text pair to the lucene update queue.  Safe to call always
+     *
+     *  @param page WikiPage to add to the update queue.
+     */
+    @Override
+    public void reindexPage( WikiPage page ) {
+<span class="pc bpc" id="L531" title="1 of 2 branches missed.">        if( page != null ) {</span>
+            String text;
+
+            // TODO: Think if this was better done in the thread itself?
+
+<span class="pc bpc" id="L536" title="1 of 2 branches missed.">            if( page instanceof Attachment ) {</span>
+<span class="nc" id="L537">                text = getAttachmentContent( (Attachment) page );</span>
+            } else {
+<span class="fc" id="L539">                text = m_engine.getPureText( page );</span>
+            }
+
+<span class="pc bpc" id="L542" title="1 of 2 branches missed.">            if( text != null ) {</span>
+                // Add work item to m_updates queue.
+<span class="fc" id="L544">                Object[] pair = new Object[2];</span>
+<span class="fc" id="L545">                pair[0] = page;</span>
+<span class="fc" id="L546">                pair[1] = text;</span>
+<span class="fc" id="L547">                m_updates.add(pair);</span>
+<span class="fc" id="L548">                log.debug(&quot;Scheduling page &quot; + page.getName() + &quot; for index update&quot;);</span>
+            }
+        }
+<span class="fc" id="L551">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; SearchResult &gt; findPages( String query, WikiContext wikiContext ) throws ProviderException {
+<span class="fc" id="L558">        return findPages( query, FLAG_CONTEXTS, wikiContext );</span>
+    }
+
+    /**
+     *  Create contexts also.  Generating contexts can be expensive,
+     *  so they're not on by default.
+     */
+    public static final int FLAG_CONTEXTS = 0x01;
+
+    /**
+     *  Searches pages using a particular combination of flags.
+     *
+     *  @param query The query to perform in Lucene query language
+     *  @param flags A set of flags
+     *  @return A Collection of SearchResult instances
+     *  @throws ProviderException if there is a problem with the backend
+     */
+    public Collection&lt; SearchResult &gt; findPages( String query, int flags, WikiContext wikiContext )
+        throws ProviderException
+    {
+<span class="fc" id="L578">        IndexSearcher  searcher = null;</span>
+<span class="fc" id="L579">        ArrayList&lt;SearchResult&gt; list = null;</span>
+<span class="fc" id="L580">        Highlighter highlighter = null;</span>
+
+        try
+        {
+<span class="fc" id="L584">            String[] queryfields = { LUCENE_PAGE_CONTENTS, LUCENE_PAGE_NAME, LUCENE_AUTHOR, LUCENE_ATTACHMENTS };</span>
+<span class="fc" id="L585">            QueryParser qp = new MultiFieldQueryParser( queryfields, getLuceneAnalyzer() );</span>
+
+            //QueryParser qp = new QueryParser( LUCENE_PAGE_CONTENTS, getLuceneAnalyzer() );
+<span class="fc" id="L588">            Query luceneQuery = qp.parse( query );</span>
+
+<span class="pc bpc" id="L590" title="1 of 2 branches missed.">            if( (flags &amp; FLAG_CONTEXTS) != 0 )</span>
+            {
+<span class="fc" id="L592">                highlighter = new Highlighter(new SimpleHTMLFormatter(&quot;&lt;span class=\&quot;searchmatch\&quot;&gt;&quot;, &quot;&lt;/span&gt;&quot;),</span>
+                                              new SimpleHTMLEncoder(),
+                                              new QueryScorer(luceneQuery));
+            }
+
+            try
+            {
+<span class="fc" id="L599">                File dir = new File(m_luceneDirectory);</span>
+<span class="fc" id="L600">                Directory luceneDir = new SimpleFSDirectory( dir.toPath() );</span>
+<span class="fc" id="L601">                IndexReader reader = DirectoryReader.open(luceneDir);</span>
+<span class="fc" id="L602">                searcher = new IndexSearcher(reader);</span>
+            }
+<span class="nc" id="L604">            catch( Exception ex )</span>
+            {
+<span class="nc" id="L606">                log.info(&quot;Lucene not yet ready; indexing not started&quot;,ex);</span>
+<span class="nc" id="L607">                return null;</span>
+<span class="fc" id="L608">            }</span>
+
+<span class="fc" id="L610">            ScoreDoc[] hits = searcher.search(luceneQuery, MAX_SEARCH_HITS).scoreDocs;</span>
+
+<span class="fc" id="L612">            AuthorizationManager mgr = m_engine.getAuthorizationManager();</span>
+
+<span class="fc" id="L614">            list = new ArrayList&lt;&gt;(hits.length);</span>
+<span class="fc bfc" id="L615" title="All 2 branches covered.">            for ( int curr = 0; curr &lt; hits.length; curr++ )</span>
+            {
+<span class="fc" id="L617">                int docID = hits[curr].doc;</span>
+<span class="fc" id="L618">                Document doc = searcher.doc( docID );</span>
+<span class="fc" id="L619">                String pageName = doc.get(LUCENE_ID);</span>
+<span class="fc" id="L620">                WikiPage page = m_engine.getPage(pageName, WikiPageProvider.LATEST_VERSION);</span>
+
+<span class="pc bpc" id="L622" title="1 of 2 branches missed.">                if(page != null)</span>
+                {
+<span class="pc bpc" id="L624" title="1 of 2 branches missed.">                    if(page instanceof Attachment)</span>
+                    {
+                        // Currently attachments don't look nice on the search-results page
+                        // When the search-results are cleaned up this can be enabled again.
+                    }
+
+<span class="fc" id="L630">                    PagePermission pp = new PagePermission( page, PagePermission.VIEW_ACTION );</span>
+<span class="fc bfc" id="L631" title="All 2 branches covered.">	                if( mgr.checkPermission( wikiContext.getWikiSession(), pp ) ) {</span>
+	
+<span class="fc" id="L633">	                    int score = (int)(hits[curr].score * 100);</span>
+	
+	
+	                    // Get highlighted search contexts
+<span class="fc" id="L637">	                    String text = doc.get(LUCENE_PAGE_CONTENTS);</span>
+	
+<span class="fc" id="L639">	                    String[] fragments = new String[0];</span>
+<span class="pc bpc" id="L640" title="2 of 4 branches missed.">	                    if( text != null &amp;&amp; highlighter != null ) {</span>
+<span class="fc" id="L641">	                        TokenStream tokenStream = getLuceneAnalyzer()</span>
+<span class="fc" id="L642">	                        .tokenStream(LUCENE_PAGE_CONTENTS, new StringReader(text));</span>
+<span class="fc" id="L643">	                        fragments = highlighter.getBestFragments(tokenStream, text, MAX_FRAGMENTS);</span>
+	                    }
+	
+<span class="fc" id="L646">	                    SearchResult result = new SearchResultImpl( page, score, fragments );     </span>
+<span class="fc" id="L647">	                    list.add(result);</span>
+	                }
+<span class="fc" id="L649">                }</span>
+                else
+                {
+<span class="nc" id="L652">                    log.error(&quot;Lucene found a result page '&quot; + pageName + &quot;' that could not be loaded, removing from Lucene cache&quot;);</span>
+<span class="nc" id="L653">                    pageRemoved(new WikiPage( m_engine, pageName ));</span>
+                }
+            }
+        }
+<span class="nc" id="L657">        catch( IOException e )</span>
+        {
+<span class="nc" id="L659">            log.error(&quot;Failed during lucene search&quot;,e);</span>
+        }
+<span class="nc" id="L661">        catch( ParseException e )</span>
+        {
+<span class="nc" id="L663">            log.info(&quot;Broken query; cannot parse query &quot;,e);</span>
+
+<span class="nc" id="L665">            throw new ProviderException(&quot;You have entered a query Lucene cannot process: &quot;+e.getMessage());</span>
+        }
+<span class="nc" id="L667">        catch( InvalidTokenOffsetsException e )</span>
+        {
+<span class="nc" id="L669">            log.error(&quot;Tokens are incompatible with provided text &quot;,e);</span>
+        }
+        finally
+        {
+<span class="pc bpc" id="L673" title="1 of 2 branches missed.">            if( searcher != null )</span>
+            {
+                try
+                {
+<span class="fc" id="L677">                    searcher.getIndexReader().close();</span>
+                }
+<span class="nc" id="L679">                catch( IOException e )</span>
+                {
+<span class="nc" id="L681">                    log.error( e );</span>
+<span class="fc" id="L682">                }</span>
+            }
+        }
+
+<span class="fc" id="L686">        return list;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String getProviderInfo()
+    {
+<span class="nc" id="L695">        return &quot;LuceneSearchProvider&quot;;</span>
+    }
+
+    /**
+     * Updater thread that updates Lucene indexes.
+     */
+    private static final class LuceneUpdater extends WikiBackgroundThread
+    {
+        protected static final int INDEX_DELAY    = 5;
+        protected static final int INITIAL_DELAY = 60;
+        private final LuceneSearchProvider m_provider;
+
+        private int m_initialDelay;
+
+        private WatchDog m_watchdog;
+
+        private LuceneUpdater( WikiEngine engine, LuceneSearchProvider provider,
+                               int initialDelay, int indexDelay )
+        {
+<span class="fc" id="L714">            super( engine, indexDelay );</span>
+<span class="fc" id="L715">            m_provider = provider;</span>
+<span class="fc" id="L716">            setName(&quot;JSPWiki Lucene Indexer&quot;);</span>
+<span class="fc" id="L717">        }</span>
+
+        @Override
+        public void startupTask() throws Exception
+        {
+<span class="fc" id="L722">            m_watchdog = getEngine().getCurrentWatchDog();</span>
+
+            // Sleep initially...
+            try
+            {
+<span class="fc" id="L727">                Thread.sleep( m_initialDelay * 1000L );</span>
+            }
+<span class="nc" id="L729">            catch( InterruptedException e )</span>
+            {
+<span class="nc" id="L731">                throw new InternalWikiException(&quot;Interrupted while waiting to start.&quot;, e);</span>
+<span class="fc" id="L732">            }</span>
+
+<span class="fc" id="L734">            m_watchdog.enterState(&quot;Full reindex&quot;);</span>
+            // Reindex everything
+<span class="fc" id="L736">            m_provider.doFullLuceneReindex();</span>
+<span class="fc" id="L737">            m_watchdog.exitState();</span>
+<span class="fc" id="L738">        }</span>
+
+        @Override
+        public void backgroundTask() throws Exception
+        {
+<span class="fc" id="L743">            m_watchdog.enterState(&quot;Emptying index queue&quot;, 60);</span>
+
+<span class="fc" id="L745">            synchronized ( m_provider.m_updates )</span>
+            {
+<span class="fc bfc" id="L747" title="All 2 branches covered.">                while( m_provider.m_updates.size() &gt; 0 )</span>
+                {
+<span class="fc" id="L749">                    Object[] pair = m_provider.m_updates.remove(0);</span>
+<span class="fc" id="L750">                    WikiPage page = ( WikiPage ) pair[0];</span>
+<span class="fc" id="L751">                    String text = ( String ) pair[1];</span>
+<span class="fc" id="L752">                    m_provider.updateLuceneIndex(page, text);</span>
+<span class="fc" id="L753">                }</span>
+<span class="fc" id="L754">            }</span>
+
+<span class="fc" id="L756">            m_watchdog.exitState();</span>
+<span class="fc" id="L757">        }</span>
+
+    }
+
+    // FIXME: This class is dumb; needs to have a better implementation
+    private static class SearchResultImpl
+        implements SearchResult
+    {
+        private WikiPage m_page;
+        private int      m_score;
+        private String[] m_contexts;
+
+        public SearchResultImpl( WikiPage page, int score, String[] contexts )
+<span class="fc" id="L770">        {</span>
+<span class="fc" id="L771">            m_page  = page;</span>
+<span class="fc" id="L772">            m_score = score;</span>
+<span class="pc bpc" id="L773" title="1 of 2 branches missed.">            m_contexts = contexts != null ? contexts.clone() : null;</span>
+<span class="fc" id="L774">        }</span>
+
+        @Override
+        public WikiPage getPage()
+        {
+<span class="fc" id="L779">            return m_page;</span>
+        }
+
+        /* (non-Javadoc)
+         * @see org.apache.wiki.SearchResult#getScore()
+         */
+        @Override
+        public int getScore()
+        {
+<span class="nc" id="L788">            return m_score;</span>
+        }
+
+
+        @Override
+        public String[] getContexts()
+        {
+<span class="nc" id="L795">            return m_contexts;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

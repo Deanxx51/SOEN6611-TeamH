@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiServlet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">WikiServlet.java</span></div><h1>WikiServlet.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki;
+
+import java.io.IOException;
+
+import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.url.DefaultURLConstructor;
+
+import net.sf.ehcache.CacheManager;
+
+
+/**
+ * This provides a master servlet for dealing with short urls.  It mostly does
+ * redirects to the proper JSP pages. It also intercepts the servlet
+ * shutdown events and uses it to signal wiki shutdown.
+ *
+ * @since 2.2
+ */
+<span class="nc" id="L43">public class WikiServlet extends HttpServlet {</span>
+
+    private static final long serialVersionUID = 3258410651167633973L;
+    private WikiEngine m_engine;
+<span class="nc" id="L47">    static final Logger log = Logger.getLogger( WikiServlet.class.getName() );</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void init( ServletConfig config ) throws ServletException {
+<span class="nc" id="L54">        super.init( config );</span>
+<span class="nc" id="L55">        m_engine = WikiEngine.getInstance( config );</span>
+<span class="nc" id="L56">        log.info( &quot;WikiServlet initialized.&quot; );</span>
+<span class="nc" id="L57">    }</span>
+
+    /**
+     * Destroys the WikiServlet; called by the servlet container
+     * when shutting down the webapp. This method calls the
+     * protected method {@link WikiEngine#shutdown()}, which
+     * sends {@link org.apache.wiki.event.WikiEngineEvent#SHUTDOWN}
+     * events to registered listeners.
+     *
+     * @see javax.servlet.GenericServlet#destroy()
+     */
+    @Override
+    public void destroy() {
+<span class="nc" id="L70">        log.info( &quot;WikiServlet shutdown.&quot; );</span>
+<span class="nc" id="L71">        CacheManager.getInstance().shutdown();</span>
+<span class="nc" id="L72">        m_engine.shutdown();</span>
+<span class="nc" id="L73">        super.destroy();</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void doPost( HttpServletRequest req, HttpServletResponse res ) throws IOException, ServletException {
+<span class="nc" id="L81">        doGet( req, res );</span>
+<span class="nc" id="L82">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void doGet( HttpServletRequest req, HttpServletResponse res ) throws IOException, ServletException {
+<span class="nc" id="L89">        String pageName = DefaultURLConstructor.parsePageFromURL( req, m_engine.getContentEncoding() );</span>
+
+<span class="nc" id="L91">        log.info( &quot;Request for page: &quot; + pageName );</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if( pageName == null ) {</span>
+<span class="nc" id="L93">            pageName = m_engine.getFrontPage(); // FIXME: Add special pages as well</span>
+        }
+
+<span class="nc" id="L96">        String jspPage = m_engine.getURLConstructor().getForwardPage( req );</span>
+<span class="nc" id="L97">        RequestDispatcher dispatcher = req.getRequestDispatcher( &quot;/&quot; + jspPage + &quot;?page=&quot; +</span>
+<span class="nc" id="L98">                                                                 m_engine.encodeName( pageName ) + &quot;&amp;&quot; + req.getQueryString() );</span>
+
+<span class="nc" id="L100">        dispatcher.forward( req, res );</span>
+<span class="nc" id="L101">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

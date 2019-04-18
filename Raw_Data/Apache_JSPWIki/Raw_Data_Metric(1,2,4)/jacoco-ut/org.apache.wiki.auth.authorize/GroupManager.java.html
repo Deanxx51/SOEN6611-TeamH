@@ -1,0 +1,749 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>GroupManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.authorize</a> &gt; <span class="el_source">GroupManager.java</span></div><h1>GroupManager.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.authorize;
+
+import java.security.Principal;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.StringTokenizer;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.AuthenticationManager;
+import org.apache.wiki.auth.Authorizer;
+import org.apache.wiki.auth.GroupPrincipal;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiSecurityEvent;
+import org.apache.wiki.ui.InputValidator;
+import org.apache.wiki.util.ClassUtil;
+
+
+/**
+ * &lt;p&gt;
+ * Facade class for storing, retrieving and managing wiki groups on behalf of
+ * AuthorizationManager, JSPs and other presentation-layer classes. GroupManager
+ * works in collaboration with a back-end {@link GroupDatabase}, which persists
+ * groups to permanent storage.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * &lt;em&gt;Note: prior to JSPWiki 2.4.19, GroupManager was an interface; it
+ * is now a concrete, final class. The aspects of GroupManager which previously
+ * extracted group information from storage (e.g., wiki pages) have been
+ * refactored into the GroupDatabase interface.&lt;/em&gt;
+ * &lt;/p&gt;
+ * @since 2.4.19
+ */
+<span class="fc" id="L68">public class GroupManager implements Authorizer, WikiEventListener {</span>
+
+    /** Key used for adding UI messages to a user's WikiSession. */
+    public static final String  MESSAGES_KEY       = &quot;group&quot;;
+
+    private static final String PROP_GROUPDATABASE = &quot;jspwiki.groupdatabase&quot;;
+
+<span class="fc" id="L75">    static final Logger         log                = Logger.getLogger( GroupManager.class );</span>
+
+    protected WikiEngine        m_engine;
+
+    protected WikiEventListener m_groupListener;
+
+<span class="fc" id="L81">    private GroupDatabase       m_groupDatabase    = null;</span>
+
+    /** Map with GroupPrincipals as keys, and Groups as values */
+<span class="fc" id="L84">    private final Map&lt;Principal, Group&gt;           m_groups           = new HashMap&lt;Principal, Group&gt;();</span>
+
+    /**
+     * &lt;p&gt;
+     * Returns a GroupPrincipal matching a given name. If a group cannot be
+     * found, return &lt;code&gt;null&lt;/code&gt;.
+     * &lt;/p&gt;
+     * @param name Name of the group. This is case-sensitive.
+     * @return A DefaultGroup instance.
+     */
+    public Principal findRole( String name )
+    {
+        try
+        {
+<span class="fc" id="L98">            Group group = getGroup( name );</span>
+<span class="fc" id="L99">            return group.getPrincipal();</span>
+        }
+<span class="fc" id="L101">        catch( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L103">            return null;</span>
+        }
+    }
+
+    /**
+     * Returns the Group matching a given name. If the group cannot be found,
+     * this method throws a &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+     * @param name the name of the group to find
+     * @return the group
+     * @throws NoSuchPrincipalException if the group cannot be found
+     */
+    public Group getGroup( String name ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L116">        Group group = m_groups.get( new GroupPrincipal( name ) );</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        if ( group != null )</span>
+        {
+<span class="fc" id="L119">            return group;</span>
+        }
+<span class="fc" id="L121">        throw new NoSuchPrincipalException( &quot;Group &quot; + name + &quot; not found.&quot; );</span>
+    }
+
+    /**
+     * Returns the current external {@link GroupDatabase} in use. This method
+     * is guaranteed to return a properly-initialized GroupDatabase, unless
+     * it could not be initialized. In that case, this method throws
+     * a {@link org.apache.wiki.api.exceptions.WikiException}. The GroupDatabase
+     * is lazily initialized.
+     * @throws org.apache.wiki.auth.WikiSecurityException if the GroupDatabase could
+     * not be initialized
+     * @return the current GroupDatabase
+     * @since 2.3
+     */
+    public GroupDatabase getGroupDatabase() throws WikiSecurityException
+    {
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">        if ( m_groupDatabase != null )</span>
+        {
+<span class="nc" id="L139">            return m_groupDatabase;</span>
+        }
+
+<span class="fc" id="L142">        String dbClassName = &quot;&lt;unknown&gt;&quot;;</span>
+<span class="fc" id="L143">        String dbInstantiationError = null;</span>
+<span class="fc" id="L144">        Throwable cause = null;</span>
+        try
+        {
+<span class="fc" id="L147">            Properties props = m_engine.getWikiProperties();</span>
+<span class="fc" id="L148">            dbClassName = props.getProperty( PROP_GROUPDATABASE );</span>
+<span class="pc bpc" id="L149" title="1 of 2 branches missed.">            if ( dbClassName == null )</span>
+            {
+<span class="nc" id="L151">                dbClassName = XMLGroupDatabase.class.getName();</span>
+            }
+<span class="fc" id="L153">            log.info( &quot;Attempting to load group database class &quot; + dbClassName );</span>
+<span class="fc" id="L154">            Class&lt;?&gt; dbClass = ClassUtil.findClass( &quot;org.apache.wiki.auth.authorize&quot;, dbClassName );</span>
+<span class="fc" id="L155">            m_groupDatabase = (GroupDatabase) dbClass.newInstance();</span>
+<span class="fc" id="L156">            m_groupDatabase.initialize( m_engine, m_engine.getWikiProperties() );</span>
+<span class="fc" id="L157">            log.info( &quot;Group database initialized.&quot; );</span>
+        }
+<span class="nc" id="L159">        catch( ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L161">            log.error( &quot;GroupDatabase class &quot; + dbClassName + &quot; cannot be found.&quot;, e );</span>
+<span class="nc" id="L162">            dbInstantiationError = &quot;Failed to locate GroupDatabase class &quot; + dbClassName;</span>
+<span class="nc" id="L163">            cause = e;</span>
+        }
+<span class="nc" id="L165">        catch( InstantiationException e )</span>
+        {
+<span class="nc" id="L167">            log.error( &quot;GroupDatabase class &quot; + dbClassName + &quot; cannot be created.&quot;, e );</span>
+<span class="nc" id="L168">            dbInstantiationError = &quot;Failed to create GroupDatabase class &quot; + dbClassName;</span>
+<span class="nc" id="L169">            cause = e;</span>
+        }
+<span class="nc" id="L171">        catch( IllegalAccessException e )</span>
+        {
+<span class="nc" id="L173">            log.error( &quot;You are not allowed to access group database class &quot; + dbClassName + &quot;.&quot;, e );</span>
+<span class="nc" id="L174">            dbInstantiationError = &quot;Access GroupDatabase class &quot; + dbClassName + &quot; denied&quot;;</span>
+<span class="nc" id="L175">            cause = e;</span>
+        }
+<span class="nc" id="L177">        catch( NoRequiredPropertyException e )</span>
+        {
+<span class="nc" id="L179">            log.error( &quot;Missing property: &quot; + e.getMessage() + &quot;.&quot; );</span>
+<span class="nc" id="L180">            dbInstantiationError = &quot;Missing property: &quot; + e.getMessage();</span>
+<span class="nc" id="L181">            cause = e;</span>
+<span class="pc" id="L182">        }</span>
+
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">        if( dbInstantiationError != null )</span>
+        {
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            throw new WikiSecurityException( dbInstantiationError + &quot; Cause: &quot; + (cause != null ? cause.getMessage() : &quot;&quot;), cause );</span>
+        }
+
+<span class="fc" id="L189">        return m_groupDatabase;</span>
+    }
+
+    /**
+     * Returns an array of GroupPrincipals this GroupManager knows about. This
+     * method will return an array of GroupPrincipal objects corresponding to
+     * the wiki groups managed by this class. This method actually returns a
+     * defensive copy of an internally stored hashmap.
+     * @return an array of Principals representing the roles
+     */
+    public Principal[] getRoles()
+    {
+<span class="fc" id="L201">        return m_groups.keySet().toArray( new Principal[m_groups.size()] );</span>
+    }
+
+    /**
+     * Initializes the group cache by initializing the group database and
+     * obtaining a list of all of the groups it stores.
+     * @param engine the wiki engine
+     * @param props the properties used to initialize the wiki engine
+     * @see GroupDatabase#initialize(org.apache.wiki.WikiEngine,
+     *      java.util.Properties)
+     * @see GroupDatabase#groups()
+     * @throws WikiSecurityException if GroupManager cannot be initialized
+     */
+    public void initialize( WikiEngine engine, Properties props ) throws WikiSecurityException
+    {
+<span class="fc" id="L216">        m_engine = engine;</span>
+
+        try
+        {
+<span class="fc" id="L220">            m_groupDatabase = getGroupDatabase();</span>
+        }
+<span class="nc" id="L222">        catch ( WikiException e )</span>
+        {
+<span class="nc" id="L224">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L225">        }</span>
+
+        // Load all groups from the database into the cache
+<span class="fc" id="L228">        Group[] groups = m_groupDatabase.groups();</span>
+<span class="fc" id="L229">        synchronized( m_groups )</span>
+        {
+<span class="fc bfc" id="L231" title="All 2 branches covered.">            for( Group group : groups )</span>
+            {
+                // Add new group to cache; fire GROUP_ADD event
+<span class="fc" id="L234">                m_groups.put( group.getPrincipal(), group );</span>
+<span class="fc" id="L235">                fireEvent( WikiSecurityEvent.GROUP_ADD, group );</span>
+            }
+<span class="fc" id="L237">        }</span>
+
+        // Make the GroupManager listen for WikiEvents (WikiSecurityEvents for changed user profiles)
+<span class="fc" id="L240">        engine.getUserManager().addWikiEventListener( this );</span>
+
+        // Success!
+<span class="fc" id="L243">        log.info( &quot;Authorizer GroupManager initialized successfully; loaded &quot; + groups.length + &quot; group(s).&quot; );</span>
+
+<span class="fc" id="L245">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Determines whether the Subject associated with a WikiSession is in a
+     * particular role. This method takes two parameters: the WikiSession
+     * containing the subject and the desired role ( which may be a Role or a
+     * Group). If either parameter is &lt;code&gt;null&lt;/code&gt;, or if the user is
+     * not authenticated, this method returns &lt;code&gt;false&lt;/code&gt;.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * With respect to this implementation, the supplied Principal must be a
+     * GroupPrincipal. The Subject posesses the &quot;role&quot; if it the session is
+     * authenticated &lt;em&gt;and&lt;/em&gt; a Subject's principal is a member of the
+     * corresponding Group. This method simply finds the Group in question, then
+     * delegates to {@link Group#isMember(Principal)} for each of the principals
+     * in the Subject's principal set.
+     * &lt;/p&gt;
+     * @param session the current WikiSession
+     * @param role the role to check
+     * @return &lt;code&gt;true&lt;/code&gt; if the user is considered to be in the role,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    public boolean isUserInRole( WikiSession session, Principal role )
+    {
+        // Always return false if session/role is null, or if
+        // role isn't a GroupPrincipal
+<span class="pc bpc" id="L272" title="3 of 8 branches missed.">        if ( session == null || role == null || !( role instanceof GroupPrincipal ) || !session.isAuthenticated() )</span>
+        {
+<span class="fc" id="L274">            return false;</span>
+        }
+
+        // Get the group we're examining
+<span class="fc" id="L278">        Group group = m_groups.get( role );</span>
+<span class="fc bfc" id="L279" title="All 2 branches covered.">        if ( group == null )</span>
+        {
+<span class="fc" id="L281">            return false;</span>
+        }
+
+        // Check each user principal to see if it belongs to the group
+<span class="fc bfc" id="L285" title="All 2 branches covered.">        for ( Principal principal : session.getPrincipals() )</span>
+        {
+<span class="pc bpc" id="L287" title="1 of 4 branches missed.">            if ( AuthenticationManager.isUserPrincipal( principal ) &amp;&amp; group.isMember( principal ) )</span>
+            {
+<span class="fc" id="L289">                return true;</span>
+            }
+        }
+<span class="fc" id="L292">        return false;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Extracts group name and members from passed parameters and populates an
+     * existing Group with them. The Group will either be a copy of an existing
+     * Group (if one can be found), or a new, unregistered Group (if not).
+     * Optionally, this method can throw a WikiSecurityException if the Group
+     * does not yet exist in the GroupManager cache.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * The &lt;code&gt;group&lt;/code&gt; parameter in the HTTP request contains the Group
+     * name to look up and populate. The &lt;code&gt;members&lt;/code&gt; parameter
+     * contains the member list. If these differ from those in the existing
+     * group, the passed values override the old values.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method does not commit the new Group to the GroupManager cache. To
+     * do that, use {@link #setGroup(WikiSession, Group)}.
+     * &lt;/p&gt;
+     * @param name the name of the group to construct
+     * @param memberLine the line of text containing the group membership list
+     * @param create whether this method should create a new, empty Group if one
+     *            with the requested name is not found. If &lt;code&gt;false&lt;/code&gt;,
+     *            groups that do not exist will cause a
+     *            &lt;code&gt;NoSuchPrincipalException&lt;/code&gt; to be thrown
+     * @return a new, populated group
+     * @see org.apache.wiki.auth.authorize.Group#RESTRICTED_GROUPNAMES
+     * @throws WikiSecurityException if the group name isn't allowed, or if
+     * &lt;code&gt;create&lt;/code&gt; is &lt;code&gt;false&lt;/code&gt;
+     * and the Group named &lt;code&gt;name&lt;/code&gt; does not exist
+     */
+    public Group parseGroup( String name, String memberLine, boolean create ) throws WikiSecurityException
+    {
+        // If null name parameter, it's because someone's creating a new group
+<span class="pc bpc" id="L328" title="1 of 2 branches missed.">        if ( name == null )</span>
+        {
+<span class="nc bnc" id="L330" title="All 2 branches missed.">            if ( create )</span>
+            {
+<span class="nc" id="L332">                name = &quot;MyGroup&quot;;</span>
+            }
+            else
+            {
+<span class="nc" id="L336">                throw new WikiSecurityException( &quot;Group name cannot be blank.&quot; );</span>
+            }
+        }
+<span class="fc bfc" id="L339" title="All 2 branches covered.">        else if ( ArrayUtils.contains( Group.RESTRICTED_GROUPNAMES, name ) )</span>
+        {
+            // Certain names are forbidden
+<span class="fc" id="L342">            throw new WikiSecurityException( &quot;Illegal group name: &quot; + name );</span>
+        }
+<span class="fc" id="L344">        name = name.trim();</span>
+
+        // Normalize the member line
+<span class="fc bfc" id="L347" title="All 2 branches covered.">        if ( InputValidator.isBlank( memberLine ) )</span>
+        {
+<span class="fc" id="L349">            memberLine = &quot;&quot;;</span>
+        }
+<span class="fc" id="L351">        memberLine = memberLine.trim();</span>
+
+        // Create or retrieve the group (may have been previously cached)
+<span class="fc" id="L354">        Group group = new Group( name, m_engine.getApplicationName() );</span>
+        try
+        {
+<span class="fc" id="L357">            Group existingGroup = getGroup( name );</span>
+
+            // If existing, clone it
+<span class="fc" id="L360">            group.setCreator( existingGroup.getCreator() );</span>
+<span class="fc" id="L361">            group.setCreated( existingGroup.getCreated() );</span>
+<span class="fc" id="L362">            group.setModifier( existingGroup.getModifier() );</span>
+<span class="fc" id="L363">            group.setLastModified( existingGroup.getLastModified() );</span>
+<span class="fc bfc" id="L364" title="All 2 branches covered.">            for( Principal existingMember : existingGroup.members() )</span>
+            {
+<span class="fc" id="L366">                group.add( existingMember );</span>
+            }
+        }
+<span class="fc" id="L369">        catch( NoSuchPrincipalException e )</span>
+        {
+            // It's a new group.... throw error if we don't create new ones
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">            if ( !create )</span>
+            {
+<span class="nc" id="L374">                throw new NoSuchPrincipalException( &quot;Group '&quot; + name + &quot;' does not exist.&quot; );</span>
+            }
+<span class="fc" id="L376">        }</span>
+
+        // If passed members not empty, overwrite
+<span class="fc" id="L379">        String[] members = extractMembers( memberLine );</span>
+<span class="fc bfc" id="L380" title="All 2 branches covered.">        if ( members.length &gt; 0 )</span>
+        {
+<span class="fc" id="L382">            group.clear();</span>
+<span class="fc bfc" id="L383" title="All 2 branches covered.">            for( String member : members )</span>
+            {
+<span class="fc" id="L385">                group.add( new WikiPrincipal( member ) );</span>
+            }
+        }
+
+<span class="fc" id="L389">        return group;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Extracts group name and members from the HTTP request and populates an
+     * existing Group with them. The Group will either be a copy of an existing
+     * Group (if one can be found), or a new, unregistered Group (if not).
+     * Optionally, this method can throw a WikiSecurityException if the Group
+     * does not yet exist in the GroupManager cache.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * The &lt;code&gt;group&lt;/code&gt; parameter in the HTTP request contains the Group
+     * name to look up and populate. The &lt;code&gt;members&lt;/code&gt; parameter
+     * contains the member list. If these differ from those in the existing
+     * group, the passed values override the old values.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method does not commit the new Group to the GroupManager cache. To
+     * do that, use {@link #setGroup(WikiSession, Group)}.
+     * &lt;/p&gt;
+     * @param context the current wiki context
+     * @param create whether this method should create a new, empty Group if one
+     *            with the requested name is not found. If &lt;code&gt;false&lt;/code&gt;,
+     *            groups that do not exist will cause a
+     *            &lt;code&gt;NoSuchPrincipalException&lt;/code&gt; to be thrown
+     * @return a new, populated group
+     * @throws WikiSecurityException if the group name isn't allowed, or if
+     * &lt;code&gt;create&lt;/code&gt; is &lt;code&gt;false&lt;/code&gt;
+     * and the Group does not exist
+     */
+    public Group parseGroup( WikiContext context, boolean create ) throws WikiSecurityException
+    {
+        // Extract parameters
+<span class="nc" id="L423">        HttpServletRequest request = context.getHttpRequest();</span>
+<span class="nc" id="L424">        String name = request.getParameter( &quot;group&quot; );</span>
+<span class="nc" id="L425">        String memberLine = request.getParameter( &quot;members&quot; );</span>
+
+        // Create the named group; we pass on any NoSuchPrincipalExceptions
+        // that may be thrown if create == false, or WikiSecurityExceptions
+<span class="nc" id="L429">        Group group = parseGroup( name, memberLine, create );</span>
+
+        // If no members, add the current user by default
+<span class="nc bnc" id="L432" title="All 2 branches missed.">        if ( group.members().length == 0 )</span>
+        {
+<span class="nc" id="L434">            group.add( context.getWikiSession().getUserPrincipal() );</span>
+        }
+
+<span class="nc" id="L437">        return group;</span>
+    }
+
+    /**
+     * Removes a named Group from the group database. If not found, throws a
+     * &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;. After removal, this method will
+     * commit the delete to the back-end group database. It will also fire a
+     * {@link org.apache.wiki.event.WikiSecurityEvent#GROUP_REMOVE} event with
+     * the GroupManager instance as the source and the Group as target.
+     * If &lt;code&gt;index&lt;/code&gt; is &lt;code&gt;null&lt;/code&gt;, this method throws
+     * an {@link IllegalArgumentException}.
+     * @param index the group to remove
+     * @throws WikiSecurityException if the Group cannot be removed by
+     * the back-end
+     * @see org.apache.wiki.auth.authorize.GroupDatabase#delete(Group)
+     */
+    public void removeGroup( String index ) throws WikiSecurityException
+    {
+<span class="pc bpc" id="L455" title="1 of 2 branches missed.">        if ( index == null )</span>
+        {
+<span class="nc" id="L457">            throw new IllegalArgumentException( &quot;Group cannot be null.&quot; );</span>
+        }
+
+<span class="fc" id="L460">        Group group = m_groups.get( new GroupPrincipal( index ) );</span>
+<span class="fc bfc" id="L461" title="All 2 branches covered.">        if ( group == null )</span>
+        {
+<span class="fc" id="L463">            throw new NoSuchPrincipalException( &quot;Group &quot; + index + &quot; not found&quot; );</span>
+        }
+
+        // Delete the group
+        // TODO: need rollback procedure
+<span class="fc" id="L468">        synchronized( m_groups )</span>
+        {
+<span class="fc" id="L470">            m_groups.remove( group.getPrincipal() );</span>
+<span class="fc" id="L471">        }</span>
+<span class="fc" id="L472">        m_groupDatabase.delete( group );</span>
+<span class="fc" id="L473">        fireEvent( WikiSecurityEvent.GROUP_REMOVE, group );</span>
+<span class="fc" id="L474">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Saves the {@link Group} created by a user in a wiki session. This method
+     * registers the Group with the GroupManager and saves it to the back-end
+     * database. If an existing Group with the same name already exists, the new
+     * group will overwrite it. After saving the Group, the group database
+     * changes are committed.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method fires the following events:
+     * &lt;/p&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;&lt;strong&gt;When creating a new Group&lt;/strong&gt;, this method fires a
+     * {@link org.apache.wiki.event.WikiSecurityEvent#GROUP_ADD} with the
+     * GroupManager instance as its source and the new Group as the target.&lt;/li&gt;
+     * &lt;li&gt;&lt;strong&gt;When overwriting an existing Group&lt;/strong&gt;, this method
+     * fires a new {@link org.apache.wiki.event.WikiSecurityEvent#GROUP_REMOVE}
+     * with this GroupManager instance as the source, and the new Group as the
+     * target. It then fires a
+     * {@link org.apache.wiki.event.WikiSecurityEvent#GROUP_ADD} event with the
+     * same source and target.&lt;/li&gt;
+     * &lt;/ul&gt;
+     * &lt;p&gt;
+     * In addition, if the save or commit actions fail, this method will attempt
+     * to restore the older version of the wiki group if it exists. This will
+     * result in a &lt;code&gt;GROUP_REMOVE&lt;/code&gt; event (for the new version of the
+     * Group) followed by a &lt;code&gt;GROUP_ADD&lt;/code&gt; event (to indicate
+     * restoration of the old version).
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method will register the new Group with the GroupManager. For example,
+     * {@link org.apache.wiki.auth.AuthenticationManager} attaches each
+     * WikiSession as a GroupManager listener. Thus, the act of registering a
+     * Group with &lt;code&gt;setGroup&lt;/code&gt; means that all WikiSessions will
+     * automatically receive group add/change/delete events immediately.
+     * &lt;/p&gt;
+     * @param session the wiki session, which may not be &lt;code&gt;null&lt;/code&gt;
+     * @param group the Group, which may not be &lt;code&gt;null&lt;/code&gt;
+     * @throws WikiSecurityException if the Group cannot be saved by the back-end
+     */
+    public void setGroup( WikiSession session, Group group ) throws WikiSecurityException
+    {
+        // TODO: check for appropriate permissions
+
+        // If group already exists, delete it; fire GROUP_REMOVE event
+<span class="fc" id="L521">        Group oldGroup = m_groups.get( group.getPrincipal() );</span>
+<span class="fc bfc" id="L522" title="All 2 branches covered.">        if ( oldGroup != null )</span>
+        {
+<span class="fc" id="L524">            fireEvent( WikiSecurityEvent.GROUP_REMOVE, oldGroup );</span>
+<span class="fc" id="L525">            synchronized( m_groups )</span>
+            {
+<span class="fc" id="L527">                m_groups.remove( oldGroup.getPrincipal() );</span>
+<span class="fc" id="L528">            }</span>
+        }
+
+        // Copy existing modifier info &amp; timestamps
+<span class="fc bfc" id="L532" title="All 2 branches covered.">        if ( oldGroup != null )</span>
+        {
+<span class="fc" id="L534">            group.setCreator( oldGroup.getCreator() );</span>
+<span class="fc" id="L535">            group.setCreated( oldGroup.getCreated() );</span>
+<span class="fc" id="L536">            group.setModifier( oldGroup.getModifier() );</span>
+<span class="fc" id="L537">            group.setLastModified( oldGroup.getLastModified() );</span>
+        }
+
+        // Add new group to cache; announce GROUP_ADD event
+<span class="fc" id="L541">        synchronized( m_groups )</span>
+        {
+<span class="fc" id="L543">            m_groups.put( group.getPrincipal(), group );</span>
+<span class="fc" id="L544">        }</span>
+<span class="fc" id="L545">        fireEvent( WikiSecurityEvent.GROUP_ADD, group );</span>
+
+        // Save the group to back-end database; if it fails,
+        // roll back to previous state. Note that the back-end
+        // MUST timestammp the create/modify fields in the Group.
+        try
+        {
+<span class="fc" id="L552">            m_groupDatabase.save( group, session.getUserPrincipal() );</span>
+        }
+
+        // We got an exception! Roll back...
+<span class="nc" id="L556">        catch( WikiSecurityException e )</span>
+        {
+<span class="nc bnc" id="L558" title="All 2 branches missed.">            if ( oldGroup != null )</span>
+            {
+                // Restore previous version, re-throw...
+<span class="nc" id="L561">                fireEvent( WikiSecurityEvent.GROUP_REMOVE, group );</span>
+<span class="nc" id="L562">                fireEvent( WikiSecurityEvent.GROUP_ADD, oldGroup );</span>
+<span class="nc" id="L563">                synchronized( m_groups )</span>
+                {
+<span class="nc" id="L565">                    m_groups.put( oldGroup.getPrincipal(), oldGroup );</span>
+<span class="nc" id="L566">                }</span>
+<span class="nc" id="L567">                throw new WikiSecurityException( e.getMessage() + &quot; (rolled back to previous version).&quot;, e );</span>
+            }
+            // Re-throw security exception
+<span class="nc" id="L570">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L571">        }</span>
+<span class="fc" id="L572">    }</span>
+
+    /**
+     * Validates a Group, and appends any errors to the session errors list. Any
+     * validation errors are added to the wiki session's messages collection
+     * (see {@link WikiSession#getMessages()}.
+     * @param context the current wiki context
+     * @param group the supplied Group
+     */
+    public void validateGroup( WikiContext context, Group group )
+    {
+<span class="nc" id="L583">        InputValidator validator = new InputValidator( MESSAGES_KEY, context );</span>
+
+        // Name cannot be null or one of the restricted names
+        try
+        {
+<span class="nc" id="L588">            checkGroupName( context, group.getName() );</span>
+        }
+<span class="nc" id="L590">        catch( WikiSecurityException e )</span>
+        {
+
+<span class="nc" id="L593">        }</span>
+
+        // Member names must be &quot;safe&quot; strings
+<span class="nc" id="L596">        Principal[] members = group.members();</span>
+<span class="nc bnc" id="L597" title="All 2 branches missed.">        for( int i = 0; i &lt; members.length; i++ )</span>
+        {
+<span class="nc" id="L599">            validator.validateNotNull( members[i].getName(), &quot;Full name&quot;, InputValidator.ID );</span>
+        }
+<span class="nc" id="L601">    }</span>
+
+    /**
+     * Extracts carriage-return separated members into a Set of String objects.
+     * @param memberLine the list of members
+     * @return the list of members
+     */
+    protected String[] extractMembers( String memberLine )
+    {
+<span class="fc" id="L610">        Set&lt;String&gt; members = new HashSet&lt;String&gt;();</span>
+<span class="pc bpc" id="L611" title="1 of 2 branches missed.">        if ( memberLine != null )</span>
+        {
+<span class="fc" id="L613">            StringTokenizer tok = new StringTokenizer( memberLine, &quot;\n&quot; );</span>
+<span class="fc bfc" id="L614" title="All 2 branches covered.">            while( tok.hasMoreTokens() )</span>
+            {
+<span class="fc" id="L616">                String uid = tok.nextToken().trim();</span>
+<span class="pc bpc" id="L617" title="2 of 4 branches missed.">                if ( uid != null &amp;&amp; uid.length() &gt; 0 )</span>
+                {
+<span class="fc" id="L619">                    members.add( uid );</span>
+                }
+<span class="fc" id="L621">            }</span>
+        }
+<span class="fc" id="L623">        return members.toArray( new String[members.size()] );</span>
+    }
+
+    /**
+     * Checks if a String is blank or a restricted Group name, and if it is,
+     * appends an error to the WikiSession's message list.
+     * @param context the wiki context
+     * @param name the Group name to test
+     * @throws WikiSecurityException if &lt;code&gt;session&lt;/code&gt; is
+     * &lt;code&gt;null&lt;/code&gt; or the Group name is illegal
+     * @see Group#RESTRICTED_GROUPNAMES
+     */
+    protected void checkGroupName( WikiContext context, String name ) throws WikiSecurityException
+    {
+        //TODO: groups cannot have the same name as a user
+
+        // Name cannot be null
+<span class="nc" id="L640">        InputValidator validator = new InputValidator( MESSAGES_KEY, context );</span>
+<span class="nc" id="L641">        validator.validateNotNull( name, &quot;Group name&quot; );</span>
+
+        // Name cannot be one of the restricted names either
+<span class="nc bnc" id="L644" title="All 2 branches missed.">        if( ArrayUtils.contains( Group.RESTRICTED_GROUPNAMES, name ) )</span>
+        {
+<span class="nc" id="L646">            throw new WikiSecurityException( &quot;The group name '&quot; + name + &quot;' is illegal. Choose another.&quot; );</span>
+        }
+<span class="nc" id="L648">    }</span>
+
+
+    // events processing .......................................................
+
+    /**
+     * Registers a WikiEventListener with this instance.
+     * This is a convenience method.
+     * @param listener the event listener
+     */
+    public synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="fc" id="L660">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="fc" id="L661">    }</span>
+
+    /**
+     * Un-registers a WikiEventListener with this instance.
+     * This is a convenience method.
+     * @param listener the event listener
+     */
+    public synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L670">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L671">    }</span>
+
+    /**
+     *  Fires a WikiSecurityEvent of the provided type, Principal and target Object
+     *  to all registered listeners.
+     *
+     * @see org.apache.wiki.event.WikiSecurityEvent
+     * @param type       the event type to be fired
+     * @param target     the changed Object, which may be &lt;code&gt;null&lt;/code&gt;
+     */
+    protected void fireEvent( int type, Object target )
+    {
+<span class="fc bfc" id="L683" title="All 2 branches covered.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="fc" id="L685">            WikiEventManager.fireEvent(this,new WikiSecurityEvent(this,type,target));</span>
+        }
+<span class="fc" id="L687">    }</span>
+
+    /**
+     * Listens for {@link org.apache.wiki.event.WikiSecurityEvent#PROFILE_NAME_CHANGED}
+     * events. If a user profile's name changes, each group is inspected. If an entry contains
+     * a name that has changed, it is replaced with the new one. No group events are emitted
+     * as a consequence of this method, because the group memberships are still the same; it is
+     * only the representations of the names within that are changing.
+     * @param event the incoming event
+     */
+    public void actionPerformed(WikiEvent event)
+    {
+<span class="pc bpc" id="L699" title="1 of 2 branches missed.">        if (! ( event instanceof WikiSecurityEvent ) )</span>
+        {
+<span class="nc" id="L701">            return;</span>
+        }
+
+<span class="fc" id="L704">        WikiSecurityEvent se = (WikiSecurityEvent)event;</span>
+<span class="fc bfc" id="L705" title="All 2 branches covered.">        if ( se.getType() == WikiSecurityEvent.PROFILE_NAME_CHANGED )</span>
+        {
+<span class="fc" id="L707">            WikiSession session = se.getSrc();</span>
+<span class="fc" id="L708">            UserProfile[] profiles = (UserProfile[])se.getTarget();</span>
+<span class="fc" id="L709">            Principal[] oldPrincipals = new Principal[] {</span>
+<span class="fc" id="L710">                new WikiPrincipal( profiles[0].getLoginName() ),</span>
+<span class="fc" id="L711">                new WikiPrincipal( profiles[0].getFullname() ),</span>
+<span class="fc" id="L712">                new WikiPrincipal( profiles[0].getWikiName() ) };</span>
+<span class="fc" id="L713">            Principal newPrincipal = new WikiPrincipal( profiles[1].getFullname() );</span>
+
+            // Examine each group
+<span class="fc" id="L716">            int groupsChanged = 0;</span>
+            try
+            {
+<span class="fc bfc" id="L719" title="All 2 branches covered.">                for ( Group group : m_groupDatabase.groups() )</span>
+                {
+<span class="fc" id="L721">                    boolean groupChanged = false;</span>
+<span class="fc bfc" id="L722" title="All 2 branches covered.">                    for ( Principal oldPrincipal : oldPrincipals )</span>
+                    {
+<span class="fc bfc" id="L724" title="All 2 branches covered.">                        if ( group.isMember( oldPrincipal ) )</span>
+                        {
+<span class="fc" id="L726">                            group.remove( oldPrincipal );</span>
+<span class="fc" id="L727">                            group.add( newPrincipal );</span>
+<span class="fc" id="L728">                            groupChanged = true;</span>
+                        }
+                    }
+<span class="fc bfc" id="L731" title="All 2 branches covered.">                    if ( groupChanged )</span>
+                    {
+<span class="fc" id="L733">                        setGroup( session, group );</span>
+<span class="fc" id="L734">                        groupsChanged++;</span>
+                    }
+                }
+            }
+<span class="nc" id="L738">            catch ( WikiException e )</span>
+            {
+                // Oooo! This is really bad...
+<span class="nc" id="L741">                log.error( &quot;Could not change user name in Group lists because of GroupDatabase error:&quot; + e.getMessage() );</span>
+<span class="fc" id="L742">            }</span>
+<span class="fc" id="L743">            log.info( &quot;Profile name change for '&quot; + newPrincipal.toString() +</span>
+                      &quot;' caused &quot; + groupsChanged + &quot; groups to change also.&quot; );
+        }
+<span class="fc" id="L746">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormInput.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormInput.java</span></div><h1>FormInput.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.forms;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.TextUtil;
+import org.apache.wiki.util.XHTML;
+import org.apache.wiki.util.XhtmlUtil;
+import org.jdom2.Element;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+/**
+ *  Creates a simple input text field.
+ */
+<span class="nc" id="L38">public class FormInput extends FormElement</span>
+{
+    /** Parameter name for setting the type.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_TYPE  = &quot;type&quot;;
+
+    /** Parameter name for setting the size of the input field.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_SIZE  = &quot;size&quot;;
+
+    public static final String PARAM_CHECKED  = &quot;checked&quot;;
+
+    /**
+     * Generates a dynamic form element on the WikiPage.
+     * 
+     * {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L56">        String inputName  = params.get( PARAM_INPUTNAME );</span>
+<span class="nc" id="L57">        String inputValue = params.get( PARAM_VALUE );</span>
+<span class="nc" id="L58">        String inputType  = params.get( PARAM_TYPE );</span>
+<span class="nc" id="L59">        String size       = params.get( PARAM_SIZE );</span>
+<span class="nc" id="L60">        String checked    = params.get( PARAM_CHECKED );</span>
+<span class="nc" id="L61">        ResourceBundle rb = Preferences.getBundle( ctx, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if ( inputName == null ) {</span>
+<span class="nc" id="L64">            throw new PluginException( rb.getString( &quot;forminput.namemissing&quot; ) );</span>
+        }
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if ( inputValue == null ) {</span>
+<span class="nc" id="L67">            inputValue = &quot;&quot;;</span>
+        }
+        
+        // Don't render if no error and error-only-rendering is on.
+<span class="nc" id="L71">        FormInfo info = getFormInfo( ctx );</span>
+<span class="nc" id="L72">        Map&lt; String, String &gt; previousValues = null;</span>
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if ( info != null )</span>
+        {
+<span class="nc bnc" id="L75" title="All 2 branches missed.">            if ( info.hide() )</span>
+            {
+//              return XhtmlUtil.serialize(XhtmlUtil.element(XHTML.p,rb.getString(&quot;forminput.noneedtoshow&quot;))); // nope
+<span class="nc" id="L78">                return &quot;&lt;p&gt;&quot; + rb.getString( &quot;forminput.noneedtoshow&quot; ) + &quot;&lt;/p&gt;&quot;;</span>
+            }
+<span class="nc" id="L80">            previousValues = info.getSubmission();</span>
+        }
+
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if ( previousValues == null )</span>
+        {
+<span class="nc" id="L85">            previousValues = new HashMap&lt; String, String &gt;();</span>
+        }
+
+        // In order to isolate posted form elements into their own
+        // map, prefix the variable name here. It will be stripped
+        // when the handler plugin is executed.
+        
+<span class="nc" id="L92">        Element field = XhtmlUtil.input(inputType,HANDLERPARAM_PREFIX + inputName,inputValue);</span>
+        
+<span class="nc" id="L94">        field.setAttribute(XHTML.ATTR_class,</span>
+<span class="nc bnc" id="L95" title="All 4 branches missed.">                String.valueOf(TextUtil.isPositive(checked) || &quot;checked&quot;.equalsIgnoreCase(checked)));</span>
+        
+<span class="nc" id="L97">        String oldValue = previousValues.get( inputName );</span>
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if ( oldValue != null )</span>
+        {
+<span class="nc" id="L100">            field.setAttribute(XHTML.ATTR_value,oldValue);</span>
+        }
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if ( size != null ) {</span>
+<span class="nc" id="L104">            field.setAttribute(XHTML.ATTR_size,size);</span>
+        }
+
+<span class="nc" id="L107">        return XhtmlUtil.serialize(field); // ctx.getEngine().getContentEncoding()</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

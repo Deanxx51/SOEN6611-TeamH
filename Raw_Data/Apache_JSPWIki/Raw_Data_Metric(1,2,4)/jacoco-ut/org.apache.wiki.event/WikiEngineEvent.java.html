@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiEngineEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">WikiEngineEvent.java</span></div><h1>WikiEngineEvent.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.event;
+
+import org.apache.wiki.WikiEngine;
+
+/**
+  * WikiEngineEvent indicates a change in the state of the WikiEngine.
+  * 
+  * @see     org.apache.wiki.event.WikiEvent
+  * @since   2.4.20
+  */
+public class WikiEngineEvent extends WikiEvent
+{
+    private static final long serialVersionUID = 1829433967558773970L;
+
+    /** Indicates a WikiEngine initialization event, fired as the 
+      * wiki service is being initialized (in progress). */
+    public static final int INITIALIZING   = -1;
+
+    /** Indicates a WikiEngine initialized event, fired after the 
+      * wiki service is fully available. */
+    public static final int INITIALIZED    = 0;
+
+    /** Indicates a WikiEngine closing event, fired as a signal that
+      * the wiki service is shutting down. */
+    public static final int SHUTDOWN       = 1;
+
+    /** Indicates a WikiEngine stopped event, fired after halting the wiki service.
+      * A WikiEngine in this state is not expected to provide further services. 
+      */
+    public static final int STOPPED        = 2;
+
+    private WikiEngine m_engine;
+
+    // ............
+
+
+     /**
+      *  Constructs an instance of this event.
+      * @param eventSource  the Object that is the source of the event,
+      * which &lt;b&gt;must&lt;/b&gt; be the WikiEngine. If it is not, this
+      * method thows a ClassCastException
+      * @param type the event type
+      */
+    public WikiEngineEvent( Object eventSource, int type )
+    {
+<span class="fc" id="L65">        super( eventSource, type );</span>
+<span class="fc" id="L66">        m_engine = (WikiEngine)eventSource;</span>
+<span class="fc" id="L67">    }</span>
+
+
+    /**
+     *  Sets the type of this event.
+     *
+     * @param type      the type of this WikiEngineEvent.
+     */
+    protected void setType( int type )
+    {
+<span class="pc bpc" id="L77" title="2 of 4 branches missed.">        if ( type &gt;= INITIALIZING &amp;&amp; type &lt;= STOPPED )</span>
+        {
+<span class="fc" id="L79">            super.setType(type);</span>
+        }
+        else
+        {
+<span class="nc" id="L83">            super.setType(ERROR);</span>
+        }
+<span class="fc" id="L85">    }</span>
+
+
+    /**
+     *  Returns the WikiEngine that spawned this event.
+     *
+     * @return  the WikiEngine that spawned this event.
+     */
+    public WikiEngine getEngine()
+    {
+<span class="nc" id="L95">        return m_engine;</span>
+    }
+
+
+    /**
+     *  Returns the WikiEngine that spawned this event.
+     *
+     * @return  the WikiEngine that spawned this event.
+     * @deprecated  use {@link #getEngine()} instead.
+     */
+    public WikiEngine getWikiEngine()
+    {
+<span class="nc" id="L107">        return m_engine;</span>
+    }
+
+
+   /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the int value is a WikiPageEvent type.
+     * @param type the event type
+     * @return the result
+     */
+    public static boolean isValidType( int type )
+    {
+<span class="pc bpc" id="L118" title="2 of 4 branches missed.">        return type &gt;= INITIALIZING &amp;&amp; type &lt;= STOPPED;</span>
+    }
+
+
+    /**
+     *  Returns a textual representation of the event type.
+     *
+     * @return a String representation of the type
+     */
+    public final String eventName()
+    {
+<span class="nc bnc" id="L129" title="All 5 branches missed.">        switch ( getType() )</span>
+        {
+<span class="nc" id="L131">            case INITIALIZING:         return &quot;INITIALIZING&quot;;</span>
+<span class="nc" id="L132">            case INITIALIZED:          return &quot;INITIALIZED&quot;;</span>
+<span class="nc" id="L133">            case SHUTDOWN:             return &quot;SHUTDOWN&quot;;</span>
+<span class="nc" id="L134">            case STOPPED:              return &quot;STOPPED&quot;;</span>
+<span class="nc" id="L135">            default:                   return super.eventName();</span>
+        }
+    }
+
+
+    /**
+     *  Returns a human-readable description of the event type.
+     *
+     * @return a String description of the type
+     */
+    public final String getTypeDescription()
+    {
+<span class="nc bnc" id="L147" title="All 5 branches missed.">        switch ( getType() )</span>
+        {
+<span class="nc" id="L149">            case INITIALIZING:         return &quot;wiki engine initializing&quot;;</span>
+<span class="nc" id="L150">            case INITIALIZED:          return &quot;wiki engine initialized&quot;;</span>
+<span class="nc" id="L151">            case SHUTDOWN:             return &quot;wiki engine shutting down&quot;;</span>
+<span class="nc" id="L152">            case STOPPED:              return &quot;wiki engine stopped&quot;;</span>
+<span class="nc" id="L153">            default:                   return super.getTypeDescription();</span>
+        }
+    }
+
+} // end class org.apache.wiki.event.WikiEngineEvent
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

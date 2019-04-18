@@ -1,0 +1,255 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TableOfContents.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">TableOfContents.java</span></div><h1>TableOfContents.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.engine.FilterManager;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.parser.Heading;
+import org.apache.wiki.parser.HeadingListener;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Provides a table of contents. 
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;title&lt;/b&gt; - The title of the table of contents.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;numbered&lt;/b&gt; - if true, generates automatically numbers for the headings.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;start&lt;/b&gt; - If using a numbered list, sets the start number.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;prefix&lt;/b&gt; - If using a numbered list, sets the prefix used for the list.&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 2.2
+ */
+<span class="fc" id="L51">public class TableOfContents</span>
+    implements WikiPlugin, HeadingListener
+{
+<span class="fc" id="L54">    private static Logger log = Logger.getLogger( TableOfContents.class );</span>
+
+    /** Parameter name for setting the title. */
+    public static final String PARAM_TITLE = &quot;title&quot;;
+    
+    /** Parameter name for setting whether the headings should be numbered. */
+    public static final String PARAM_NUMBERED = &quot;numbered&quot;;
+    
+    /** Parameter name for setting where the numbering should start. */
+    public static final String PARAM_START = &quot;start&quot;;
+    
+    /** Parameter name for setting what the prefix for the heading is. */
+    public static final String PARAM_PREFIX = &quot;prefix&quot;;
+
+    private static final String VAR_ALREADY_PROCESSING = &quot;__TableOfContents.processing&quot;;
+
+<span class="fc" id="L70">    StringBuffer m_buf = new StringBuffer();</span>
+<span class="fc" id="L71">    private boolean m_usingNumberedList = false;</span>
+<span class="fc" id="L72">    private String m_prefix = &quot;&quot;;</span>
+<span class="fc" id="L73">    private int m_starting = 0;</span>
+<span class="fc" id="L74">    private int m_level1Index = 0;</span>
+<span class="fc" id="L75">    private int m_level2Index = 0;</span>
+<span class="fc" id="L76">    private int m_level3Index = 0;</span>
+<span class="fc" id="L77">    private int m_lastLevel = 0;</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void headingAdded( WikiContext context, Heading hd )
+    {
+<span class="fc" id="L84">        log.debug(&quot;HD: &quot;+hd.m_level+&quot;, &quot;+hd.m_titleText+&quot;, &quot;+hd.m_titleAnchor);</span>
+
+<span class="pc bpc" id="L86" title="1 of 4 branches missed.">        switch( hd.m_level )</span>
+        {
+          case Heading.HEADING_SMALL:
+<span class="fc" id="L89">            m_buf.append(&quot;&lt;li class=\&quot;toclevel-3\&quot;&gt;&quot;);</span>
+<span class="fc" id="L90">            m_level3Index++;</span>
+<span class="fc" id="L91">            break;</span>
+          case Heading.HEADING_MEDIUM:
+<span class="fc" id="L93">            m_buf.append(&quot;&lt;li class=\&quot;toclevel-2\&quot;&gt;&quot;);</span>
+<span class="fc" id="L94">            m_level2Index++;</span>
+<span class="fc" id="L95">            break;</span>
+          case Heading.HEADING_LARGE:
+<span class="fc" id="L97">            m_buf.append(&quot;&lt;li class=\&quot;toclevel-1\&quot;&gt;&quot;);</span>
+<span class="fc" id="L98">            m_level1Index++;</span>
+<span class="fc" id="L99">            break;</span>
+          default:
+<span class="nc" id="L101">            throw new InternalWikiException(&quot;Unknown depth in toc! (Please submit a bug report.)&quot;);</span>
+        }
+
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if (m_level1Index &lt; m_starting)</span>
+        {
+            // in case we never had a large heading ...
+<span class="fc" id="L107">            m_level1Index++;</span>
+        }
+<span class="fc bfc" id="L109" title="All 4 branches covered.">        if ((m_lastLevel == Heading.HEADING_SMALL) &amp;&amp; (hd.m_level != Heading.HEADING_SMALL))</span>
+        {
+<span class="fc" id="L111">            m_level3Index = 0;</span>
+        }
+<span class="fc bfc" id="L113" title="All 6 branches covered.">        if ( ((m_lastLevel == Heading.HEADING_SMALL) || (m_lastLevel == Heading.HEADING_MEDIUM)) &amp;&amp;</span>
+                  (hd.m_level == Heading.HEADING_LARGE) )
+        {
+<span class="fc" id="L116">            m_level3Index = 0;</span>
+<span class="fc" id="L117">            m_level2Index = 0;</span>
+        }
+
+<span class="fc" id="L120">        String titleSection = hd.m_titleSection.replace( '%', '_' );</span>
+<span class="fc" id="L121">        String pageName = context.getEngine().encodeName(context.getPage().getName()).replace( '%', '_' );</span>
+
+<span class="fc" id="L123">        String sectref = &quot;#section-&quot;+pageName+&quot;-&quot;+titleSection;</span>
+
+<span class="fc" id="L125">        m_buf.append( &quot;&lt;a class=\&quot;wikipage\&quot; href=\&quot;&quot; + sectref + &quot;\&quot;&gt;&quot; );</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">        if (m_usingNumberedList)</span>
+        {
+<span class="pc bpc" id="L128" title="1 of 4 branches missed.">            switch( hd.m_level )</span>
+            {
+            case Heading.HEADING_SMALL:
+<span class="fc" id="L131">                m_buf.append(m_prefix + m_level1Index + &quot;.&quot; + m_level2Index + &quot;.&quot;+ m_level3Index +&quot; &quot;);</span>
+<span class="fc" id="L132">                break;</span>
+            case Heading.HEADING_MEDIUM:
+<span class="fc" id="L134">                m_buf.append(m_prefix + m_level1Index + &quot;.&quot; + m_level2Index + &quot; &quot;);</span>
+<span class="fc" id="L135">                break;</span>
+            case Heading.HEADING_LARGE:
+<span class="fc" id="L137">                m_buf.append(m_prefix + m_level1Index +&quot; &quot;);</span>
+<span class="fc" id="L138">                break;</span>
+            default:
+<span class="nc" id="L140">                throw new InternalWikiException(&quot;Unknown depth in toc! (Please submit a bug report.)&quot;);</span>
+            }
+        }
+<span class="fc" id="L143">        m_buf.append( TextUtil.replaceEntities(hd.m_titleText)+&quot;&lt;/a&gt;&lt;/li&gt;\n&quot; );</span>
+
+<span class="fc" id="L145">        m_lastLevel = hd.m_level;</span>
+<span class="fc" id="L146">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="fc" id="L154">        WikiEngine engine = context.getEngine();</span>
+<span class="fc" id="L155">        WikiPage   page   = context.getPage();</span>
+<span class="fc" id="L156">        ResourceBundle rb = Preferences.getBundle( context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+
+<span class="fc bfc" id="L158" title="All 2 branches covered.">        if( context.getVariable( VAR_ALREADY_PROCESSING ) != null )</span>
+        {
+            //return rb.getString(&quot;tableofcontents.title&quot;);
+<span class="fc" id="L161">            return &quot;&lt;a href=\&quot;#section-TOC\&quot; class=\&quot;toc\&quot;&gt;&quot;+rb.getString(&quot;tableofcontents.title&quot;)+&quot;&lt;/a&gt;&quot;;</span>
+        }
+
+<span class="fc" id="L164">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="fc" id="L166">        sb.append(&quot;&lt;div class=\&quot;toc\&quot;&gt;\n&quot;);</span>
+<span class="fc" id="L167">        sb.append(&quot;&lt;div class=\&quot;collapsebox\&quot;&gt;\n&quot;);</span>
+
+<span class="fc" id="L169">        String title = params.get(PARAM_TITLE);</span>
+<span class="fc" id="L170">        sb.append(&quot;&lt;h4 id=\&quot;section-TOC\&quot;&gt;&quot;);</span>
+<span class="pc bpc" id="L171" title="1 of 2 branches missed.">        if( title != null )</span>
+        {
+            //sb.append(&quot;&lt;h4&gt;&quot;+TextUtil.replaceEntities(title)+&quot;&lt;/h4&gt;\n&quot;);
+<span class="nc" id="L174">            sb.append(TextUtil.replaceEntities(title));</span>
+        }
+        else
+        {
+            //sb.append(&quot;&lt;h4&gt;&quot;+rb.getString(&quot;tableofcontents.title&quot;)+&quot;&lt;/h4&gt;\n&quot;);
+<span class="fc" id="L179">            sb.append(rb.getString(&quot;tableofcontents.title&quot;));</span>
+        }
+<span class="fc" id="L181">        sb.append(&quot;&lt;/h4&gt;\n&quot;);</span>
+
+        // should we use an ordered list?
+<span class="fc" id="L184">        m_usingNumberedList = false;</span>
+<span class="fc bfc" id="L185" title="All 2 branches covered.">        if (params.containsKey(PARAM_NUMBERED))</span>
+        {
+<span class="fc" id="L187">            String numbered = params.get(PARAM_NUMBERED);</span>
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">            if (numbered.equalsIgnoreCase(&quot;true&quot;))</span>
+            {
+<span class="fc" id="L190">                m_usingNumberedList = true;</span>
+            }
+<span class="nc bnc" id="L192" title="All 2 branches missed.">            else if (numbered.equalsIgnoreCase(&quot;yes&quot;))</span>
+            {
+<span class="nc" id="L194">                m_usingNumberedList = true;</span>
+            }
+        }
+
+        // if we are using a numbered list, get the rest of the parameters (if any) ...
+<span class="fc bfc" id="L199" title="All 2 branches covered.">        if (m_usingNumberedList)</span>
+        {
+<span class="fc" id="L201">            int start = 0;</span>
+<span class="fc" id="L202">            String startStr = params.get(PARAM_START);</span>
+<span class="pc bpc" id="L203" title="2 of 4 branches missed.">            if ((startStr != null) &amp;&amp; (startStr.matches(&quot;^\\d+$&quot;)))</span>
+            {
+<span class="fc" id="L205">                start = Integer.parseInt(startStr);</span>
+            }
+<span class="pc bpc" id="L207" title="1 of 2 branches missed.">            if (start &lt; 0) start = 0;</span>
+
+<span class="fc" id="L209">            m_starting = start;</span>
+<span class="fc" id="L210">            m_level1Index = start - 1;</span>
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">            if (m_level1Index &lt; 0) m_level1Index = 0;</span>
+<span class="fc" id="L212">            m_level2Index = 0;</span>
+<span class="fc" id="L213">            m_level3Index = 0;</span>
+<span class="fc" id="L214">            m_prefix = params.get(PARAM_PREFIX);</span>
+<span class="fc bfc" id="L215" title="All 2 branches covered.">            if (m_prefix == null) m_prefix = &quot;&quot;;</span>
+<span class="fc" id="L216">            m_lastLevel = Heading.HEADING_LARGE;</span>
+        }
+
+        try
+        {
+<span class="fc" id="L221">            String wikiText = engine.getPureText( page );</span>
+<span class="fc" id="L222">            boolean runFilters = &quot;true&quot;.equals( engine.getVariableManager().getValue( context, WikiEngine.PROP_RUNFILTERS, &quot;true&quot; ) );</span>
+            
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">            if( runFilters ) {</span>
+				try {
+<span class="fc" id="L226">					FilterManager fm = engine.getFilterManager();</span>
+<span class="fc" id="L227">					wikiText = fm.doPreTranslateFiltering(context, wikiText);</span>
+
+<span class="nc" id="L229">				} catch (Exception e) {</span>
+<span class="nc" id="L230">					log.error(&quot;Could not construct table of contents: Filter Error&quot;, e);</span>
+<span class="nc" id="L231">					throw new PluginException(&quot;Unable to construct table of contents (see logs)&quot;);</span>
+<span class="fc" id="L232">				}</span>
+            }
+            
+<span class="fc" id="L235">            context.setVariable( VAR_ALREADY_PROCESSING, &quot;x&quot; );</span>
+            
+<span class="fc" id="L237">            MarkupParser parser = engine.getRenderingManager().getParser( context, wikiText );</span>
+<span class="fc" id="L238">            parser.addHeadingListener( this );</span>
+<span class="fc" id="L239">            parser.parse();</span>
+
+<span class="fc" id="L241">            sb.append( &quot;&lt;ul&gt;\n&quot;+m_buf.toString()+&quot;&lt;/ul&gt;\n&quot; );</span>
+        }
+<span class="nc" id="L243">        catch( IOException e )</span>
+        {
+<span class="nc" id="L245">            log.error(&quot;Could not construct table of contents&quot;, e);</span>
+<span class="nc" id="L246">            throw new PluginException(&quot;Unable to construct table of contents (see logs)&quot;);</span>
+<span class="fc" id="L247">        }</span>
+
+<span class="fc" id="L249">        sb.append(&quot;&lt;/div&gt;\n&lt;/div&gt;\n&quot;);</span>
+
+<span class="fc" id="L251">        return sb.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

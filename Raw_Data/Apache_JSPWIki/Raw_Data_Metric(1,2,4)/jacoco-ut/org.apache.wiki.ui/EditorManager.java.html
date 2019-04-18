@@ -1,0 +1,299 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>EditorManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">EditorManager.java</span></div><h1>EditorManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ui;
+
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import javax.servlet.jsp.PageContext;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoSuchVariableException;
+import org.apache.wiki.modules.ModuleManager;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.XmlUtil;
+import org.jdom2.Element;
+
+
+/**
+ *  Defines an editor manager.  An editor can be added by adding a
+ *  suitable JSP file under templates/default/editors
+ *  If you want your editor to include any scripts or something, you
+ *  can simply request it by adding the following in your
+ *  ini/jspwiki_module.xml:
+ *
+ *  &lt;pre&gt;
+ *  &lt;modules&gt;
+ *   &lt;editor name=&quot;myeditor&quot;&gt;
+ *       &lt;author&gt;Janne Jalkanen&lt;/author&gt;
+ *       &lt;script&gt;foo.js&lt;/script&gt;
+ *       &lt;stylesheet&gt;foo.css&lt;/stylesheet&gt;
+ *       &lt;path&gt;editors/myeditor.jsp&lt;/path&gt;
+ *   &lt;/editor&gt;
+ *  &lt;/modules&gt;
+ *  &lt;/pre&gt;
+ *
+ *  @since 2.4
+ */
+public class EditorManager extends ModuleManager {
+
+    /** The property name for setting the editor.  Current value is &quot;jspwiki.editor&quot; */
+    /* not used anymore -- replaced by defaultpref.template.editor */
+    public static final String       PROP_EDITORTYPE = &quot;jspwiki.editor&quot;;
+
+    /** Parameter for changing editors at run-time */
+    public static final String       PARA_EDITOR     = &quot;editor&quot;;
+
+    /** Known name for the plain wikimarkup editor. */
+    public static final String       EDITOR_PLAIN    = &quot;plain&quot;;
+
+    /** Known name for the preview editor component. */
+    public static final String       EDITOR_PREVIEW  = &quot;preview&quot;;
+
+    /** Known attribute name for storing the user edited text inside a HTTP parameter. */
+    public static final String       REQ_EDITEDTEXT  = &quot;_editedtext&quot;;
+
+    /** Known attribute name for storing the user edited text inside a session or a page context */
+    public static final String       ATTR_EDITEDTEXT = REQ_EDITEDTEXT;
+
+    private             Map&lt;String, WikiEditorInfo&gt;  m_editors;
+
+<span class="fc" id="L85">    private static      Logger       log             = Logger.getLogger( EditorManager.class );</span>
+
+    public EditorManager( WikiEngine engine )
+    {
+<span class="fc" id="L89">        super(engine);</span>
+<span class="fc" id="L90">    }</span>
+
+    /**
+     *  Initializes the EditorManager.  It also registers any editors it can find.
+     *
+     *  @param props  Properties for setup.
+     */
+    public void initialize( Properties props )
+    {
+<span class="fc" id="L99">        registerEditors();</span>
+<span class="fc" id="L100">    }</span>
+
+    /**
+     *  This method goes through the jspwiki_module.xml files and hunts for editors.
+     *  Any editors found are put in the registry.
+     *
+     */
+    private void registerEditors() {
+<span class="fc" id="L108">        log.info( &quot;Registering editor modules&quot; );</span>
+<span class="fc" id="L109">        m_editors = new HashMap&lt;String, WikiEditorInfo&gt;();</span>
+
+        //
+        // Register all editors which have created a resource containing its properties.
+        //
+        // Get all resources of all modules
+        //
+<span class="fc" id="L116">        List&lt; Element &gt; editors = XmlUtil.parse( PLUGIN_RESOURCE_LOCATION, &quot;/modules/editor&quot; );</span>
+
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        for( Iterator&lt; Element &gt; i = editors.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L119">            Element pluginEl = i.next();</span>
+<span class="fc" id="L120">            String name = pluginEl.getAttributeValue( &quot;name&quot; );</span>
+<span class="fc" id="L121">            WikiEditorInfo info = WikiEditorInfo.newInstance( name, pluginEl );</span>
+
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">            if( checkCompatibility(info) ) {</span>
+<span class="fc" id="L124">                m_editors.put( name, info );</span>
+<span class="fc" id="L125">                log.debug( &quot;Registered editor &quot; + name );</span>
+            } else {
+<span class="nc" id="L127">                log.info( &quot;Editor '&quot; + name + &quot;' not compatible with this version of JSPWiki.&quot; );</span>
+            }
+<span class="fc" id="L129">        }</span>
+<span class="fc" id="L130">    }</span>
+
+    /**
+     *  Returns an editor for the current context.  The editor names are matched in
+     *  a case insensitive manner.  At the moment, the only place that this method
+     *  looks in is the property file, but in the future this will also look at
+     *  user preferences.
+     *  &lt;p&gt;
+     *  Determines the editor to use by the following order of conditions:
+     *  1. Editor set in User Preferences
+     *  2. Default Editor set in jspwiki.properties
+     *  &lt;p&gt;
+     *  For the PREVIEW context, this method returns the &quot;preview&quot; editor.
+     *
+     * @param context The context that is chosen.
+     * @return The name of the chosen editor.  If no match could be found, will
+     *         revert to the default &quot;plain&quot; editor.
+     */
+    public String getEditorName( WikiContext context )
+    {
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        if( context.getRequestContext().equals(WikiContext.PREVIEW) )</span>
+<span class="nc" id="L151">            return EDITOR_PREVIEW;</span>
+
+<span class="nc" id="L153">        String editor = null;</span>
+
+        // User has set an editor in preferences
+<span class="nc" id="L156">        editor = Preferences.getPreference( context, PARA_EDITOR );</span>
+
+        /* FIXME: actual default 'editor' property is read by the Preferences class */
+<span class="nc bnc" id="L159" title="All 2 branches missed.">        if (editor == null)</span>
+        {
+            // or use the default editor in jspwiki.properties
+            try
+            {
+<span class="nc" id="L164">                editor = m_engine.getVariableManager().getValue( context, PROP_EDITORTYPE );</span>
+            }
+<span class="nc" id="L166">            catch( NoSuchVariableException e ) {} // This is fine</span>
+        }
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        if (editor != null)</span>
+        {
+<span class="nc" id="L171">            String[] editorlist = getEditorList();</span>
+
+<span class="nc" id="L173">            editor = editor.trim();</span>
+
+<span class="nc bnc" id="L175" title="All 2 branches missed.">            for( int i = 0; i &lt; editorlist.length; i++ )</span>
+            {
+<span class="nc bnc" id="L177" title="All 2 branches missed.">                if( editorlist[i].equalsIgnoreCase(editor))</span>
+                {
+<span class="nc" id="L179">                    return editorlist[i];</span>
+                }
+            }
+        }
+
+<span class="nc" id="L184">        return EDITOR_PLAIN;</span>
+    }
+
+    /**
+     *  Returns a list of editors as Strings of editor names.
+     *
+     *  @return the list of available editors
+     */
+    public String[] getEditorList()
+    {
+<span class="nc" id="L194">        String[] editors = new String[m_editors.size()];</span>
+
+<span class="nc" id="L196">        Set&lt;String&gt; keys = m_editors.keySet();</span>
+
+<span class="nc" id="L198">        return keys.toArray( editors );</span>
+    }
+
+    /**
+     *  Convenience method for getting the path to the editor JSP file.
+     *
+     *  @param context
+     *  @return e.g. &quot;editors/plain.jsp&quot;
+     */
+    public String getEditorPath( WikiContext context )
+    {
+<span class="nc" id="L209">        String path = null;</span>
+
+<span class="nc" id="L211">        String editor = getEditorName( context );</span>
+
+<span class="nc" id="L213">        WikiEditorInfo ed = m_editors.get( editor );</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if( ed != null )</span>
+        {
+<span class="nc" id="L217">            path = ed.getPath();</span>
+        }
+        else
+        {
+<span class="nc" id="L221">            path = &quot;editors/&quot;+editor+&quot;.jsp&quot;;</span>
+        }
+
+<span class="nc" id="L224">        return path;</span>
+    }
+
+    /**
+     *  Convenience function which examines the current context and attempts to figure
+     *  out whether the edited text is in the HTTP request parameters or somewhere in
+     *  the session.
+     *
+     *  @param ctx the JSP page context
+     *  @return the edited text, if present in the session page context or as a parameter
+     */
+    public static String getEditedText( PageContext ctx )
+    {
+<span class="nc" id="L237">        String usertext = ctx.getRequest().getParameter( REQ_EDITEDTEXT );</span>
+
+<span class="nc bnc" id="L239" title="All 2 branches missed.">        if( usertext == null )</span>
+        {
+<span class="nc" id="L241">            usertext = (String)ctx.findAttribute( ATTR_EDITEDTEXT );</span>
+        }
+
+<span class="nc" id="L244">        return usertext;</span>
+    }
+
+    /**
+     *  Contains info about an editor.
+     *
+     */
+    private static final class WikiEditorInfo
+        extends WikiModuleInfo
+    {
+        private String m_path;
+
+        protected static WikiEditorInfo newInstance( String name, Element el )
+        {
+<span class="pc bpc" id="L258" title="2 of 4 branches missed.">            if( name == null || name.length() == 0 ) return null;</span>
+<span class="fc" id="L259">            WikiEditorInfo info = new WikiEditorInfo( name );</span>
+
+<span class="fc" id="L261">            info.initializeFromXML( el );</span>
+<span class="fc" id="L262">            return info;</span>
+        }
+
+        protected void initializeFromXML( Element el )
+        {
+<span class="fc" id="L267">            super.initializeFromXML( el );</span>
+<span class="fc" id="L268">            m_path = el.getChildText(&quot;path&quot;);</span>
+<span class="fc" id="L269">        }</span>
+
+        private WikiEditorInfo( String name )
+        {
+<span class="fc" id="L273">            super(name);</span>
+<span class="fc" id="L274">        }</span>
+
+        public String getPath()
+        {
+<span class="nc" id="L278">            return m_path;</span>
+        }
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiModuleInfo &gt; modules() {
+<span class="fc" id="L287">        return modules( m_editors.values().iterator() );</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public WikiEditorInfo getModuleInfo(String moduleName) {
+<span class="nc" id="L295">        return m_editors.get(moduleName);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

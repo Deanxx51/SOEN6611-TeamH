@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CreoleFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.filters</a> &gt; <span class="el_source">CreoleFilter.java</span></div><h1>CreoleFilter.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.filters;
+
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.api.exceptions.FilterException;
+import org.apache.wiki.parser.CreoleToJSPWikiTranslator;
+
+/**
+ * &lt;p&gt;Provides the Implementation for mixed mode creole: If you activate
+ * this filter, it will translate all markup that was saved as creole
+ * markup to JSPWiki markup. Therefore the files will be saved 
+ * with mixed markup.
+ * &lt;p&gt;
+ * &lt;b&gt;WARNING&lt;/b&gt;: There's no turning back after insalling this
+ * filter. Since your wiki pages are saved in Creole markup you can
+ * not deactivate it afterwards.
+ * &lt;p&gt;
+ * &lt;b&gt;WARNING&lt;/b&gt;: This feature is completely experimental, and is known to be
+ * broken.  Use at your own risk.
+ * &lt;p&gt;
+ * &lt;b&gt;WARNING&lt;/b&gt;: The CreoleFilter feature is deprecated.  JSPWiki is likely
+ * to implement a non-mixed mode Creole at some point, since turning on
+ * Creole will make new pages obsolete.
+ * 
+ * 
+ * @see &lt;a href=&quot;http://www.wikicreole.org/wiki/MixedMode&quot;&gt;[[WikiCreole:MixedMode]]&lt;/a&gt; 
+ */
+
+<span class="nc" id="L51">public class CreoleFilter extends BasicPageFilter </span>
+{
+    
+<span class="nc" id="L54">    private static final Logger log = Logger.getLogger(CreoleFilter.class);</span>
+    
+    /**
+     *  {@inheritDoc}
+     */
+    public void initialize(WikiEngine engine, Properties props) throws FilterException 
+    {
+<span class="nc" id="L61">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String preSave( WikiContext wikiContext, String content )
+    throws FilterException
+    {
+        try 
+        {
+<span class="nc" id="L71">            String username=wikiContext.getCurrentUser().getName();</span>
+<span class="nc" id="L72">            Properties prop = wikiContext.getEngine().getWikiProperties();</span>
+<span class="nc" id="L73">            return new CreoleToJSPWikiTranslator().translateSignature(prop, content,username);</span>
+        }
+<span class="nc" id="L75">        catch(Exception e )</span>
+        {
+<span class="nc" id="L77">            log.error( e.getMessage(), e );</span>
+<span class="nc" id="L78">            return e.getMessage();</span>
+        }
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String preTranslate(WikiContext wikiContext, String content)
+        throws FilterException 
+    {
+        try
+        {
+<span class="nc" id="L90">            Properties prop = wikiContext.getEngine().getWikiProperties();</span>
+<span class="nc" id="L91">            return new CreoleToJSPWikiTranslator().translate(prop ,content);</span>
+        } 
+<span class="nc" id="L93">        catch (Exception e) </span>
+        {
+<span class="nc" id="L95">            log.error( e.getMessage(), e );</span>
+<span class="nc" id="L96">            return content</span>
+                   + &quot;\n \n %%error \n&quot;
+                   + &quot;[CreoleFilterError]: This page was not translated by the CreoleFilter due to &quot;
+<span class="nc" id="L99">                   + &quot;the following error: &quot; + e.getMessage() + &quot;\n \n&quot;</span>
+                   + &quot;%%\n \n&quot;;
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

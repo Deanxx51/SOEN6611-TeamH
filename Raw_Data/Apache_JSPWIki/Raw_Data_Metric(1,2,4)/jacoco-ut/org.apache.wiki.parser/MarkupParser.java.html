@@ -1,0 +1,483 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MarkupParser.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.parser</a> &gt; <span class="el_source">MarkupParser.java</span></div><h1>MarkupParser.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+*/
+package org.apache.wiki.parser;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.PushbackReader;
+import java.io.Reader;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+import org.apache.oro.text.GlobCompiler;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.wiki.StringTransmutator;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.jdom2.Element;
+
+/**
+ *   Provides an abstract class for the parser instances.
+ *
+ *   @since  2.4
+ */
+public abstract class MarkupParser
+{
+    /** Allow this many characters to be pushed back in the stream.  In effect,
+        this limits the size of a single line.  */
+    protected static final int              PUSHBACK_BUFFER_SIZE = 10*1024;
+    protected PushbackReader                m_in;
+<span class="fc" id="L52">    private int              m_pos = -1; // current position in reader stream</span>
+
+    protected WikiEngine     m_engine;
+    protected WikiContext    m_context;
+
+    /** Optionally stores internal wikilinks */
+<span class="fc" id="L58">    protected ArrayList&lt;StringTransmutator&gt;      m_localLinkMutatorChain    = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L59">    protected ArrayList&lt;StringTransmutator&gt;      m_externalLinkMutatorChain = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L60">    protected ArrayList&lt;StringTransmutator&gt;      m_attachmentLinkMutatorChain = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L61">    protected ArrayList&lt;HeadingListener&gt;         m_headingListenerChain     = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L62">    protected ArrayList&lt;StringTransmutator&gt;      m_linkMutators             = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L64">    protected boolean        m_inlineImages     = true;</span>
+<span class="fc" id="L65">    protected boolean        m_parseAccessRules = true;</span>
+    /** Keeps image regexp Patterns */
+<span class="fc" id="L67">    protected List&lt; Pattern &gt; m_inlineImagePatterns = null;</span>
+    protected LinkParsingOperations m_linkParsingOperations;
+
+<span class="fc" id="L70">    private static Logger log = Logger.getLogger( MarkupParser.class );</span>
+
+    /** If set to &quot;true&quot;, allows using raw HTML within Wiki text.  Be warned,
+        this is a VERY dangerous option to set - never turn this on in a publicly
+        allowable Wiki, unless you are absolutely certain of what you're doing. */
+    public static final String     PROP_ALLOWHTML        = &quot;jspwiki.translatorReader.allowHTML&quot;;
+    /** If set to &quot;true&quot;, enables plugins during parsing */
+    public static final String     PROP_RUNPLUGINS       = &quot;jspwiki.translatorReader.runPlugins&quot;;
+
+    /** Lists all punctuation characters allowed in WikiMarkup. These
+        will not be cleaned away. This is for compatibility for older versions
+        of JSPWiki. */
+    protected static final String LEGACY_CHARS_ALLOWED      = &quot;._&quot;;
+
+    /** Lists all punctuation characters allowed in page names. */
+    public    static final String PUNCTUATION_CHARS_ALLOWED = &quot; ()&amp;+,-=._$&quot;;
+
+    public    static final String HASHLINK = &quot;hashlink&quot;;
+
+    /** Name of the outlink image; relative path to the JSPWiki directory. */
+    public    static final String OUTLINK_IMAGE = &quot;images/out.png&quot;;
+    /** Outlink css class. */
+    public    static final String OUTLINK = &quot;outlink&quot;;
+
+    /** If true, all outward links (external links) have a small link image appended. */
+    public    static final String PROP_USEOUTLINKIMAGE  = &quot;jspwiki.translatorReader.useOutlinkImage&quot;;
+
+    private   static final String INLINE_IMAGE_PATTERNS = &quot;JSPWikiMarkupParser.inlineImagePatterns&quot;;
+
+    /** If set to &quot;true&quot;, all external links are tagged with 'rel=&quot;nofollow&quot;' */
+    public static final String     PROP_USERELNOFOLLOW   = &quot;jspwiki.translatorReader.useRelNofollow&quot;;
+
+    /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for wiki page (normal) links. The value is &quot;wikipage&quot;. */
+   public static final String CLASS_WIKIPAGE = &quot;wikipage&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for edit page links. The value is &quot;createpage&quot;. */
+   public static final String CLASS_EDITPAGE = &quot;createpage&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for interwiki page links. The value is &quot;interwiki&quot;. */
+   public static final String CLASS_INTERWIKI = &quot;interwiki&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for footnote links. The value is &quot;footnote&quot;. */
+   public static final String CLASS_FOOTNOTE = &quot;footnote&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for footnote links. The value is &quot;footnote&quot;. */
+   public static final String CLASS_FOOTNOTE_REF = &quot;footnoteref&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for external links. The value is &quot;external&quot;. */
+   public static final String CLASS_EXTERNAL = &quot;external&quot;;
+
+   /** The value for anchor element &lt;tt&gt;class&lt;/tt&gt; attributes when used
+     * for attachments. The value is &quot;attachment&quot;. */
+   public static final String CLASS_ATTACHMENT = &quot;attachment&quot;;
+
+<span class="fc" id="L130">   public static final String[] CLASS_TYPES =</span>
+   {
+      CLASS_WIKIPAGE,
+      CLASS_EDITPAGE,
+      &quot;&quot;,
+      CLASS_FOOTNOTE,
+      CLASS_FOOTNOTE_REF,
+      &quot;&quot;,
+      CLASS_EXTERNAL,
+      CLASS_INTERWIKI,
+      CLASS_EXTERNAL,
+      CLASS_WIKIPAGE,
+      CLASS_ATTACHMENT
+   };
+
+    /**
+     *  Constructs a MarkupParser.  The subclass must call this constructor
+     *  to set up the necessary bits and pieces.
+     *
+     *  @param context The WikiContext.
+     *  @param in The reader from which we are reading the bytes from.
+     */
+    protected MarkupParser( WikiContext context, Reader in )
+<span class="fc" id="L153">    {</span>
+<span class="fc" id="L154">        m_engine = context.getEngine();</span>
+<span class="fc" id="L155">        m_context = context;</span>
+<span class="fc" id="L156">        m_linkParsingOperations = new LinkParsingOperations( m_context );</span>
+<span class="fc" id="L157">        setInputReader( in );</span>
+<span class="fc" id="L158">    }</span>
+
+    /**
+     *  Replaces the current input character stream with a new one.
+     *  @param in New source for input.  If null, this method does nothing.
+     *  @return the old stream
+     */
+    public Reader setInputReader( Reader in )
+    {
+<span class="fc" id="L167">        Reader old = m_in;</span>
+
+<span class="fc bfc" id="L169" title="All 2 branches covered.">        if( in != null )</span>
+        {
+<span class="fc" id="L171">            m_in = new PushbackReader( new BufferedReader( in ),</span>
+                                       PUSHBACK_BUFFER_SIZE );
+        }
+
+<span class="fc" id="L175">        return old;</span>
+    }
+
+    /**
+     *  Adds a hook for processing link texts.  This hook is called
+     *  when the link text is written into the output stream, and
+     *  you may use it to modify the text.  It does not affect the
+     *  actual link, only the user-visible text.
+     *
+     *  @param mutator The hook to call.  Null is safe.
+     */
+    public void addLinkTransmutator( StringTransmutator mutator )
+    {
+<span class="pc bpc" id="L188" title="1 of 2 branches missed.">        if( mutator != null )</span>
+        {
+<span class="fc" id="L190">            m_linkMutators.add( mutator );</span>
+        }
+<span class="fc" id="L192">    }</span>
+
+    /**
+     *  Adds a hook for processing local links.  The engine
+     *  transforms both non-existing and existing page links.
+     *
+     *  @param mutator The hook to call.  Null is safe.
+     */
+    public void addLocalLinkHook( StringTransmutator mutator )
+    {
+<span class="pc bpc" id="L202" title="1 of 2 branches missed.">        if( mutator != null )</span>
+        {
+<span class="fc" id="L204">            m_localLinkMutatorChain.add( mutator );</span>
+        }
+<span class="fc" id="L206">    }</span>
+
+    /**
+     *  Adds a hook for processing external links.  This includes
+     *  all http:// ftp://, etc. links, including inlined images.
+     *
+     *  @param mutator The hook to call.  Null is safe.
+     */
+    public void addExternalLinkHook( StringTransmutator mutator )
+    {
+<span class="fc bfc" id="L216" title="All 2 branches covered.">        if( mutator != null )</span>
+        {
+<span class="fc" id="L218">            m_externalLinkMutatorChain.add( mutator );</span>
+        }
+<span class="fc" id="L220">    }</span>
+
+    /**
+     *  Adds a hook for processing attachment links.
+     *
+     *  @param mutator The hook to call.  Null is safe.
+     */
+    public void addAttachmentLinkHook( StringTransmutator mutator )
+    {
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">        if( mutator != null )</span>
+        {
+<span class="fc" id="L231">            m_attachmentLinkMutatorChain.add( mutator );</span>
+        }
+<span class="fc" id="L233">    }</span>
+
+    /**
+     *  Adds a HeadingListener to the parser chain.  It will be called whenever
+     *  a parsed header is found.
+     *
+     *  @param listener The listener to add.
+     */
+    public void addHeadingListener( HeadingListener listener )
+    {
+<span class="pc bpc" id="L243" title="1 of 2 branches missed.">        if( listener != null )</span>
+        {
+<span class="fc" id="L245">            m_headingListenerChain.add( listener );</span>
+        }
+<span class="fc" id="L247">    }</span>
+
+    /**
+     *  Disables access rule parsing.
+     */
+    public void disableAccessRules()
+    {
+<span class="fc" id="L254">        m_parseAccessRules = false;</span>
+<span class="fc" id="L255">    }</span>
+
+    public boolean isParseAccessRules()
+    {
+<span class="nc" id="L259">        return m_parseAccessRules;</span>
+    }
+
+    /**
+     *  Use this to turn on or off image inlining.
+     *  @param toggle If true, images are inlined (as per set in jspwiki.properties)
+     *                If false, then images won't be inlined; instead, they will be
+     *                treated as standard hyperlinks.
+     *  @since 2.2.9
+     */
+    public void enableImageInlining( boolean toggle )
+    {
+<span class="fc" id="L271">        m_inlineImages = toggle;</span>
+<span class="fc" id="L272">    }</span>
+
+    public boolean isImageInlining() {
+<span class="fc" id="L275">        return m_inlineImages;</span>
+    }
+
+    @SuppressWarnings( &quot;unchecked&quot; )
+    protected final void initInlineImagePatterns() {
+<span class="fc" id="L280">		PatternCompiler compiler = new GlobCompiler();</span>
+        //
+        //  We cache compiled patterns in the engine, since their creation is really expensive
+        //
+<span class="fc" id="L284">        List&lt; Pattern &gt; compiledpatterns = ( List&lt; Pattern &gt; )m_engine.getAttribute( INLINE_IMAGE_PATTERNS );</span>
+
+<span class="fc bfc" id="L286" title="All 2 branches covered.">        if( compiledpatterns == null ) {</span>
+<span class="fc" id="L287">            compiledpatterns = new ArrayList&lt; &gt;( 20 );</span>
+<span class="fc" id="L288">            Collection&lt; String &gt; ptrns = m_engine.getAllInlinedImagePatterns();</span>
+
+            //
+            //  Make them into Regexp Patterns.  Unknown patterns are ignored.
+            //
+<span class="fc bfc" id="L293" title="All 2 branches covered.">            for( Iterator&lt; String &gt; i = ptrns.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L294">            	String pattern = i.next();</span>
+                try {
+<span class="fc" id="L296">                    compiledpatterns.add( compiler.compile( pattern,</span>
+                                                            GlobCompiler.DEFAULT_MASK | GlobCompiler.READ_ONLY_MASK ) );
+<span class="nc" id="L298">                } catch( MalformedPatternException e ) {</span>
+<span class="nc" id="L299">                    log.error( &quot;Malformed pattern [&quot; + pattern + &quot;] in properties: &quot;, e );</span>
+<span class="fc" id="L300">                }</span>
+<span class="fc" id="L301">            }</span>
+
+<span class="fc" id="L303">            m_engine.setAttribute( INLINE_IMAGE_PATTERNS, compiledpatterns );</span>
+        }
+
+<span class="fc" id="L306">        m_inlineImagePatterns = Collections.unmodifiableList( compiledpatterns );</span>
+<span class="fc" id="L307">	}</span>
+
+    public List&lt; Pattern &gt; getInlineImagePatterns() {
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">    	if( m_inlineImagePatterns == null ) {</span>
+<span class="nc" id="L311">    		initInlineImagePatterns();</span>
+    	}
+<span class="fc" id="L313">    	return m_inlineImagePatterns;</span>
+    }
+
+    /**
+     *  Parses the document.
+     *  @return the parsed document, as a WikiDocument
+     *  @throws IOException If something goes wrong.
+     */
+    public abstract WikiDocument parse()
+         throws IOException;
+
+    /**
+     *  Return the current position in the reader stream.
+     *  The value will be -1 prior to reading.
+     * @return the reader position as an int.
+     */
+    public int getPosition()
+    {
+<span class="fc" id="L331">        return m_pos;</span>
+    }
+
+    /**
+     * Returns the next token in the stream.  This is the most called method
+     * in the entire parser, so it needs to be lean and mean.
+     *
+     * @return The next token in the stream; or, if the stream is ended, -1.
+     * @throws IOException If something bad happens
+     * @throws NullPointerException If you have not yet created an input document.
+     */
+    protected final int nextToken()
+        throws IOException, NullPointerException
+    {
+        // if( m_in == null ) return -1;
+<span class="fc" id="L346">        m_pos++;</span>
+<span class="fc" id="L347">        return m_in.read();</span>
+    }
+
+    /**
+     *  Push back any character to the current input.  Does not
+     *  push back a read EOF, though.
+     *
+     *  @param c Character to push back.
+     *  @throws IOException In case the character cannot be pushed back.
+     */
+    protected void pushBack( int c )
+        throws IOException
+    {
+<span class="pc bpc" id="L360" title="1 of 4 branches missed.">        if( c != -1 &amp;&amp; m_in != null )</span>
+        {
+<span class="fc" id="L362">            m_pos--;</span>
+<span class="fc" id="L363">            m_in.unread( c );</span>
+        }
+<span class="fc" id="L365">    }</span>
+
+    /**
+     *  Writes HTML for error message.  Does not add it to the document, you
+     *  have to do it yourself.
+     *
+     *  @param error The error string.
+     *  @return An Element containing the error.
+     */
+
+    public static Element makeError( String error )
+    {
+<span class="fc" id="L377">        return new Element(&quot;span&quot;).setAttribute(&quot;class&quot;,&quot;error&quot;).addContent(error);</span>
+    }
+
+    /**
+     *  Cleans a Wiki name.  The functionality of this method was changed in 2.6
+     *  so that the list of allowed characters is much larger.  Use wikifyLink()
+     *  to get the legacy behaviour.
+     *  &lt;P&gt;
+     *  [ This is a link ] -&amp;gt; This is a link
+     *
+     *  @param link Link to be cleared. Null is safe, and causes this to return null.
+     *  @return A cleaned link.
+     *
+     *  @since 2.0
+     */
+    public static String cleanLink( String link )
+    {
+<span class="fc" id="L394">        return cleanLink(link, PUNCTUATION_CHARS_ALLOWED);</span>
+    }
+
+    /**
+     *  Cleans a Wiki name based on a list of characters.  Also, any multiple
+     *  whitespace is collapsed into a single space, and any leading or trailing
+     *  space is removed.
+     *
+     *  @param link Link to be cleared. Null is safe, and causes this to return null.
+     *  @param allowedChars Characters which are allowed in the string.
+     *  @return A cleaned link.
+     *
+     *  @since 2.6
+     */
+    public static String cleanLink( String link, String allowedChars )
+    {
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">        if( link == null ) return null;</span>
+
+<span class="fc" id="L412">        link = link.trim();</span>
+<span class="fc" id="L413">        StringBuilder clean = new StringBuilder(link.length());</span>
+
+        //
+        //  Remove non-alphanumeric characters that should not
+        //  be put inside WikiNames.  Note that all valid
+        //  Unicode letters are considered okay for WikiNames.
+        //  It is the problem of the WikiPageProvider to take
+        //  care of actually storing that information.
+        //
+        //  Also capitalize things, if necessary.
+        //
+
+<span class="fc" id="L425">        boolean isWord = true;  // If true, we've just crossed a word boundary</span>
+<span class="fc" id="L426">        boolean wasSpace = false;</span>
+
+<span class="fc bfc" id="L428" title="All 2 branches covered.">        for( int i = 0; i &lt; link.length(); i++ )</span>
+        {
+<span class="fc" id="L430">            char ch = link.charAt(i);</span>
+
+            //
+            //  Cleans away repetitive whitespace and only uses the first one.
+            //
+<span class="fc bfc" id="L435" title="All 2 branches covered.">            if( Character.isWhitespace(ch) )</span>
+            {
+<span class="fc bfc" id="L437" title="All 2 branches covered.">                if( wasSpace )</span>
+<span class="fc" id="L438">                    continue;</span>
+
+<span class="fc" id="L440">                wasSpace = true;</span>
+            }
+            else
+            {
+<span class="fc" id="L444">                wasSpace = false;</span>
+            }
+
+            //
+            //  Check if it is allowed to use this char, and capitalize, if necessary.
+            //
+<span class="fc bfc" id="L450" title="All 4 branches covered.">            if( Character.isLetterOrDigit( ch ) || allowedChars.indexOf(ch) != -1 )</span>
+            {
+                // Is a letter
+
+<span class="fc bfc" id="L454" title="All 2 branches covered.">                if( isWord ) ch = Character.toUpperCase( ch );</span>
+<span class="fc" id="L455">                clean.append( ch );</span>
+<span class="fc" id="L456">                isWord = false;</span>
+            }
+            else
+            {
+<span class="fc" id="L460">                isWord = true;</span>
+            }
+        }
+
+<span class="fc" id="L464">        return clean.toString();</span>
+    }
+
+    /**
+     *  Cleans away extra legacy characters.  This method functions exactly
+     *  like pre-2.6 cleanLink()
+     *  &lt;P&gt;
+     *  [ This is a link ] -&amp;gt; ThisIsALink
+     *
+     *  @param link Link to be cleared. Null is safe, and causes this to return null.
+     *  @return A cleaned link.
+     *  @since 2.6
+     */
+    public static String wikifyLink(String link)
+    {
+<span class="fc" id="L479">        return MarkupParser.cleanLink(link, MarkupParser.LEGACY_CHARS_ALLOWED);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

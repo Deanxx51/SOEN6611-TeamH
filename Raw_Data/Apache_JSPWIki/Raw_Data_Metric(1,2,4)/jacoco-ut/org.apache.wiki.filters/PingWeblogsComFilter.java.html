@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PingWeblogsComFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.filters</a> &gt; <span class="el_source">PingWeblogsComFilter.java</span></div><h1>PingWeblogsComFilter.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.filters;
+
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Hashtable;
+import java.util.Properties;
+import java.util.Vector;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.xmlrpc.AsyncCallback;
+import org.apache.xmlrpc.XmlRpcClient;
+
+/**
+ *  A very dumb class that pings weblogs.com on each save.  INTERNAL USE ONLY SO FAR!
+ *  Look, but don't use as-is.
+ */
+// FIXME: Needs to figure out when only weblogs have been saved.
+// FIXME: rpc endpoint must be configurable
+// FIXME: Should really be settable per-page.
+// FIXME: Weblog name has been set to stone
+<span class="nc" id="L42">public class PingWeblogsComFilter</span>
+    extends BasicPageFilter
+{
+<span class="nc" id="L45">    private static final Logger log = Logger.getLogger( PingWeblogsComFilter.class );</span>
+
+    private String m_pingURL;
+
+    /**
+     *  The property name for the URL to ping.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_PINGURL = &quot;pingurl&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void initialize( WikiEngine engine, Properties props )
+    {
+<span class="nc" id="L59">        m_pingURL = props.getProperty( PROP_PINGURL, &quot;http://rpc.weblogs.com/RPC2&quot; );</span>
+<span class="nc" id="L60">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void postSave( WikiContext context, String pagecontent )
+    {
+<span class="nc" id="L67">        String     blogName = context.getPage().getName();</span>
+<span class="nc" id="L68">        WikiEngine engine   = context.getEngine();</span>
+
+<span class="nc" id="L70">        int blogentryTxt = blogName.indexOf(&quot;_blogentry_&quot;);</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">        if( blogentryTxt == -1 )</span>
+        {
+<span class="nc" id="L73">            return; // This is not a weblog entry.</span>
+        }
+        
+<span class="nc" id="L76">        blogName = blogName.substring( 0, blogentryTxt );</span>
+
+<span class="nc bnc" id="L78" title="All 2 branches missed.">        if( blogName.equals( engine.getFrontPage() ) )</span>
+        {
+<span class="nc" id="L80">            blogName = null;</span>
+        }
+
+        try
+        {
+<span class="nc" id="L85">            XmlRpcClient xmlrpc = new XmlRpcClient(m_pingURL);</span>
+<span class="nc" id="L86">            Vector&lt;String&gt; params = new Vector&lt;String&gt;();</span>
+<span class="nc" id="L87">            params.addElement( &quot;The Butt Ugly Weblog&quot; ); // FIXME: Must be settable</span>
+<span class="nc" id="L88">            params.addElement( engine.getURL( WikiContext.VIEW, blogName, null, true ) );</span>
+
+<span class="nc bnc" id="L90" title="All 2 branches missed.">            if( log.isDebugEnabled() )</span>
+<span class="nc" id="L91">                log.debug(&quot;Pinging weblogs.com with URL: &quot;+engine.getURL( WikiContext.VIEW, blogName, null, true ));</span>
+
+<span class="nc" id="L93">            xmlrpc.executeAsync(&quot;weblogUpdates.ping&quot;, params, </span>
+                                new AsyncCallback() 
+<span class="nc" id="L95">                                {</span>
+                                    public void handleError( Exception ex,
+                                                             URL url,
+                                                             String method )
+                                    {
+<span class="nc" id="L100">                                        log.error(&quot;Unable to execute weblogs.com ping to URL: &quot;+url.toString(),ex);</span>
+<span class="nc" id="L101">                                    }</span>
+
+                                    public void handleResult( Object result,
+                                                              URL url,
+                                                              String method )
+                                    {
+                                        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L108">                                        Hashtable&lt; String, Object &gt; res = (Hashtable &lt; String, Object &gt; ) result;</span>
+
+<span class="nc" id="L110">                                        Boolean flerror = (Boolean)res.get(&quot;flerror&quot;);</span>
+<span class="nc" id="L111">                                        String  msg     = (String)res.get(&quot;message&quot;);</span>
+
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                                        if( flerror.booleanValue() )</span>
+                                        {
+<span class="nc" id="L115">                                            log.error(&quot;Failed to ping: &quot;+msg);</span>
+                                        }
+
+<span class="nc" id="L118">                                        log.info(&quot;Weblogs.com has been pinged.&quot;);</span>
+<span class="nc" id="L119">                                    }</span>
+                                }
+                                );
+        }
+<span class="nc" id="L123">        catch( MalformedURLException e )</span>
+        {
+<span class="nc" id="L125">            log.error(&quot;Malformed URL&quot;,e);</span>
+<span class="nc" id="L126">        }</span>
+<span class="nc" id="L127">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

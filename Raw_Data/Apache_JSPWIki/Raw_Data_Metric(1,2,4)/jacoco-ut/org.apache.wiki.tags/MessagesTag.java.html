@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>MessagesTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">MessagesTag.java</span></div><h1>MessagesTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * Returns or clears the current messages associated with the user's wiki
+ * session. This tag accepts four attributes: &lt;ul&gt; &lt;li&gt;&lt;code&gt;action&lt;/code&gt; -
+ * if &quot;clear&quot;, the messsages will be cleared. Otherwise, this tag will always
+ * print the set of current messages as either a single &amp;lt;p&amp;gt; tag (if there
+ * is only one message) or a bulleted list (if there is more than one).&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;prefix&lt;/code&gt; - the string to prepend to the list of errors, if
+ * there are any; default is empty string&lt;/li&gt; &lt;li&gt;&lt;code&gt;topic&lt;/code&gt; - a
+ * collection for messages, for example those associated with a particular web
+ * form. If not suppled, defaults to a generic (non-specific) collection&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;div&lt;/code&gt; - the &lt;code&gt;div&lt;/code&gt; class to wrap the
+ * messages in; if not supplied, &lt;code&gt;information&lt;/code&gt; is assumed&lt;/li&gt;&lt;/ul&gt;
+ * @since 2.3.54
+ */
+<span class="nc" id="L40">public class MessagesTag extends WikiTagBase</span>
+{
+    private static final long   serialVersionUID = 0L;
+
+<span class="nc" id="L44">    private String              m_action         = null;</span>
+
+<span class="nc" id="L46">    private String              m_prefix         = &quot;&quot;;</span>
+
+<span class="nc" id="L48">    private String              m_topic          = null;</span>
+
+<span class="nc" id="L50">    private String              m_div            = &quot;information&quot;;</span>
+
+    private static final String CLEAR            = &quot;clear&quot;;
+
+    public void initTag()
+    {
+<span class="nc" id="L56">        super.initTag();</span>
+<span class="nc" id="L57">        m_action = m_topic = null;</span>
+<span class="nc" id="L58">        m_prefix = &quot;&quot;;</span>
+<span class="nc" id="L59">        m_div = &quot;information&quot;;</span>
+<span class="nc" id="L60">    }</span>
+
+
+    public void setTopic( String topic )
+    {
+<span class="nc" id="L65">        m_topic = topic;</span>
+<span class="nc" id="L66">    }</span>
+
+    public void setPrefix( String prefix )
+    {
+<span class="nc" id="L70">        m_prefix = prefix;</span>
+<span class="nc" id="L71">    }</span>
+
+    public void setDiv( String div )
+    {
+<span class="nc" id="L75">        m_div = div;</span>
+<span class="nc" id="L76">    }</span>
+
+    public void setAction( String action )
+    {
+<span class="nc" id="L80">        m_action = action.toLowerCase();</span>
+<span class="nc" id="L81">    }</span>
+
+    public final int doWikiStartTag() throws IOException
+    {
+<span class="nc" id="L85">        WikiSession session = m_wikiContext.getWikiSession();</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if ( CLEAR.equals( m_action ) )</span>
+        {
+<span class="nc bnc" id="L88" title="All 2 branches missed.">            if ( m_topic == null )</span>
+            {
+<span class="nc" id="L90">                session.clearMessages();</span>
+            }
+            else
+            {
+<span class="nc" id="L94">                session.clearMessages( m_topic );</span>
+            }
+        }
+        else
+        {
+<span class="nc bnc" id="L99" title="All 2 branches missed.">            String[] messages = ( m_topic == null ) ? session.getMessages() : session.getMessages( m_topic );</span>
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            if ( messages.length &gt; 0 )</span>
+            {
+<span class="nc" id="L102">            	StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">                if ( messages.length == 1 )</span>
+                {
+<span class="nc" id="L105">                    sb.append( &quot;&lt;div class=\&quot;&quot; + m_div + &quot;\&quot;&gt;&quot; + m_prefix + TextUtil.replaceEntities(messages[0]) + &quot;&lt;/div&gt;&quot; );</span>
+                }
+                else
+                {
+<span class="nc" id="L109">                    sb.append( &quot;&lt;div class=\&quot;&quot; + m_div + &quot;\&quot;&gt;&quot; + m_prefix );</span>
+<span class="nc" id="L110">                    sb.append( &quot;&lt;ul&gt;&quot; );</span>
+<span class="nc bnc" id="L111" title="All 2 branches missed.">                    for( int i = 0; i &lt; messages.length; i++ )</span>
+                    {
+<span class="nc" id="L113">                        sb.append( &quot;&lt;li&gt;&quot; + TextUtil.replaceEntities(messages[i]) + &quot;&lt;/li&gt;&quot; );</span>
+                    }
+<span class="nc" id="L115">                    sb.append( &quot;&lt;/ul&gt;&lt;/div&gt;&quot; );</span>
+                }
+<span class="nc" id="L117">                pageContext.getOut().println( sb.toString() );</span>
+            }
+        }
+<span class="nc" id="L120">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

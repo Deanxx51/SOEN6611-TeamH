@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>VariableTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">VariableTag.java</span></div><h1>VariableTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.JspException;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoSuchVariableException;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Returns the value of an Wiki variable.
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;var - Name of the variable.  Required.
+ *    &lt;LI&gt;default - Revert to this value, if the value of &quot;var&quot; is null.
+ *                  If left out, this tag will produce a concise error message
+ *                  if the named variable is not found. Set to empty (default=&quot;&quot;)
+ *                  to hide the message.
+ *  &lt;/UL&gt;
+ *
+ *  &lt;P&gt;A default value implies &lt;I&gt;failmode='quiet'&lt;/I&gt;.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L46">public class VariableTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 0L;
+
+<span class="nc" id="L51">    private String m_var      = null;</span>
+<span class="nc" id="L52">    private String m_default  = null;</span>
+
+    public void initTag()
+    {
+<span class="nc" id="L56">        super.initTag();</span>
+<span class="nc" id="L57">        m_var = m_default = null;</span>
+<span class="nc" id="L58">    }</span>
+
+    public String getVar()
+    {
+<span class="nc" id="L62">        return m_var;</span>
+    }
+
+    public void setVar( String arg )
+    {
+<span class="nc" id="L67">        m_var = arg;</span>
+<span class="nc" id="L68">    }</span>
+
+    public void setDefault( String arg )
+    {
+<span class="nc" id="L72">        m_default = arg;</span>
+<span class="nc" id="L73">    }</span>
+
+    public final int doWikiStartTag()
+        throws JspException,
+               IOException
+    {
+<span class="nc" id="L79">        WikiEngine engine   = m_wikiContext.getEngine();</span>
+<span class="nc" id="L80">        JspWriter out = pageContext.getOut();</span>
+<span class="nc" id="L81">        String msg = null;</span>
+<span class="nc" id="L82">        String value = null;</span>
+
+        try
+        {
+<span class="nc" id="L86">            value = engine.getVariableManager().getValue( m_wikiContext,</span>
+<span class="nc" id="L87">                                                          getVar() );</span>
+        }
+<span class="nc" id="L89">        catch( NoSuchVariableException e )</span>
+        {
+<span class="nc" id="L91">            msg = &quot;No such variable: &quot;+e.getMessage();</span>
+        }
+<span class="nc" id="L93">        catch( IllegalArgumentException e )</span>
+        {
+<span class="nc" id="L95">            msg = &quot;Incorrect variable name: &quot;+e.getMessage();</span>
+<span class="nc" id="L96">        }</span>
+
+<span class="nc bnc" id="L98" title="All 2 branches missed.">        if( value == null )</span>
+        {
+<span class="nc" id="L100">            value = m_default;</span>
+        }
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if( value == null )</span>
+        {
+<span class="nc" id="L105">            value = msg;</span>
+        }
+<span class="nc" id="L107">        out.write( TextUtil.replaceEntities(value) );</span>
+<span class="nc" id="L108">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

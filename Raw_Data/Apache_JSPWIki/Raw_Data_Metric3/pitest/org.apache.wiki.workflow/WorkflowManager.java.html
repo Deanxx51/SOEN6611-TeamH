@@ -1,0 +1,5565 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="../style.css">
+</head>
+<body>
+
+
+<h1>WorkflowManager.java</h1>
+
+<table class="src">
+
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_1'/>
+1
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_1'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/* </span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_2'/>
+2
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_2'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    Licensed to the Apache Software Foundation (ASF) under one</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_3'/>
+3
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_3'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    or more contributor license agreements.  See the NOTICE file</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_4'/>
+4
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_4'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    distributed with this work for additional information</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_5'/>
+5
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_5'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    regarding copyright ownership.  The ASF licenses this file</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_6'/>
+6
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_6'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    to you under the Apache License, Version 2.0 (the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_7'/>
+7
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_7'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    &#34;License&#34;); you may not use this file except in compliance</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_8'/>
+8
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_8'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    with the License.  You may obtain a copy of the License at</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_9'/>
+9
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_9'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_10'/>
+10
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_10'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>       http://www.apache.org/licenses/LICENSE-2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_11'/>
+11
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_11'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_12'/>
+12
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_12'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    Unless required by applicable law or agreed to in writing,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_13'/>
+13
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_13'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    software distributed under the License is distributed on an</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_14'/>
+14
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_14'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    &#34;AS IS&#34; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_15'/>
+15
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_15'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    KIND, either express or implied.  See the License for the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_16'/>
+16
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_16'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    specific language governing permissions and limitations</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_17'/>
+17
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_17'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    under the License.  </span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_18'/>
+18
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_18'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_19'/>
+19
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_19'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>package org.apache.wiki.workflow;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_20'/>
+20
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_20'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_21'/>
+21
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_21'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.security.Principal;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_22'/>
+22
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_22'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.ArrayList;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_23'/>
+23
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_23'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Collection;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_24'/>
+24
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_24'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.HashMap;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_25'/>
+25
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_25'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.HashSet;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_26'/>
+26
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_26'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Iterator;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_27'/>
+27
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_27'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.List;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_28'/>
+28
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_28'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Map;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_29'/>
+29
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_29'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Properties;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_30'/>
+30
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_30'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Set;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_31'/>
+31
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_31'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_32'/>
+32
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_32'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.WikiEngine;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_33'/>
+33
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_33'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.WikiSession;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_34'/>
+34
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_34'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.api.exceptions.WikiException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_35'/>
+35
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_35'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.auth.acl.UnresolvedPrincipal;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_36'/>
+36
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_36'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.event.WikiEvent;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_37'/>
+37
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_37'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.event.WikiEventListener;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_38'/>
+38
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_38'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.event.WorkflowEvent;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_39'/>
+39
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_39'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_40'/>
+40
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_40'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_41'/>
+41
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_41'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_42'/>
+42
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_42'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * &#60;p&#62;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_43'/>
+43
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_43'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * Monitor class that tracks running Workflows. The WorkflowManager also keeps</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_44'/>
+44
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_44'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * track of the names of users or groups expected to approve particular</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_45'/>
+45
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_45'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * Workflows.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_46'/>
+46
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_46'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * &#60;/p&#62;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_47'/>
+47
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_47'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_48'/>
+48
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_48'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>public class WorkflowManager implements WikiEventListener {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_49'/>
+49
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_49'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_50'/>
+50
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_50'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private final DecisionQueue m_queue = new DecisionQueue();</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_51'/>
+51
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_51'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_52'/>
+52
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_52'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private final Set&#60;Workflow&#62; m_workflows;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_53'/>
+53
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_53'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_54'/>
+54
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_54'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private final Map&#60;String, Principal&#62; m_approvers;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_55'/>
+55
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_55'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_56'/>
+56
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_56'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private final List&#60;Workflow&#62; m_completed;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_57'/>
+57
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_57'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_58'/>
+58
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_58'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /** The prefix to use for looking up &#60;code&#62;jspwiki.properties&#60;/code&#62; approval roles. */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_59'/>
+59
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_59'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    protected static final String PROPERTY_APPROVER_PREFIX = &#34;jspwiki.approver.&#34;;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_60'/>
+60
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_60'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_61'/>
+61
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_61'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_62'/>
+62
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_62'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Constructs a new WorkflowManager, with an empty workflow cache. New</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_63'/>
+63
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_63'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Workflows are automatically assigned unique identifiers, starting with 1.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_64'/>
+64
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_64'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_65'/>
+65
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_65'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public WorkflowManager()</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_66'/>
+66
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_66'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_67'/>
+67
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_67'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_next = 1;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_68'/>
+68
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_68'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_workflows = new HashSet&#60;&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_69'/>
+69
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_69'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_approvers = new HashMap&#60;&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_70'/>
+70
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_70'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_completed = new ArrayList&#60;&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_71'/>
+71
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_71'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_72'/>
+72
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_72'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_73'/>
+73
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_73'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_74'/>
+74
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_74'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Adds a new workflow to the set of workflows and starts it. The new</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_75'/>
+75
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_75'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * workflow is automatically assigned a unique ID. If another workflow with</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_76'/>
+76
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_76'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * the same ID already exists, this method throws a WikIException.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_77'/>
+77
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_77'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param workflow the workflow to start</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_78'/>
+78
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_78'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws WikiException if a workflow the automatically assigned</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_79'/>
+79
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_79'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * ID already exist; this should not happen normally</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_80'/>
+80
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_80'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_81'/>
+81
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_81'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void start( Workflow workflow ) throws WikiException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_82'/>
+82
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_82'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_83'/>
+83
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_83'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_workflows.add( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_84'/>
+84
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_84'>1</a>
+<span>
+1. start : removed call to org/apache/wiki/workflow/Workflow::setWorkflowManager &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        workflow.setWorkflowManager( this );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_85'/>
+85
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_85'>1</a>
+<span>
+1. start : removed call to org/apache/wiki/workflow/Workflow::setId &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        workflow.setId( nextId() );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_86'/>
+86
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_86'>1</a>
+<span>
+1. start : removed call to org/apache/wiki/workflow/Workflow::start &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        workflow.start();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_87'/>
+87
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_87'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_88'/>
+88
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_88'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_89'/>
+89
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_89'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_90'/>
+90
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_90'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns a collection of the currently active workflows.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_91'/>
+91
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_91'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_92'/>
+92
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_92'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the current workflows</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_93'/>
+93
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_93'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_94'/>
+94
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_94'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Collection&#60; Workflow &#62; getWorkflows() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_95'/>
+95
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_95'>1</a>
+<span>
+1. getWorkflows : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return new HashSet&#60;&#62;( m_workflows );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_96'/>
+96
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_96'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_97'/>
+97
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_97'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_98'/>
+98
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_98'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_99'/>
+99
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_99'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns a collection of finished workflows; that is, those that have aborted or completed.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_100'/>
+100
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_100'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the finished workflows</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_101'/>
+101
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_101'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_102'/>
+102
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_102'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public List&#60; Workflow &#62; getCompletedWorkflows() {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_103'/>
+103
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_103'>1</a>
+<span>
+1. getCompletedWorkflows : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getCompletedWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return new ArrayList&#60; &#62;( m_completed );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_104'/>
+104
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_104'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_105'/>
+105
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_105'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_106'/>
+106
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_106'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private WikiEngine m_engine = null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_107'/>
+107
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_107'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_108'/>
+108
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_108'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_109'/>
+109
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_109'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Initializes the WorkflowManager using a specfied WikiEngine and</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_110'/>
+110
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_110'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * properties. Any properties that begin with</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_111'/>
+111
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_111'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link #PROPERTY_APPROVER_PREFIX} will be assumed to be</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_112'/>
+112
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_112'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Decisions that require approval. For a given property key, everything</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_113'/>
+113
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_113'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * after the prefix denotes the Decision&#39;s message key. The property</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_114'/>
+114
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_114'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * value indicates the Principal (Role, GroupPrincipal, WikiPrincipal) that</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_115'/>
+115
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_115'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * must approve the Decision. For example, if the property key/value pair</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_116'/>
+116
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_116'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * is &#60;code&#62;jspwiki.approver.workflow.saveWikiPage=Admin&#60;/code&#62;,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_117'/>
+117
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_117'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * the Decision&#39;s message key is &#60;code&#62;workflow.saveWikiPage&#60;/code&#62;.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_118'/>
+118
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_118'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * The Principal &#60;code&#62;Admin&#60;/code&#62; will be resolved via</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_119'/>
+119
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_119'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link org.apache.wiki.auth.AuthorizationManager#resolvePrincipal(String)}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_120'/>
+120
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_120'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param engine the wiki engine to associate with this WorkflowManager</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_121'/>
+121
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_121'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param props the wiki engine&#39;s properties</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_122'/>
+122
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_122'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_123'/>
+123
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_123'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void initialize( WikiEngine engine, Properties props )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_124'/>
+124
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_124'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_125'/>
+125
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_125'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        m_engine = engine;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_126'/>
+126
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_126'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_127'/>
+127
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_127'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        // Identify the workflows requiring approvals</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_128'/>
+128
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_128'>1</a>
+<span>
+1. initialize : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        for ( Iterator&#60;?&#62; it = props.keySet().iterator(); it.hasNext(); )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_129'/>
+129
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_129'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_130'/>
+130
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_130'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            String prop = (String) it.next();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_131'/>
+131
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_131'>1</a>
+<span>
+1. initialize : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            if ( prop.startsWith( PROPERTY_APPROVER_PREFIX ) )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_132'/>
+132
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_132'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_133'/>
+133
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_133'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_134'/>
+134
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_134'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                // For the key, everything after the prefix is the workflow name</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_135'/>
+135
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_135'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                String key = prop.substring( PROPERTY_APPROVER_PREFIX.length() );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_136'/>
+136
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_136'>3</a>
+<span>
+1. initialize : changed conditional boundary &rarr; KILLED<br/>
+2. initialize : negated conditional &rarr; KILLED<br/>
+3. initialize : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                if ( key != null &#38;&#38; key.length() &#62; 0 )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_137'/>
+137
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_137'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_138'/>
+138
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_138'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_139'/>
+139
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_139'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    // Only use non-null/non-blank approvers</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_140'/>
+140
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_140'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                    String approver = props.getProperty( prop );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_141'/>
+141
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_141'>3</a>
+<span>
+1. initialize : changed conditional boundary &rarr; KILLED<br/>
+2. initialize : negated conditional &rarr; KILLED<br/>
+3. initialize : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                    if ( approver != null &#38;&#38; approver.length() &#62; 0 )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_142'/>
+142
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_142'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_143'/>
+143
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_143'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                        m_approvers.put( key, new UnresolvedPrincipal( approver ) );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_144'/>
+144
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_144'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_145'/>
+145
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_145'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_146'/>
+146
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_146'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_147'/>
+147
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_147'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_148'/>
+148
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_148'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_149'/>
+149
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_149'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_150'/>
+150
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_150'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_151'/>
+151
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_151'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns &#60;code&#62;true&#60;/code&#62; if a workflow matching a particular key</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_152'/>
+152
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_152'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * contains an approval step.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_153'/>
+153
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_153'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_154'/>
+154
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_154'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param messageKey</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_155'/>
+155
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_155'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            the name of the workflow; corresponds to the value returned by</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_156'/>
+156
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_156'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            {@link Workflow#getMessageKey()}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_157'/>
+157
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_157'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the result</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_158'/>
+158
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_158'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_159'/>
+159
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_159'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public boolean requiresApproval( String messageKey )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_160'/>
+160
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_160'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_161'/>
+161
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_161'>1</a>
+<span>
+1. requiresApproval : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return  m_approvers.containsKey( messageKey );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_162'/>
+162
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_162'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_163'/>
+163
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_163'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_164'/>
+164
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_164'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_165'/>
+165
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_165'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Looks up and resolves the actor who approves a Decision for a particular</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_166'/>
+166
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_166'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Workflow, based on the Workflow&#39;s message key. If not found, or if</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_167'/>
+167
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_167'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Principal is Unresolved, throws WikiException. This particular</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_168'/>
+168
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_168'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * implementation always returns the GroupPrincipal &#60;code&#62;Admin&#60;/code&#62;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_169'/>
+169
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_169'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_170'/>
+170
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_170'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param messageKey the Decision&#39;s message key</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_171'/>
+171
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_171'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the actor who approves Decisions</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_172'/>
+172
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_172'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws WikiException if the message key was not found, or the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_173'/>
+173
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_173'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Principal value corresponding to the key could not be resolved</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_174'/>
+174
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_174'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_175'/>
+175
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_175'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Principal getApprover( String messageKey ) throws WikiException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_176'/>
+176
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_176'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_177'/>
+177
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_177'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        Principal approver = m_approvers.get( messageKey );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_178'/>
+178
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_178'>1</a>
+<span>
+1. getApprover : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if ( approver == null )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_179'/>
+179
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_179'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_180'/>
+180
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_180'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            throw new WikiException( &#34;Workflow &#39;&#34; + messageKey + &#34;&#39; does not require approval.&#34; );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_181'/>
+181
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_181'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_182'/>
+182
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_182'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_183'/>
+183
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_183'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        // Try to resolve UnresolvedPrincipals</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_184'/>
+184
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_184'>1</a>
+<span>
+1. getApprover : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if ( approver instanceof UnresolvedPrincipal )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_185'/>
+185
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_185'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_186'/>
+186
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_186'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            String name = approver.getName();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_187'/>
+187
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_187'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            approver = m_engine.getAuthorizationManager().resolvePrincipal( name );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_188'/>
+188
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_188'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_189'/>
+189
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_189'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            // If still unresolved, throw exception; otherwise, freshen our</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_190'/>
+190
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_190'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            // cache</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_191'/>
+191
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_191'>1</a>
+<span>
+1. getApprover : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            if ( approver instanceof UnresolvedPrincipal )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_192'/>
+192
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_192'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_193'/>
+193
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_193'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                throw new WikiException( &#34;Workflow approver &#39;&#34; + name + &#34;&#39; cannot not be resolved.&#34; );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_194'/>
+194
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_194'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_195'/>
+195
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_195'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_196'/>
+196
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_196'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            m_approvers.put( messageKey, approver );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_197'/>
+197
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_197'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_198'/>
+198
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_198'>1</a>
+<span>
+1. getApprover : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getApprover to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return approver;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_199'/>
+199
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_199'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_200'/>
+200
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_200'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_201'/>
+201
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_201'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_202'/>
+202
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_202'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Protected helper method that returns the associated WikiEngine</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_203'/>
+203
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_203'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_204'/>
+204
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_204'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the wiki engine</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_205'/>
+205
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_205'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_206'/>
+206
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_206'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    protected WikiEngine getEngine()</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_207'/>
+207
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_207'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_208'/>
+208
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_208'>1</a>
+<span>
+1. getEngine : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if ( m_engine == null )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_209'/>
+209
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_209'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_210'/>
+210
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_210'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            throw new IllegalStateException( &#34;WikiEngine cannot be null; please initialize WorkflowManager first.&#34; );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_211'/>
+211
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_211'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_212'/>
+212
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_212'>1</a>
+<span>
+1. getEngine : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getEngine to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        return m_engine;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_213'/>
+213
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_213'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_214'/>
+214
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_214'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_215'/>
+215
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_215'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_216'/>
+216
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_216'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns the DecisionQueue associated with this WorkflowManager</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_217'/>
+217
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_217'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_218'/>
+218
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_218'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the decision queue</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_219'/>
+219
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_219'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_220'/>
+220
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_220'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public DecisionQueue getDecisionQueue()</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_221'/>
+221
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_221'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_222'/>
+222
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_222'>1</a>
+<span>
+1. getDecisionQueue : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getDecisionQueue to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return m_queue;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_223'/>
+223
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_223'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_224'/>
+224
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_224'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_225'/>
+225
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_225'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private volatile int m_next;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_226'/>
+226
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_226'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_227'/>
+227
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_227'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_228'/>
+228
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_228'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns the next available unique identifier, which is subsequently</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_229'/>
+229
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_229'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * incremented.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_230'/>
+230
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_230'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_231'/>
+231
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_231'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the id</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_232'/>
+232
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_232'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_233'/>
+233
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_233'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private synchronized int nextId()</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_234'/>
+234
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_234'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_235'/>
+235
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_235'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        int current = m_next;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_236'/>
+236
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_236'>1</a>
+<span>
+1. nextId : Replaced integer addition with subtraction &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        m_next++;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_237'/>
+237
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_237'>1</a>
+<span>
+1. nextId : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return current;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_238'/>
+238
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_238'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_239'/>
+239
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_239'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_240'/>
+240
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_240'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_241'/>
+241
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_241'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Returns the current workflows a wiki session owns. These are workflows whose</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_242'/>
+242
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_242'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link Workflow#getOwner()} method returns a Principal also possessed by the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_243'/>
+243
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_243'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * wiki session (see {@link org.apache.wiki.WikiSession#getPrincipals()}). If the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_244'/>
+244
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_244'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * wiki session is not authenticated, this method returns an empty Collection.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_245'/>
+245
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_245'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param session the wiki session</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_246'/>
+246
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_246'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the collection workflows the wiki session owns, which may be empty</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_247'/>
+247
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_247'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_248'/>
+248
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_248'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public Collection&#60; Workflow &#62; getOwnerWorkflows( WikiSession session )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_249'/>
+249
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_249'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_250'/>
+250
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_250'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        List&#60;Workflow&#62; workflows = new ArrayList&#60;&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_251'/>
+251
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_251'>1</a>
+<span>
+1. getOwnerWorkflows : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if ( session.isAuthenticated() )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_252'/>
+252
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_252'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_253'/>
+253
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_253'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            Principal[] sessionPrincipals = session.getPrincipals();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_254'/>
+254
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_254'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            for ( Workflow w : m_workflows )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_255'/>
+255
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_255'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_256'/>
+256
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_256'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                Principal owner = w.getOwner();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_257'/>
+257
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_257'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                for ( Principal sessionPrincipal : sessionPrincipals )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_258'/>
+258
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_258'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_259'/>
+259
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_259'>1</a>
+<span>
+1. getOwnerWorkflows : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    if ( sessionPrincipal.equals( owner ) )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_260'/>
+260
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_260'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_261'/>
+261
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_261'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                        workflows.add( w );</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_262'/>
+262
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_262'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                        break;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_263'/>
+263
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_263'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_264'/>
+264
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_264'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_265'/>
+265
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_265'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_266'/>
+266
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_266'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_267'/>
+267
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_267'>1</a>
+<span>
+1. getOwnerWorkflows : mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getOwnerWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        return workflows;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_268'/>
+268
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_268'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_269'/>
+269
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_269'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_270'/>
+270
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_270'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_271'/>
+271
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_271'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Listens for {@link org.apache.wiki.event.WorkflowEvent} objects emitted</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_272'/>
+272
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_272'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * by Workflows. In particular, this method listens for</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_273'/>
+273
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_273'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link org.apache.wiki.event.WorkflowEvent#CREATED},</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_274'/>
+274
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_274'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link org.apache.wiki.event.WorkflowEvent#ABORTED} and</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_275'/>
+275
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_275'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link org.apache.wiki.event.WorkflowEvent#COMPLETED} events. If a</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_276'/>
+276
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_276'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * workflow is created, it is automatically added to the cache. If one is</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_277'/>
+277
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_277'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * aborted or completed, it is automatically removed.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_278'/>
+278
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_278'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param event the event passed to this listener</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_279'/>
+279
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_279'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_280'/>
+280
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_280'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_281'/>
+281
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_281'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void actionPerformed(WikiEvent event)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_282'/>
+282
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_282'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_283'/>
+283
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_283'>1</a>
+<span>
+1. actionPerformed : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if (event instanceof WorkflowEvent)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_284'/>
+284
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_284'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_285'/>
+285
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_285'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            Workflow workflow = event.getSrc();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_286'/>
+286
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_286'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            switch ( event.getType() )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_287'/>
+287
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_287'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_288'/>
+288
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_288'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                case WorkflowEvent.ABORTED:</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_289'/>
+289
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_289'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    // Remove from manager</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_290'/>
+290
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_290'>1</a>
+<span>
+1. actionPerformed : removed call to org/apache/wiki/workflow/WorkflowManager::remove &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                    remove( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_291'/>
+291
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_291'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                    break;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_292'/>
+292
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_292'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                case WorkflowEvent.COMPLETED:</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_293'/>
+293
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_293'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    // Remove from manager</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_294'/>
+294
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_294'>1</a>
+<span>
+1. actionPerformed : removed call to org/apache/wiki/workflow/WorkflowManager::remove &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>                    remove( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_295'/>
+295
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_295'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>                    break;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_296'/>
+296
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_296'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                case WorkflowEvent.CREATED:</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_297'/>
+297
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_297'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    // Add to manager</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_298'/>
+298
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_298'>1</a>
+<span>
+1. actionPerformed : removed call to org/apache/wiki/workflow/WorkflowManager::add &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    add( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_299'/>
+299
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_299'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    break;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_300'/>
+300
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_300'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                default:</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_301'/>
+301
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_301'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    break;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_302'/>
+302
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_302'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_303'/>
+303
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_303'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_304'/>
+304
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_304'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_305'/>
+305
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_305'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_306'/>
+306
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_306'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_307'/>
+307
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_307'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Protected helper method that adds a newly created Workflow to the cache,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_308'/>
+308
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_308'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * and sets its &#60;code&#62;workflowManager&#60;/code&#62; and &#60;code&#62;Id&#60;/code&#62;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_309'/>
+309
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_309'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * properties if not set.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_310'/>
+310
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_310'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_311'/>
+311
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_311'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param workflow</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_312'/>
+312
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_312'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            the workflow to add</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_313'/>
+313
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_313'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_314'/>
+314
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_314'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    protected synchronized void add( Workflow workflow )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_315'/>
+315
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_315'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_316'/>
+316
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_316'>1</a>
+<span>
+1. add : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if ( workflow.getWorkflowManager() == null )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_317'/>
+317
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_317'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_318'/>
+318
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_318'>1</a>
+<span>
+1. add : removed call to org/apache/wiki/workflow/Workflow::setWorkflowManager &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>            workflow.setWorkflowManager( this );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_319'/>
+319
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_319'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_320'/>
+320
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_320'>1</a>
+<span>
+1. add : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if ( workflow.getId() == Workflow.ID_NOT_SET )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_321'/>
+321
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_321'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_322'/>
+322
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_322'>1</a>
+<span>
+1. add : removed call to org/apache/wiki/workflow/Workflow::setId &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>            workflow.setId( nextId() );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_323'/>
+323
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_323'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_324'/>
+324
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_324'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        m_workflows.add( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_325'/>
+325
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_325'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_326'/>
+326
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_326'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_327'/>
+327
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_327'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_328'/>
+328
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_328'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Protected helper method that removes a specified Workflow from the cache,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_329'/>
+329
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_329'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * and moves it to the workflow history list. This method defensively</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_330'/>
+330
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_330'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * checks to see if the workflow has not yet been removed.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_331'/>
+331
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_331'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_332'/>
+332
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_332'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param workflow</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_333'/>
+333
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_333'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *            the workflow to remove</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_334'/>
+334
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_334'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_335'/>
+335
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_335'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    protected synchronized void remove(Workflow workflow)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_336'/>
+336
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_336'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_337'/>
+337
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_337'>1</a>
+<span>
+1. remove : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if ( m_workflows.contains( workflow ) )</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_338'/>
+338
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_338'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_339'/>
+339
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_339'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            m_workflows.remove( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_340'/>
+340
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_340'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            m_completed.add( workflow );</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_341'/>
+341
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_341'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_342'/>
+342
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_342'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@31782d31_343'/>
+343
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_343'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>}</span></pre></td></tr>
+
+
+
+<tr><td></td><td></td><td><h2>Mutations</h2></td></tr>
+
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_84'>84</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_84'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>start<br/><b>Killed by : </b>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithException()</span></span> removed call to org/apache/wiki/workflow/Workflow::setWorkflowManager &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_85'>85</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_85'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>start<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testStart()</span></span> removed call to org/apache/wiki/workflow/Workflow::setId &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_86'>86</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_86'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>start<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testStart()</span></span> removed call to org/apache/wiki/workflow/Workflow::start &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_95'>95</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_95'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getWorkflows<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows()</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_103'>103</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_103'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getCompletedWorkflows<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows()</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getCompletedWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_128'>128</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_128'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_131'>131</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_131'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_136'>136</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_136'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover()</span></span> changed conditional boundary &rarr; KILLED</p> <p class='KILLED'><span class='pop'>2.<span><b>2</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> <p class='KILLED'><span class='pop'>3.<span><b>3</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_141'>141</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_141'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> changed conditional boundary &rarr; KILLED</p> <p class='KILLED'><span class='pop'>2.<span><b>2</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> <p class='KILLED'><span class='pop'>3.<span><b>3</b><br/><b>Location : </b>initialize<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_161'>161</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_161'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>requiresApproval<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval()</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_178'>178</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_178'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getApprover<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_184'>184</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_184'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getApprover<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_191'>191</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_191'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getApprover<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_198'>198</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_198'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getApprover<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover()</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getApprover to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_208'>208</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_208'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getEngine<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_212'>212</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_212'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getEngine<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getEngine to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_222'>222</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_222'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getDecisionQueue<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testStart()</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getDecisionQueue to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_236'>236</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_236'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>nextId<br/><b>Killed by : </b>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithException()</span></span> Replaced integer addition with subtraction &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_237'>237</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_237'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>nextId<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testStart()</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_251'>251</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_251'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getOwnerWorkflows<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_259'>259</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_259'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getOwnerWorkflows<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_267'>267</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_267'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getOwnerWorkflows<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/wiki/workflow/WorkflowManager::getOwnerWorkflows to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_283'>283</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_283'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>actionPerformed<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_290'>290</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_290'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>actionPerformed<br/><b>Killed by : </b>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithException()</span></span> removed call to org/apache/wiki/workflow/WorkflowManager::remove &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_294'>294</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_294'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>actionPerformed<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows()</span></span> removed call to org/apache/wiki/workflow/WorkflowManager::remove &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_298'>298</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_298'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>actionPerformed<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/workflow/WorkflowManager::add &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_316'>316</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_316'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>add<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_318'>318</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_318'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>add<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/workflow/Workflow::setWorkflowManager &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_320'>320</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_320'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>add<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_322'>322</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_322'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>add<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/workflow/Workflow::setId &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@31782d31_337'>337</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@31782d31_337'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>remove<br/><b>Killed by : </b>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+
+</table>
+
+
+<h2>Active mutators</h2>
+<ul>
+<li class='mutator'>INCREMENTS_MUTATOR</li>
+<li class='mutator'>VOID_METHOD_CALL_MUTATOR</li>
+<li class='mutator'>RETURN_VALS_MUTATOR</li>
+<li class='mutator'>MATH_MUTATOR</li>
+<li class='mutator'>NEGATE_CONDITIONALS_MUTATOR</li>
+<li class='mutator'>INVERT_NEGS_MUTATOR</li>
+<li class='mutator'>CONDITIONALS_BOUNDARY_MUTATOR</li>
+
+</ul>
+
+<h2>Tests examined</h2>
+<ul>
+<li>org.apache.wiki.auth.AuthorizationManagerTest.testPrincipalAcl() (32 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testListLinksWithAttachments() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed4() (45 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionWithPath() (31 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerNoWikiName() (57 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel3() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExt2() (30 ms)</li><li>org.apache.wiki.WikiSessionTest.testIsIPAddress() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testErroneousHyperlink() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpacesInLinks2() (37 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testSelfReference() (31 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmInClude() (58 ms)</li><li>org.apache.wiki.WikiEngineTest.testOldVersionVars() (98 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym() (51 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDotsInBeginning() (15 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testHeadingVariables() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExtNofollow() (1468 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetAttribute() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginDoublyQuotedArgs() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testAlias2() (14 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testEmptyURL() (14 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL3() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testAlias() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraExclamation() (29 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDelete() (12 ms)</li><li>org.apache.wiki.WikiSessionTest.testAuthenticationCookieWhenOn() (47 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs() (62 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBrokenLink1() (51 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveBuiltInRoles() (27 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testMultiInvocation() (45 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames() (33 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsSorted() (51 ms)</li><li>org.apache.wiki.WikiEngineTest.testCreateEmptyPage() (45 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLWhenAllowedPre() (47 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testAttachURL1() (11 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGroupMembership() (32 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testStaticPermission() (38 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testContextLimits() (122 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsWithPrefix() (29 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testInlineImages() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel2() (26 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfile() (25 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude() (66 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testOtherURL1() (11 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet2() (73 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidate() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testItalicAcrossLinebreak() (25 ms)</li><li>org.apache.wiki.render.WysiwygEditingRendererTest.testUndefinedPageLink() (27 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationChangesHistory() (34 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testNoChanges() (109 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptyBold() (33 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL2() (13 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testEditURL1() (16 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testDelete() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename1() (35 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testRenameOfEscapedLinks() (58 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink2() (60 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginQuotedArgs2() (35 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testLineBreak() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginWikiText() (36 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testIsUserInRole() (26 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug25() (76 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinksAttachment() (36 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testDecisionWorkflow() (20 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testValidateFileName() (44 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLInPre() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithPunctuation() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCFirstAndLast() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testXSS1() (27 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBrokenLink2() (55 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities() (29 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNote() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTableLink() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd6() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet1() (25 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetRenamedUserProfile() (189 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedList() (26 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testAlice() (26 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet3() (51 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAuthenticatedSession() (25 ms)</li><li>org.apache.wiki.VariableManagerTest.testNonExistantVariable() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages2() (25 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testSave() (20 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testReferenceWidth() (65 ms)</li><li>org.apache.wiki.WikiSessionTest.testUserPrincipal() (23 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testVersionHistory() (372 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert4() (27 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL5() (12 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testPre() (17 ms)</li><li>org.apache.wiki.WikiEngineTest.testChangeNoteOldVersion2() (75 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStore() (50 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testTitleSearch2() (6055 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testMaxReferences() (61 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGetRoles() (24 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testAttachmentChange() (80 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilineList2() (26 ms)</li><li>org.apache.wiki.rss.RSSGeneratorTest.testBlogRSS2() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageTextShort2() (31 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testSave() (29 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersion2() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink3() (29 ms)</li><li>org.apache.wiki.filters.DefaultFilterManagerTest.testInitParams() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink() (24 ms)</li><li>org.apache.wiki.filters.DefaultFilterManagerTest.testInitFilters() (17 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidateNotNull() (23 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetLockExpiry() (18 ms)</li><li>org.apache.wiki.util.MailUtilTest.testSendMail() (52 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleNumbers() (42 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testGroups() (25 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentDirectory() (50 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testEquals2() (15 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRulerCombo() (31 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testRoleAcl() (33 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testSelf() (100 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testGroups() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape() (34 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testAttachURL1() (11 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testPutAttachmentUTF8() (27 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet4() (54 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testShow() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptyItalic() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel4() (23 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testExtendedLinks() (48 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL4() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageText() (60 ms)</li><li>org.apache.wiki.rss.RSSGeneratorTest.testBlogRSS() (52 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilineList1() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortPluginInsert() (30 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersionUTF8() (50 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testParseGroup() (29 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsComplex2() (33 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeCC() (54 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink2() (28 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testValidatePassword() (22 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentPage2() (32 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByEmail() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRenderingSpeed1() (436 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testErroneousHyperlink2() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet2() (24 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude2() (72 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testRemove() (14 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testRecentChanges() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph3() (34 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand1() (45 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC2() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinks2() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLongRuler() (29 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension5() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages4() (26 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case1() (32 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomJAASLoginModule() (46 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmExClude() (74 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRulerCombo2() (27 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomAuthorizer() (42 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testRecursive() (26 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL2() (15 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL2() (13 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testLoginCustomWithGroup() (50 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testSave() (2199 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL7() (13 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testAuthor() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch3() (28 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageNameSingular() (57 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testBuildApprovalWorkflowDeny() (16 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testBoldItalic() (11 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldAcrossLinebreak() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent2() (23 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChange() (38 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testVariableInsert() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDivStyle1() (26 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testInheritedPermissions() (32 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testSingleReferral() (65 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetRequiredProperty() (105 ms)</li><li>org.apache.wiki.WikiSessionTest.testAssertionCookie() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksInterWiki2() (23 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testRecursive2() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities1() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph2() (38 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testBob() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages3() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginInsertJS() (38 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testRenameOfEscapedLinks2() (50 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testAttachURLRelative1() (10 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedList2() (25 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL3() (19 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension4() (24 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL3() (10 ms)</li><li>org.apache.wiki.ui.admin.beans.PluginBeanTest.testDoGet() (13 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL6() (11 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtrafileInAttachmentDir() (2040 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testScandinavianLetters() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch2() (25 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNoteOldVersion() (29 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet() (48 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent3() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs2() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNonExistant() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDivStyle2() (33 ms)</li><li>org.apache.wiki.providers.CachingProviderTest.testSneakyAdd() (4042 ms)</li><li>org.apache.wiki.ui.GroupCommandTest.testStaticCommand() (16 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd3() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginHTMLInsert() (32 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationSimple() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreak() (22 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testBecomesUnreferenced() (202 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testScandinavianLettersUTF8() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginNoInsert() (38 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testBuildApprovalWorkflow() (15 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testPageInfo() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksInterWiki1() (24 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPageEntities2() (45 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testRefersTo() (97 ms)</li><li>org.apache.wiki.PageManagerTest.testPageCacheExists() (1373 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptySecondLevelList2() (30 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testHasRoleOrPrincipal() (25 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testNonexistentPage() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed2() (34 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeleteVersion2() (86 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities2() (33 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testPrintAcl() (29 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAdminView() (49 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsComplex() (31 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case3() (27 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval() (13 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testOtherURL2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSetHTML() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortPluginInsert2() (33 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testUnsafePattern() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTML2() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreWithLines() (34 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreWithoutExt() (47 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testInitPlugin() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithPunctuation2() (48 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testInheritedAclPermissions() (42 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTTAcrossLines() (26 ms)</li><li>org.apache.wiki.plugin.UndefinedPagesPluginTest.testCount() (55 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmMax() (67 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testMultiples() (31 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testDecisions() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename2() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent4() (186 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testGetRoles() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedPlugin2() (33 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs2() (53 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testRoles() (21 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByWikiName() (22 ms)</li><li>org.apache.wiki.plugin.GroupsTest.testTag() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs3() (26 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd2() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoPlugin() (31 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testIsContainerAuthorized() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler3() (41 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidateEmail() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinkJS1() (24 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude3() (68 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreakEscape() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTT() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanEscape() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed3() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTML() (30 ms)</li><li>org.apache.wiki.ui.PageCommandTest.testTargetedCommand() (38 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpacesInLinks1() (38 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension6() (27 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case2() (42 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentPage() (30 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testAttachURL1() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd() (32 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL1() (11 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testPageInfo() (33 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testEditURL1() (13 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testListAttachments() (46 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL1() (14 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountEntries() (67 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleArticle() (42 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testNonExistantDirectory() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert3() (12 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAdminView2() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testScandicPagename1() (31 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationMultiChangesNoCache() (51 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename3() (34 ms)</li><li>org.apache.wiki.workflow.OutcomeTest.testMessage() (11 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testNonexistentPage() (53 ms)</li><li>org.apache.wiki.render.WysiwygEditingRendererTest.testDefinedPageLink() (25 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd1() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch4() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs4() (25 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testParserPlugin() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testList1() (22 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testGetPermissions() (30 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testDelete() (4362 ms)</li><li>org.apache.wiki.VariableManagerTest.testPageName() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler2() (45 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePage() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLWhenAllowed() (135 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateBothExist() (75 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsSpace() (44 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate1() (151 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinks() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTableLinkEscapedBar() (33 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testRemove() (19 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks2() (25 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testGroups() (4247 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC6() (41 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch() (32 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testCount() (78 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testIncrement2() (16 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testExternalAnchor() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph7() (35 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testCustomProperties() (15 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExists() (517 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL6() (12 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testUserPolicy() (51 ms)</li><li>org.apache.wiki.WikiEngineTest.testRename() (52 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testNonExistant2() (126 ms)</li><li>org.apache.wiki.WikiEngineTest.testReadLinks() (37 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows() (15 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsUTF1() (51 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testSimple() (52 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testGetWikiNames() (19 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage2() (14 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testConstraints() (36 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginUserAllowed() (26 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindStaticWikiAction() (25 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL6() (13 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testDeleteByLoginName() (18 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert() (13 ms)</li><li>org.apache.wiki.VariableManagerTest.testMixedCase() (25 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testAttachURLRelative1() (12 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersion() (44 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs4() (83 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs5() (34 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtradirInAttachmentDir() (2037 ms)</li><li>org.apache.wiki.WikiEngineTest.testEncodeNameLatin1() (39 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testSerialization() (28 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeAnchor() (45 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testSlashesInPageNames() (16 ms)</li><li>org.apache.wiki.ui.WikiCommandTest.testStaticCommand() (17 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testEquals() (23 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePageAndAttachments2() (56 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetUid() (13 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testTitleSearch() (6053 ms)</li><li>org.apache.wiki.PageManagerTest.testPageCacheNotInUse() (51 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC5() (47 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetHTML() (63 ms)</li><li>org.apache.wiki.plugin.UndefinedPagesPluginTest.testSimpleUndefined() (42 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph6() (33 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testQuotedArgs() (15 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateBothExist2() (98 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testIncrement() (16 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithException() (13 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand4() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre2() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC() (30 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleInsertions() (105 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL7() (11 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testNonexistantPage() (23 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testBold() (22 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testHTML() (30 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsUTF2() (48 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMillionChanges() (453 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape5() (33 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList2() (14 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case4() (42 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate2() (158 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationInfoAvailable() (34 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testWithBlanks1() (29 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testGetRoles() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptySecondLevelList() (25 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL7() (15 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testAttributes() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePlugin1() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading3() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkBold() (44 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPage() (43 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testSimpleRename() (57 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithApproval() (19 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym2() (60 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedPlugin1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre3() (38 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs3() (81 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs6() (27 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testSamePage() (53 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCamelCaseInPre() (31 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeWithBlanks2() (71 ms)</li><li>org.apache.wiki.WikiSessionTest.testRoles() (27 ms)</li><li>org.apache.wiki.WikiEngineTest.testEncodeNameUTF8() (64 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTTLinks() (34 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testOtherURL2() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC4() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph5() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldItalic() (33 ms)</li><li>org.apache.wiki.WikiEngineTest.testCreatePage() (56 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testSimilarNames() (29 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand3() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable4() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperLinks6() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks5() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkInList() (37 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL4() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape4() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList3() (13 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL4() (14 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationWithSimpleHistory() (31 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension3() (28 ms)</li><li>org.apache.wiki.ui.WikiCommandTest.testTargetedCommand() (14 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveUsers() (29 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testDeleteVersion() (37 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testEmptyURL() (11 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testResave() (3198 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginQuotedArgs() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape3() (36 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeleteVersion() (85 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreByVersion() (44 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage4() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMissingPlugin() (28 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testEnabled() (50 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testSlashesInPageNamesUTF8() (15 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByFullName() (18 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageName() (56 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym3() (50 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testCircularRefs() (144 ms)</li><li>org.apache.wiki.VariableManagerTest.testPageName2() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription3() (34 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testReferrers() (97 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyleTable() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAmpersand2() (40 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionNoParams() (25 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs7() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginWikiText2() (34 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomJAASLoginModuleOptions() (44 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testOtherURL1() (12 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByUid() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks3() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph4() (55 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDirectoryIsFile() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC3() (28 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAssertedSession() (22 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testSimple() (52 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGroupAddEvents() (27 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand2() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable5() (29 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginIPAllowed() (28 ms)</li><li>org.apache.wiki.WikiSessionTest.testAuthenticationCookieDefaults() (24 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithRejection() (18 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testParmInClude() (57 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL5() (15 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList4() (16 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginUserNotAllowed() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks() (22 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testUnderscore() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage3() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageTextShort() (35 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testOtherURL2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedList2() (32 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension2() (26 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testEmptyURL() (9 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL5() (19 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated() (28 ms)</li><li>org.apache.wiki.render.RenderingManagerTest.testCache() (504 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape2() (32 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testResave() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginInsert() (33 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testCheckin() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs() (31 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testTwinVar() (17 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFinalPageName() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription2() (33 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUncreated() (77 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByLoginName() (16 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItems() (28 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllNoExtension() (2043 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs8() (29 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationMultiChangesHistory() (41 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testRule() (15 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testCharlie() (23 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsExclude() (57 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testNoInsert() (17 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testExternalAnchor2() (17 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsBasic() (61 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testLoginCustom() (26 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert2() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithScandics() (39 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testActorDecisions() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable2() (26 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testNoRecentChanges() (53 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch() (2128 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle4() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks3() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanNested() (30 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testOtherURL1() (13 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals1() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink() (48 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames2() (32 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePageAndAttachments() (53 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testSimpleVar() (15 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testRecentChangesWithAttachments() (34 ms)</li><li>org.apache.wiki.ui.GroupCommandTest.testTargetedCommand() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated2() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testItalic() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDeadlySpammer() (490 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanJavascript() (31 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch3() (6080 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs9() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd3() (32 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testInclude() (69 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testAdd() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription5() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet3() (36 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveGroups() (20 ms)</li><li>org.apache.wiki.WikiSessionTest.testIPAddress() (19 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testPlugins() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable3() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle3() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testNumberArgs() (12 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testDefaultProvider() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks4() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testFootnote2() (31 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testParmExClude() (61 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testReassign() (21 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert3() (26 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testStart() (12 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals2() (12 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleDeletions() (95 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldAcrossParagraph() (31 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testAclRegex() (28 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug21() (55 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testSingularReferences() (115 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageNamePlural() (64 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNoteOldVersion2() (41 ms)</li><li>org.apache.wiki.WikiEngineTest.testParsedVariables() (46 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames3() (32 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testListLinks() (31 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPageEntities() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink() (41 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testAttachURLRelative1() (9 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExists2() (48 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAmpersand1() (42 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch2() (6062 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreakClear() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd2() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet4() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription4() (24 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateFoobar2s() (81 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfileWithDenial() (34 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription() (33 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testDefaultPermissions() (30 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testMultipleStore() (51 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfileWithApproval() (41 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeWithBlanks() (60 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle2() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink3() (35 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testSpecialPageReference() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testFootnote1() (26 ms)</li><li>org.apache.wiki.providers.CachingProviderTest.testInitialization() (30 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdatePluralOnlyRef() (78 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL1() (11 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testQuotedArgs2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRuler() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading1() (25 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testWithBlanks2() (2665 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testEditURL1() (10 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals3() (13 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testSimpleCount() (12 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate3() (176 ms)</li><li>org.apache.wiki.WikiEngineTest.testSpacedNames1() (43 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtrafile() (2036 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading2() (23 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeMultilink() (49 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testRename() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBlankEscape() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink3() (55 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleChanges() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated4() (28 ms)</li><li>org.apache.wiki.util.MailUtilTest.testProperties() (15 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkItalic() (38 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetByVersion() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd5() (34 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testDave() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks2() (31 ms)</li><li>org.apache.wiki.ui.PageCommandTest.testStaticCommand() (26 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert1() (24 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitle() (90 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph8() (36 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle1() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable1() (32 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testIsUserPrincipal() (19 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetCollidingUserProfile() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testIllegalXML() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink2() (37 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testNonExistant1() (122 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedList() (32 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetRequiredPropertyNRPE() (37 ms)</li><li>org.apache.wiki.ui.admin.beans.FilterBeanTest.testDoGet() (14 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover() (14 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals4() (17 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAll() (2038 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginIPNotAllowed() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkBold2() (103 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink4() (53 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated3() (30 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testComplete() (20 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testDelete() (41 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExt() (35 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionWithParams() (21 ms)</li><li>org.apache.wiki.WikiEngineTest.testSaveExistingPageWithEmptyContent() (45 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUnreferenced() (86 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginNoEnd() (37 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testRemove() (116 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd4() (33 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreSpace() (46 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch4() (6067 ms)</li>
+</ul>
+
+<br/>
+
+Report generated by <a href='http://pitest.org'>PIT</a> 1.4.3
+
+</body>
+</html>

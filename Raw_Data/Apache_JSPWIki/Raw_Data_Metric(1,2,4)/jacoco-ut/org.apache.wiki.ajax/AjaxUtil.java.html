@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AjaxUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ajax</a> &gt; <span class="el_source">AjaxUtil.java</span></div><h1>AjaxUtil.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.     
+ */
+package org.apache.wiki.ajax;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+
+import org.apache.commons.lang.StringUtils;
+
+import com.google.gson.Gson;
+
+/**
+ * Helpful utilities for the Ajax functions.
+ * 
+ * @since 2.10.2-svn12
+ */
+<span class="nc" id="L33">public class AjaxUtil extends HttpServlet {</span>
+	private static final long serialVersionUID = 3170439306358345408L;
+<span class="fc" id="L35">	private static Gson gson = new Gson();</span>
+
+	/**
+	 * Uses Google Gson (https://code.google.com/p/google-gson/) to convert to JSON
+	 * @param input the object to be converted to JSON
+	 * @return the JSON string of the object
+	 */
+	public static String toJson(Object input) {
+<span class="nc" id="L43">		String result = &quot;&quot;;</span>
+<span class="nc bnc" id="L44" title="All 2 branches missed.">		if (input != null) {</span>
+<span class="nc" id="L45">			result = gson.toJson(input);</span>
+		}
+<span class="nc" id="L47">		return result;</span>
+	}
+	
+	/**
+	 * Given a requestUri path, find the next uri &quot;fragment&quot; after the &quot;/lastPart/&quot; one.
+	 * E.g. given url &quot;/test/abc/travel&quot;, and lastPart &quot;abc&quot;, this will return &quot;travel&quot;. Given lastPart &quot;test&quot; will return &quot;abc&quot;.
+	 * 
+	 * This could be done better using a &lt;a href=&quot;http://en.wikipedia.org/wiki/URL_Template&quot;&gt;URITemplate&lt;/a&gt;
+	 * (as &lt;a href=&quot;https://tools.ietf.org/html/rfc6570&quot;&gt;RFC6570&lt;/a&gt;) 
+	 * 
+	 * @param path the RequestURI to search usually done by calling request.getRequestUri().
+	 * @param lastPart the previousPart of the path to search after.
+	 * @return the next part of the path.
+	 * @throws ServletException
+	 */
+	public static String getNextPathPart(String path, String lastPart) throws ServletException {
+<span class="fc" id="L63">        String result = null;</span>
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        if (StringUtils.isBlank(path)) {</span>
+<span class="nc" id="L65">            return result;</span>
+        }
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">        if (!lastPart.endsWith(&quot;/&quot;)) {</span>
+<span class="nc" id="L68">        	lastPart += &quot;/&quot;;</span>
+        }
+<span class="fc" id="L70">        int index = path.indexOf(lastPart);</span>
+<span class="pc bpc" id="L71" title="1 of 2 branches missed.">        if (index&lt;0) {</span>
+<span class="nc" id="L72">        	lastPart = lastPart.substring(0,lastPart.length()-1);</span>
+<span class="nc" id="L73">        	index = path.indexOf(lastPart);</span>
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        	if (index&lt;0) {</span>
+<span class="nc" id="L75">        		throw new ServletException(&quot;Invalid path provided &quot; + path + &quot; does not contain '&quot; + lastPart + &quot;'&quot;);</span>
+        	}
+        }
+<span class="fc" id="L78">        path = path.substring(index+lastPart.length());</span>
+<span class="fc" id="L79">        index = path.indexOf(&quot;/&quot;);</span>
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        if (index == -1) {</span>
+<span class="fc" id="L81">            index = path.indexOf(&quot;#&quot;);</span>
+<span class="fc bfc" id="L82" title="All 2 branches covered.">            if (index == -1) {</span>
+<span class="fc" id="L83">                index = path.indexOf(&quot;?&quot;);</span>
+            }
+        }
+<span class="fc bfc" id="L86" title="All 2 branches covered.">        if (index == -1) {</span>
+<span class="fc" id="L87">            result = path;</span>
+        }
+        else {
+<span class="fc" id="L90">            result = path.substring(0,index);</span>
+        }
+
+<span class="fc" id="L93">        return result;</span>
+    }
+	
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,464 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultFilterManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.filters</a> &gt; <span class="el_source">DefaultFilterManager.java</span></div><h1>DefaultFilterManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.filters;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.engine.FilterManager;
+import org.apache.wiki.api.exceptions.FilterException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.api.filters.PageFilter;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.modules.ModuleManager;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.PriorityList;
+import org.apache.wiki.util.XmlUtil;
+import org.jdom2.Element;
+
+
+/**
+ *  Manages the page filters.  Page filters are components that can be executed
+ *  at certain places:
+ *  &lt;ul&gt;
+ *    &lt;li&gt;Before the page is translated into HTML.
+ *    &lt;li&gt;After the page has been translated into HTML.
+ *    &lt;li&gt;Before the page is saved.
+ *    &lt;li&gt;After the page has been saved.
+ *  &lt;/ul&gt;
+ *
+ *  Using page filters allows you to modify the page data on-the-fly, and do things like
+ *  adding your own custom WikiMarkup.
+ *
+ *  &lt;p&gt;
+ *  The initial page filter configuration is kept in a file called &quot;filters.xml&quot;.  The
+ *  format is really very simple:
+ *  &lt;pre&gt;
+ *  &lt;?xml version=&quot;1.0&quot;?&gt;
+ *
+ *  &lt;pagefilters&gt;
+ *
+ *    &lt;filter&gt;
+ *      &lt;class&gt;org.apache.wiki.filters.ProfanityFilter&lt;/class&gt;
+ *    &lt;/filter&gt;
+ *
+ *    &lt;filter&gt;
+ *      &lt;class&gt;org.apache.wiki.filters.TestFilter&lt;/class&gt;
+ *
+ *      &lt;param&gt;
+ *        &lt;name&gt;foobar&lt;/name&gt;
+ *        &lt;value&gt;Zippadippadai&lt;/value&gt;
+ *      &lt;/param&gt;
+ *
+ *      &lt;param&gt;
+ *        &lt;name&gt;blatblaa&lt;/name&gt;
+ *        &lt;value&gt;5&lt;/value&gt;
+ *      &lt;/param&gt;
+ *
+ *    &lt;/filter&gt;
+ *  &lt;/pagefilters&gt;
+ *  &lt;/pre&gt;
+ *
+ *  The &amp;lt;filter&gt; -sections define the filters.  For more information, please see
+ *  the PageFilterConfiguration page in the JSPWiki distribution.
+ */
+public class DefaultFilterManager extends ModuleManager implements FilterManager {
+
+<span class="fc" id="L97">    private PriorityList&lt; PageFilter &gt; m_pageFilters = new PriorityList&lt; PageFilter &gt;();</span>
+
+<span class="fc" id="L99">    private Map&lt; String, PageFilterInfo &gt; m_filterClassMap = new HashMap&lt; String, PageFilterInfo &gt;();</span>
+
+<span class="fc" id="L101">    private static final Logger log = Logger.getLogger(DefaultFilterManager.class);</span>
+
+    /**
+     *  Constructs a new FilterManager object.
+     *
+     *  @param engine The WikiEngine which owns the FilterManager
+     *  @param props Properties to initialize the FilterManager with
+     *  @throws WikiException If something goes wrong.
+     */
+    public DefaultFilterManager( WikiEngine engine, Properties props )
+        throws WikiException
+    {
+<span class="fc" id="L113">        super( engine );</span>
+<span class="fc" id="L114">        initialize( props );</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     *  Adds a page filter to the queue.  The priority defines in which
+     *  order the page filters are run, the highest priority filters go
+     *  in the queue first.
+     *  &lt;p&gt;
+     *  In case two filters have the same priority, their execution order
+     *  is the insertion order.
+     *
+     *  @since 2.1.44.
+     *  @param f PageFilter to add
+     *  @param priority The priority in which position to add it in.
+     *  @throws IllegalArgumentException If the PageFilter is null or invalid.
+     */
+    public void addPageFilter( PageFilter f, int priority ) throws IllegalArgumentException
+    {
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if( f == null )</span>
+        {
+<span class="nc" id="L134">            throw new IllegalArgumentException(&quot;Attempt to provide a null filter - this should never happen.  Please check your configuration (or if you're a developer, check your own code.)&quot;);</span>
+        }
+
+<span class="fc" id="L137">        m_pageFilters.add( f, priority );</span>
+<span class="fc" id="L138">    }</span>
+
+    private void initPageFilter( String className, Properties props )
+    {
+        try
+        {
+<span class="fc" id="L144">            PageFilterInfo info = m_filterClassMap.get( className );</span>
+
+<span class="pc bpc" id="L146" title="3 of 4 branches missed.">            if( info != null &amp;&amp; !checkCompatibility(info) )</span>
+            {
+<span class="nc" id="L148">                String msg = &quot;Filter '&quot;+info.getName()+&quot;' not compatible with this version of JSPWiki&quot;;</span>
+<span class="nc" id="L149">                log.warn(msg);</span>
+<span class="nc" id="L150">                return;</span>
+            }
+
+<span class="fc" id="L153">            int priority = 0; // FIXME: Currently fixed.</span>
+
+<span class="fc" id="L155">            Class&lt; ? &gt; cl = ClassUtil.findClass( &quot;org.apache.wiki.filters&quot;, className );</span>
+
+<span class="fc" id="L157">            PageFilter filter = (PageFilter)cl.newInstance();</span>
+
+<span class="fc" id="L159">            filter.initialize( m_engine, props );</span>
+
+<span class="fc" id="L161">            addPageFilter( filter, priority );</span>
+<span class="fc" id="L162">            log.info(&quot;Added page filter &quot;+cl.getName()+&quot; with priority &quot;+priority);</span>
+        }
+<span class="nc" id="L164">        catch( ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L166">            log.error(&quot;Unable to find the filter class: &quot;+className);</span>
+        }
+<span class="nc" id="L168">        catch( InstantiationException e )</span>
+        {
+<span class="nc" id="L170">            log.error(&quot;Cannot create filter class: &quot;+className);</span>
+        }
+<span class="nc" id="L172">        catch( IllegalAccessException e )</span>
+        {
+<span class="nc" id="L174">            log.error(&quot;You are not allowed to access class: &quot;+className);</span>
+        }
+<span class="nc" id="L176">        catch( ClassCastException e )</span>
+        {
+<span class="nc" id="L178">            log.error(&quot;Suggested class is not a PageFilter: &quot;+className);</span>
+        }
+<span class="nc" id="L180">        catch( FilterException e )</span>
+        {
+<span class="nc" id="L182">            log.error(&quot;Filter &quot;+className+&quot; failed to initialize itself.&quot;, e);</span>
+<span class="pc" id="L183">        }</span>
+<span class="fc" id="L184">    }</span>
+
+
+    /**
+     *  Initializes the filters from an XML file.
+     *
+     *  @param props The list of properties.  Typically jspwiki.properties
+     *  @throws WikiException If something goes wrong.
+     */
+    protected void initialize( Properties props ) throws WikiException {
+<span class="fc" id="L194">        InputStream xmlStream = null;</span>
+<span class="fc" id="L195">        String      xmlFile   = props.getProperty( PROP_FILTERXML );</span>
+
+        try {
+<span class="fc" id="L198">            registerFilters();</span>
+
+<span class="pc bpc" id="L200" title="1 of 2 branches missed.">            if( m_engine.getServletContext() != null ) {</span>
+<span class="fc" id="L201">                log.debug( &quot;Attempting to locate &quot; + DEFAULT_XMLFILE + &quot; from servlet context.&quot; );</span>
+<span class="fc bfc" id="L202" title="All 2 branches covered.">                if( xmlFile == null ) {</span>
+<span class="fc" id="L203">                    xmlStream = m_engine.getServletContext().getResourceAsStream( DEFAULT_XMLFILE );</span>
+                } else {
+<span class="fc" id="L205">                    xmlStream = m_engine.getServletContext().getResourceAsStream( xmlFile );</span>
+                }
+            }
+
+<span class="fc bfc" id="L209" title="All 2 branches covered.">            if( xmlStream == null ) {</span>
+                // just a fallback element to the old behaviour prior to 2.5.8
+<span class="fc" id="L211">                log.debug( &quot;Attempting to locate filters.xml from class path.&quot; );</span>
+
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">                if( xmlFile == null ) {</span>
+<span class="fc" id="L214">                    xmlStream = getClass().getResourceAsStream( &quot;/filters.xml&quot; );</span>
+                } else {
+<span class="nc" id="L216">                    xmlStream = getClass().getResourceAsStream( xmlFile );</span>
+                }
+            }
+
+<span class="pc bpc" id="L220" title="3 of 4 branches missed.">            if( (xmlStream == null) &amp;&amp; (xmlFile != null) ) {</span>
+<span class="nc" id="L221">                log.debug(&quot;Attempting to load property file &quot;+xmlFile);</span>
+<span class="nc" id="L222">                xmlStream = new FileInputStream( new File(xmlFile) );</span>
+            }
+
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">            if( xmlStream == null ) {</span>
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                log.info( &quot;Cannot find property file for filters (this is okay, expected to find it as: '&quot; +</span>
+                           ( xmlFile == null ? DEFAULT_XMLFILE : xmlFile ) +
+                          &quot;')&quot; );
+<span class="nc" id="L229">                return;</span>
+            }
+
+<span class="fc" id="L232">            parseConfigFile( xmlStream );</span>
+<span class="nc" id="L233">        } catch( IOException e ) {</span>
+<span class="nc" id="L234">            log.error(&quot;Unable to read property file&quot;, e);</span>
+        } finally {
+<span class="fc" id="L236">        	IOUtils.closeQuietly( xmlStream );</span>
+        }
+<span class="fc" id="L238">    }</span>
+
+    /**
+     *  Parses the XML filters configuration file.
+     *
+     * @param xmlStream stream to parse
+     */
+    private void parseConfigFile( InputStream xmlStream ) {
+<span class="fc" id="L246">    	List&lt; Element &gt; pageFilters = XmlUtil.parse( xmlStream, &quot;/pagefilters/filter&quot; );</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        for( Iterator&lt; Element &gt; i = pageFilters.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L248">            Element f = i.next();</span>
+<span class="fc" id="L249">            String filterClass = f.getChildText( &quot;class&quot; );</span>
+<span class="fc" id="L250">            Properties props = new Properties();</span>
+
+<span class="fc" id="L252">            List&lt; Element &gt; params = f.getChildren( &quot;param&quot; );</span>
+<span class="fc bfc" id="L253" title="All 2 branches covered.">            for( Iterator&lt; Element &gt; par = params.iterator(); par.hasNext(); ) {</span>
+<span class="fc" id="L254">                Element p = par.next();</span>
+<span class="fc" id="L255">                props.setProperty( p.getChildText( &quot;name&quot; ), p.getChildText( &quot;value&quot; ) );</span>
+<span class="fc" id="L256">            }</span>
+
+<span class="fc" id="L258">            initPageFilter( filterClass, props );</span>
+<span class="fc" id="L259">        }</span>
+<span class="fc" id="L260">    }</span>
+
+
+    /**
+     *  Does the filtering before a translation.
+     *
+     *  @param context The WikiContext
+     *  @param pageData WikiMarkup data to be passed through the preTranslate chain.
+     *  @throws FilterException If any of the filters throws a FilterException
+     *  @return The modified WikiMarkup
+     *
+     *  @see PageFilter#preTranslate(WikiContext, String)
+     */
+    public String doPreTranslateFiltering( WikiContext context, String pageData )
+        throws FilterException
+    {
+<span class="fc" id="L276">        fireEvent( WikiPageEvent.PRE_TRANSLATE_BEGIN, context );</span>
+
+<span class="fc bfc" id="L278" title="All 2 branches covered.">        for( PageFilter f : m_pageFilters )</span>
+        {
+<span class="fc" id="L280">            pageData = f.preTranslate( context, pageData );</span>
+<span class="fc" id="L281">        }</span>
+
+<span class="fc" id="L283">        fireEvent( WikiPageEvent.PRE_TRANSLATE_END, context );</span>
+
+<span class="fc" id="L285">        return pageData;</span>
+    }
+
+    /**
+     *  Does the filtering after HTML translation.
+     *
+     *  @param context The WikiContext
+     *  @param htmlData HTML data to be passed through the postTranslate
+     *  @throws FilterException If any of the filters throws a FilterException
+     *  @return The modified HTML
+     *  @see PageFilter#postTranslate(WikiContext, String)
+     */
+    public String doPostTranslateFiltering( WikiContext context, String htmlData )
+        throws FilterException
+    {
+<span class="fc" id="L300">        fireEvent( WikiPageEvent.POST_TRANSLATE_BEGIN, context );</span>
+
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        for( PageFilter f : m_pageFilters )</span>
+        {
+<span class="fc" id="L304">            htmlData = f.postTranslate( context, htmlData );</span>
+<span class="fc" id="L305">        }</span>
+
+<span class="fc" id="L307">        fireEvent( WikiPageEvent.POST_TRANSLATE_END, context );</span>
+
+<span class="fc" id="L309">        return htmlData;</span>
+    }
+
+    /**
+     *  Does the filtering before a save to the page repository.
+     *
+     *  @param context The WikiContext
+     *  @param pageData WikiMarkup data to be passed through the preSave chain.
+     *  @throws FilterException If any of the filters throws a FilterException
+     *  @return The modified WikiMarkup
+     *  @see PageFilter#preSave(WikiContext, String)
+     */
+    public String doPreSaveFiltering( WikiContext context, String pageData )
+        throws FilterException
+    {
+<span class="fc" id="L324">        fireEvent( WikiPageEvent.PRE_SAVE_BEGIN, context );</span>
+
+<span class="fc bfc" id="L326" title="All 2 branches covered.">        for( PageFilter f : m_pageFilters )</span>
+        {
+<span class="fc" id="L328">            pageData = f.preSave( context, pageData );</span>
+<span class="fc" id="L329">        }</span>
+
+<span class="fc" id="L331">        fireEvent( WikiPageEvent.PRE_SAVE_END, context );</span>
+
+<span class="fc" id="L333">        return pageData;</span>
+    }
+
+    /**
+     *  Does the page filtering after the page has been saved.
+     *
+     *  @param context The WikiContext
+     *  @param pageData WikiMarkup data to be passed through the postSave chain.
+     *  @throws FilterException If any of the filters throws a FilterException
+     *
+     *  @see PageFilter#postSave(WikiContext, String)
+     */
+    public void doPostSaveFiltering( WikiContext context, String pageData )
+        throws FilterException
+    {
+<span class="fc" id="L348">        fireEvent( WikiPageEvent.POST_SAVE_BEGIN, context );</span>
+
+<span class="fc bfc" id="L350" title="All 2 branches covered.">        for( PageFilter f : m_pageFilters )</span>
+        {
+            // log.info(&quot;POSTSAVE: &quot;+f.toString() );
+<span class="fc" id="L353">            f.postSave( context, pageData );</span>
+<span class="fc" id="L354">        }</span>
+
+<span class="fc" id="L356">        fireEvent( WikiPageEvent.POST_SAVE_END, context );</span>
+<span class="fc" id="L357">    }</span>
+
+    /**
+     *  Returns the list of filters currently installed.  Note that this is not
+     *  a copy, but the actual list.  So be careful with it.
+     *
+     *  @return A List of PageFilter objects
+     */
+    public List&lt; PageFilter &gt; getFilterList()
+    {
+<span class="fc" id="L367">        return m_pageFilters;</span>
+    }
+
+    /**
+     *
+     * Notifies PageFilters to clean up their ressources.
+     *
+     */
+    public void destroy()
+    {
+<span class="nc bnc" id="L377" title="All 2 branches missed.">        for( PageFilter f : m_pageFilters )</span>
+        {
+<span class="nc" id="L379">            f.destroy( m_engine );</span>
+<span class="nc" id="L380">        }</span>
+<span class="nc" id="L381">    }</span>
+
+    // events processing .......................................................
+
+    /**
+     *  Fires a WikiPageEvent of the provided type and WikiContext.
+     *  Invalid WikiPageEvent types are ignored.
+     *
+     * @see org.apache.wiki.event.WikiPageEvent
+     * @param type      the WikiPageEvent type to be fired.
+     * @param context   the WikiContext of the event.
+     */
+    public void fireEvent( int type, WikiContext context )
+    {
+<span class="pc bpc" id="L395" title="2 of 4 branches missed.">        if ( WikiEventManager.isListening(this) &amp;&amp; WikiPageEvent.isValidType(type) )</span>
+        {
+<span class="fc" id="L397">            WikiEventManager.fireEvent(this,</span>
+<span class="fc" id="L398">                    new WikiPageEvent(m_engine,type,context.getPage().getName()) );</span>
+        }
+<span class="fc" id="L400">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiModuleInfo &gt; modules() {
+<span class="fc" id="L407">        return modules( m_filterClassMap.values().iterator() );</span>
+    }
+
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public PageFilterInfo getModuleInfo(String moduleName) {
+<span class="nc" id="L416">        return m_filterClassMap.get(moduleName);</span>
+    }
+
+    private void registerFilters() {
+<span class="fc" id="L420">        log.info( &quot;Registering filters&quot; );</span>
+<span class="fc" id="L421">        List&lt; Element &gt; filters = XmlUtil.parse( PLUGIN_RESOURCE_LOCATION, &quot;/modules/filter&quot; );</span>
+
+        //
+        // Register all filters which have created a resource containing its properties.
+        //
+        // Get all resources of all plugins.
+        //
+<span class="fc bfc" id="L428" title="All 2 branches covered.">        for( Iterator&lt; Element &gt; i = filters.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L429">            Element pluginEl = i.next();</span>
+<span class="fc" id="L430">            String className = pluginEl.getAttributeValue( &quot;class&quot; );</span>
+<span class="fc" id="L431">            PageFilterInfo filterInfo = PageFilterInfo.newInstance( className, pluginEl );</span>
+<span class="pc bpc" id="L432" title="1 of 2 branches missed.">            if( filterInfo != null ) {</span>
+<span class="fc" id="L433">                registerFilter( filterInfo );</span>
+            }
+<span class="fc" id="L435">        }</span>
+<span class="fc" id="L436">    }</span>
+
+    private void registerFilter(PageFilterInfo pluginInfo) {
+<span class="fc" id="L439">        m_filterClassMap.put( pluginInfo.getName(), pluginInfo );</span>
+<span class="fc" id="L440">    }</span>
+
+    /**
+     *  Stores information about the filters.
+     *
+     *  @since 2.6.1
+     */
+    private static final class PageFilterInfo extends WikiModuleInfo
+    {
+        private PageFilterInfo( String name )
+        {
+<span class="fc" id="L451">            super(name);</span>
+<span class="fc" id="L452">        }</span>
+
+        protected static PageFilterInfo newInstance(String className, Element pluginEl)
+        {
+<span class="pc bpc" id="L456" title="2 of 4 branches missed.">            if( className == null || className.length() == 0 ) return null;</span>
+<span class="fc" id="L457">            PageFilterInfo info = new PageFilterInfo( className );</span>
+
+<span class="fc" id="L459">            info.initializeFromXML( pluginEl );</span>
+<span class="fc" id="L460">            return info;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

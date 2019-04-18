@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiJSPFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">WikiJSPFilter.java</span></div><h1>WikiJSPFilter.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ui;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.WriteListener;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpServletResponseWrapper;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.NDC;
+import org.apache.wiki.WatchDog;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.url.DefaultURLConstructor;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ * This filter goes through the generated page response prior and
+ * places requested resources at the appropriate inclusion markers.
+ * This is done to let dynamic content (e.g. plugins, editors)
+ * include custom resources, even after the HTML head section is
+ * in fact built. This filter is typically the last filter to execute,
+ * and it &lt;em&gt;must&lt;/em&gt; run after servlet or JSP code that performs
+ * redirections or sends error codes (such as access control methods).
+ * &lt;p&gt;
+ * Inclusion markers are placed by the IncludeResourcesTag; the
+ * default content templates (see .../templates/default/commonheader.jsp)
+ * are configured to do this. As an example, a JavaScript resource marker
+ * is added like this:
+ * &lt;pre&gt;
+ * &amp;lt;wiki:IncludeResources type=&quot;script&quot;/&amp;gt;
+ * &lt;/pre&gt;
+ * Any code that requires special resources must register a resource
+ * request with the TemplateManager. For example:
+ * &lt;pre&gt;
+ * &amp;lt;wiki:RequestResource type=&quot;script&quot; path=&quot;scripts/custom.js&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * or programmatically,
+ * &lt;pre&gt;
+ * TemplateManager.addResourceRequest( context, TemplateManager.RESOURCE_SCRIPT, &quot;scripts/customresource.js&quot; );
+ * &lt;/pre&gt;
+ *
+ * @see TemplateManager
+ * @see org.apache.wiki.tags.RequestResourceTag
+ */
+<span class="nc" id="L78">public class WikiJSPFilter extends WikiServletFilter</span>
+{
+    private String m_wiki_encoding;
+    private boolean useEncoding;
+
+    /** {@inheritDoc} */
+    public void init( FilterConfig config ) throws ServletException
+    {
+<span class="nc" id="L86">        super.init( config );</span>
+<span class="nc" id="L87">        m_wiki_encoding = m_engine.getWikiProperties().getProperty(WikiEngine.PROP_ENCODING);</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">        useEncoding = !(new Boolean(m_engine.getWikiProperties().getProperty(WikiEngine.PROP_NO_FILTER_ENCODING, &quot;false&quot;).trim()).booleanValue());</span>
+<span class="nc" id="L90">    }</span>
+
+    public void doFilter( ServletRequest  request, ServletResponse response, FilterChain chain )
+        throws ServletException, IOException
+    {
+<span class="nc" id="L95">        WatchDog w = m_engine.getCurrentWatchDog();</span>
+        try
+        {
+<span class="nc" id="L98">            NDC.push( m_engine.getApplicationName()+&quot;:&quot;+((HttpServletRequest)request).getRequestURI() );</span>
+
+<span class="nc" id="L100">            w.enterState(&quot;Filtering for URL &quot;+((HttpServletRequest)request).getRequestURI(), 90 );</span>
+            HttpServletResponseWrapper responseWrapper;
+
+<span class="nc" id="L103">            responseWrapper = new JSPWikiServletResponseWrapper( (HttpServletResponse)response, m_wiki_encoding, useEncoding);</span>
+
+            // fire PAGE_REQUESTED event
+<span class="nc" id="L106">            String pagename = DefaultURLConstructor.parsePageFromURL(</span>
+<span class="nc" id="L107">                    (HttpServletRequest)request, response.getCharacterEncoding() );</span>
+<span class="nc" id="L108">            fireEvent( WikiPageEvent.PAGE_REQUESTED, pagename );</span>
+
+<span class="nc" id="L110">            super.doFilter( request, responseWrapper, chain );</span>
+
+            // The response is now complete. Lets replace the markers now.
+
+            // WikiContext is only available after doFilter! (That is after
+            //   interpreting the jsp)
+
+            try
+            {
+<span class="nc" id="L119">                w.enterState( &quot;Delivering response&quot;, 30 );</span>
+<span class="nc" id="L120">                WikiContext wikiContext = getWikiContext( request );</span>
+<span class="nc" id="L121">                String r = filter( wikiContext, responseWrapper );</span>
+
+<span class="nc bnc" id="L123" title="All 2 branches missed.">                if (useEncoding)</span>
+                {
+<span class="nc" id="L125">                    OutputStreamWriter out = new OutputStreamWriter(response.getOutputStream(),</span>
+<span class="nc" id="L126">                                                                    response.getCharacterEncoding());</span>
+<span class="nc" id="L127">                    out.write(r);</span>
+<span class="nc" id="L128">                    out.flush();</span>
+<span class="nc" id="L129">                    out.close();</span>
+<span class="nc" id="L130">                }</span>
+                else
+                {
+<span class="nc" id="L133">                    response.getWriter().write(r);</span>
+                }
+
+                // Clean up the UI messages and loggers
+<span class="nc bnc" id="L137" title="All 2 branches missed.">                if( wikiContext != null )</span>
+                {
+<span class="nc" id="L139">                    wikiContext.getWikiSession().clearMessages();</span>
+                }
+
+                // fire PAGE_DELIVERED event
+<span class="nc" id="L143">                fireEvent( WikiPageEvent.PAGE_DELIVERED, pagename );</span>
+
+            }
+            finally
+            {
+<span class="nc" id="L148">                w.exitState();</span>
+            }
+        }
+        finally
+        {
+<span class="nc" id="L153">            w.exitState();</span>
+<span class="nc" id="L154">            NDC.pop();</span>
+<span class="nc" id="L155">            NDC.remove();</span>
+        }
+<span class="nc" id="L157">    }</span>
+
+    /**
+     * Goes through all types and writes the appropriate response.
+     *
+     * @param wikiContext The usual processing context
+     * @param response The source string
+     * @return The modified string with all the insertions in place.
+     */
+    private String filter(WikiContext wikiContext, HttpServletResponse response )
+    {
+<span class="nc" id="L168">        String string = response.toString();</span>
+
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        if( wikiContext != null )</span>
+        {
+<span class="nc" id="L172">            String[] resourceTypes = TemplateManager.getResourceTypes( wikiContext );</span>
+
+<span class="nc bnc" id="L174" title="All 2 branches missed.">            for( int i = 0; i &lt; resourceTypes.length; i++ )</span>
+            {
+<span class="nc" id="L176">                string = insertResources( wikiContext, string, resourceTypes[i] );</span>
+            }
+
+            //
+            //  Add HTTP header Resource Requests
+            //
+<span class="nc" id="L182">            String[] headers = TemplateManager.getResourceRequests( wikiContext,</span>
+                                                                    TemplateManager.RESOURCE_HTTPHEADER );
+
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            for( int i = 0; i &lt; headers.length; i++ )</span>
+            {
+<span class="nc" id="L187">                String key = headers[i];</span>
+<span class="nc" id="L188">                String value = &quot;&quot;;</span>
+<span class="nc" id="L189">                int split = headers[i].indexOf(':');</span>
+<span class="nc bnc" id="L190" title="All 4 branches missed.">                if( split &gt; 0 &amp;&amp; split &lt; headers[i].length()-1 )</span>
+                {
+<span class="nc" id="L192">                    key = headers[i].substring( 0, split );</span>
+<span class="nc" id="L193">                    value = headers[i].substring( split+1 );</span>
+                }
+
+<span class="nc" id="L196">                response.addHeader( key.trim(), value.trim() );</span>
+            }
+        }
+
+<span class="nc" id="L200">        return string;</span>
+    }
+
+    /**
+     *  Inserts whatever resources
+     *  were requested by any plugins or other components for this particular
+     *  type.
+     *
+     *  @param wikiContext The usual processing context
+     *  @param string The source string
+     *  @param type Type identifier for insertion
+     *  @return The filtered string.
+     */
+    private String insertResources(WikiContext wikiContext, String string, String type )
+    {
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if( wikiContext == null )</span>
+        {
+<span class="nc" id="L217">            return string;</span>
+        }
+
+<span class="nc" id="L220">        String marker = TemplateManager.getMarker( wikiContext, type );</span>
+<span class="nc" id="L221">        int idx = string.indexOf( marker );</span>
+
+<span class="nc bnc" id="L223" title="All 2 branches missed.">        if( idx == -1 )</span>
+        {
+<span class="nc" id="L225">            return string;</span>
+        }
+
+<span class="nc" id="L228">        log.debug(&quot;...Inserting...&quot;);</span>
+
+<span class="nc" id="L230">        String[] resources = TemplateManager.getResourceRequests( wikiContext, type );</span>
+
+<span class="nc" id="L232">        StringBuilder concat = new StringBuilder( resources.length * 40 );</span>
+
+<span class="nc bnc" id="L234" title="All 2 branches missed.">        for( int i = 0; i &lt; resources.length; i++  )</span>
+        {
+<span class="nc" id="L236">            log.debug(&quot;...:::&quot;+resources[i]);</span>
+<span class="nc" id="L237">            concat.append( resources[i] );</span>
+        }
+
+<span class="nc" id="L240">        string = TextUtil.replaceString( string,</span>
+                                         idx,
+<span class="nc" id="L242">                                         idx+marker.length(),</span>
+<span class="nc" id="L243">                                         concat.toString() );</span>
+
+<span class="nc" id="L245">        return string;</span>
+    }
+
+    /**
+     *  Simple response wrapper that just allows us to gobble through the entire
+     *  response before it's output.
+     */
+    private static class JSPWikiServletResponseWrapper
+        extends HttpServletResponseWrapper
+    {
+        ByteArrayOutputStream m_output;
+        private ByteArrayServletOutputStream m_servletOut;
+        private PrintWriter m_writer;
+        private HttpServletResponse m_response;
+        private boolean useEncoding;
+
+        /**
+         *  How large the initial buffer should be.  This should be tuned to achieve
+         *  a balance in speed and memory consumption.
+         */
+        private static final int INIT_BUFFER_SIZE = 0x8000;
+
+
+        public JSPWikiServletResponseWrapper( HttpServletResponse r, final String wiki_encoding, boolean useEncoding)
+                throws UnsupportedEncodingException {
+<span class="nc" id="L270">            super(r);</span>
+<span class="nc" id="L271">            m_output = new ByteArrayOutputStream(INIT_BUFFER_SIZE);</span>
+<span class="nc" id="L272">            m_servletOut = new ByteArrayServletOutputStream(m_output);</span>
+<span class="nc" id="L273">            m_writer = new PrintWriter(new OutputStreamWriter(m_servletOut, wiki_encoding), true);</span>
+<span class="nc" id="L274">            this.useEncoding = useEncoding;</span>
+
+<span class="nc" id="L276">            m_response = r;</span>
+<span class="nc" id="L277">        }</span>
+
+        /**
+         *  Returns a writer for output; this wraps the internal buffer
+         *  into a PrintWriter.
+         */
+        public PrintWriter getWriter()
+        {
+<span class="nc" id="L285">            return m_writer;</span>
+        }
+
+        public ServletOutputStream getOutputStream()
+        {
+<span class="nc" id="L290">            return m_servletOut;</span>
+        }
+
+        public void flushBuffer() throws IOException
+        {
+<span class="nc" id="L295">            m_writer.flush();</span>
+<span class="nc" id="L296">            super.flushBuffer();</span>
+<span class="nc" id="L297">        }</span>
+
+        class ByteArrayServletOutputStream extends ServletOutputStream
+        {
+            ByteArrayOutputStream m_buffer;
+
+            public ByteArrayServletOutputStream(ByteArrayOutputStream byteArrayOutputStream)
+<span class="nc" id="L304">            {</span>
+<span class="nc" id="L305">                super();</span>
+<span class="nc" id="L306">                m_buffer = byteArrayOutputStream;</span>
+<span class="nc" id="L307">            }</span>
+
+            @Override
+            public void write(int aInt) throws IOException
+            {
+<span class="nc" id="L312">                m_buffer.write( aInt );</span>
+<span class="nc" id="L313">            }</span>
+
+			@Override
+			public boolean isReady() 
+			{
+<span class="nc" id="L318">				return false;</span>
+			}
+
+			@Override
+			public void setWriteListener(WriteListener writeListener) 
+			{
+<span class="nc" id="L324">			}</span>
+			
+        }
+
+        /**
+         *  Returns whatever was written so far into the Writer.
+         */
+        public String toString()
+        {
+            try
+			{
+<span class="nc" id="L335">				flushBuffer();</span>
+<span class="nc" id="L336">			} catch (IOException e)</span>
+			{
+<span class="nc" id="L338">                log.error( e );</span>
+<span class="nc" id="L339">                return StringUtils.EMPTY;</span>
+<span class="nc" id="L340">			}</span>
+
+            try
+			{
+<span class="nc bnc" id="L344" title="All 2 branches missed.">				if (useEncoding)</span>
+				{
+<span class="nc" id="L346">					return m_output.toString(m_response.getCharacterEncoding());</span>
+				}
+
+<span class="nc" id="L349">				return m_output.toString();</span>
+			}
+<span class="nc" id="L351">            catch( UnsupportedEncodingException e )</span>
+            {
+<span class="nc" id="L353">                log.error( e );</span>
+<span class="nc" id="L354">                return StringUtils.EMPTY;</span>
+             }
+        }
+    }
+
+
+    // events processing .......................................................
+
+
+    /**
+     *  Fires a WikiPageEvent of the provided type and page name
+     *  to all registered listeners of the current WikiEngine.
+     *
+     * @see org.apache.wiki.event.WikiPageEvent
+     * @param type       the event type to be fired
+     * @param pagename   the wiki page name as a String
+     */
+    protected final void fireEvent( int type, String pagename )
+    {
+<span class="nc bnc" id="L373" title="All 2 branches missed.">        if ( WikiEventManager.isListening(m_engine) )</span>
+        {
+<span class="nc" id="L375">            WikiEventManager.fireEvent(m_engine,new WikiPageEvent(m_engine,type,pagename));</span>
+        }
+<span class="nc" id="L377">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

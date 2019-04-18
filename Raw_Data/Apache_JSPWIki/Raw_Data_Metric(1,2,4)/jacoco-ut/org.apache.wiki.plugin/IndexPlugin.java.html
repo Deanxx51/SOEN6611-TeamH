@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IndexPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">IndexPlugin.java</span></div><h1>IndexPlugin.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.plugin;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.jdom2.Element;
+import org.jdom2.Namespace;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
+
+/**
+ *  A WikiPlugin that creates an index of pages according to a certain pattern.
+ *  &lt;br /&gt;
+ *  The default is to include all pages.
+ *  &lt;p&gt;
+ *  This is a rewrite of the earlier JSPWiki IndexPlugin using JDOM2.
+ 8  &lt;/p&gt;
+ *  &lt;p&gt;
+ *  Parameters (from AbstractReferralPlugin):
+ *  &lt;/p&gt;
+ *  &lt;ul&gt;
+ *    &lt;li&gt;&lt;b&gt;include&lt;/b&gt; - A regexp pattern for marking which pages should be included.&lt;/li&gt;
+ *    &lt;li&gt;&lt;b&gt;exclude&lt;/b&gt; - A regexp pattern for marking which pages should be excluded.&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *  
+ * @author Ichiro Furusato
+ */
+<span class="nc" id="L56">public class IndexPlugin extends AbstractReferralPlugin implements WikiPlugin</span>
+{
+<span class="nc" id="L58">    private static Logger log = Logger.getLogger(IndexPlugin.class);</span>
+
+<span class="nc" id="L60">    private Namespace xmlns_XHTML = Namespace.getNamespace(&quot;http://www.w3.org/1999/xhtml&quot;);</span>
+    
+    /**
+     * {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String,String&gt; params ) throws PluginException
+    {
+<span class="nc" id="L67">        String include = params.get(PARAM_INCLUDE);</span>
+<span class="nc" id="L68">        String exclude = params.get(PARAM_EXCLUDE);</span>
+        
+<span class="nc" id="L70">        Element masterDiv = getElement(&quot;div&quot;,&quot;index&quot;);     </span>
+<span class="nc" id="L71">        Element indexDiv = getElement(&quot;div&quot;,&quot;header&quot;);</span>
+<span class="nc" id="L72">        masterDiv.addContent(indexDiv);</span>
+        try {
+<span class="nc" id="L74">            List&lt;String&gt; pages = listPages(context,include,exclude);</span>
+<span class="nc" id="L75">            context.getEngine().getPageManager().getPageSorter().sort(pages);</span>
+<span class="nc" id="L76">            char initialChar = ' ';</span>
+<span class="nc" id="L77">            Element currentDiv = new Element(&quot;div&quot;,xmlns_XHTML);            </span>
+<span class="nc bnc" id="L78" title="All 2 branches missed.">            for ( String name : pages ) {</span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">                if ( name.charAt(0) != initialChar ) {</span>
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                    if ( initialChar != ' ' ) {</span>
+<span class="nc" id="L81">                        indexDiv.addContent(&quot; - &quot;);</span>
+                    }                    
+<span class="nc" id="L83">                    initialChar = name.charAt(0);</span>
+<span class="nc" id="L84">                    masterDiv.addContent(makeHeader(String.valueOf(initialChar)));</span>
+<span class="nc" id="L85">                    currentDiv = getElement(&quot;div&quot;,&quot;body&quot;);</span>
+<span class="nc" id="L86">                    masterDiv.addContent(currentDiv);</span>
+<span class="nc" id="L87">                    indexDiv.addContent(getLink(&quot;#&quot;+initialChar,String.valueOf(initialChar)));</span>
+                } else {
+<span class="nc" id="L89">                    currentDiv.addContent(&quot;, &quot;);</span>
+                }
+<span class="nc" id="L91">                currentDiv.addContent(getLink(context.getURL(WikiContext.VIEW,name),name));</span>
+<span class="nc" id="L92">            }</span>
+            
+<span class="nc" id="L94">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L95">            log.warn(&quot;could not load page index&quot;,e);</span>
+<span class="nc" id="L96">            throw new PluginException( e.getMessage() );</span>
+<span class="nc" id="L97">        }</span>
+        // serialize to raw format string (no changes to whitespace)
+<span class="nc" id="L99">        XMLOutputter out = new XMLOutputter(Format.getRawFormat()); </span>
+<span class="nc" id="L100">        return out.outputString(masterDiv);</span>
+    }
+
+
+    private Element getLink( String href, String content )
+    {
+<span class="nc" id="L106">        Element a = new Element(&quot;a&quot;,xmlns_XHTML);</span>
+<span class="nc" id="L107">        a.setAttribute(&quot;href&quot;,href);</span>
+<span class="nc" id="L108">        a.addContent(content);</span>
+<span class="nc" id="L109">        return a;</span>
+    }
+
+    
+    private Element makeHeader( String initialChar )
+    {
+<span class="nc" id="L115">        Element span = getElement(&quot;span&quot;,&quot;section&quot;);</span>
+<span class="nc" id="L116">        Element a = new Element(&quot;a&quot;,xmlns_XHTML);</span>
+<span class="nc" id="L117">        a.setAttribute(&quot;id&quot;,initialChar);</span>
+<span class="nc" id="L118">        a.addContent(initialChar);</span>
+<span class="nc" id="L119">        span.addContent(a);</span>
+<span class="nc" id="L120">        return span;</span>
+    }
+
+    
+    private Element getElement( String gi, String classValue )
+    {
+<span class="nc" id="L126">        Element elt = new Element(gi,xmlns_XHTML);</span>
+<span class="nc" id="L127">        elt.setAttribute(&quot;class&quot;,classValue);</span>
+<span class="nc" id="L128">        return elt;</span>
+    }
+    
+
+    /**
+     *  Grabs a list of all pages and filters them according to the include/exclude patterns.
+     *  
+     * @param context
+     * @param include
+     * @param exclude
+     * @return A list containing page names which matched the filters.
+     * @throws ProviderException
+     */
+    private List&lt;String&gt; listPages( WikiContext context, String include, String exclude ) throws ProviderException {
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        Pattern includePtrn = include != null ? Pattern.compile( include ) : Pattern.compile(&quot;.*&quot;);</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        Pattern excludePtrn = exclude != null ? Pattern.compile( exclude ) : Pattern.compile(&quot;\\p{Cntrl}&quot;); // there are no control characters in page names</span>
+<span class="nc" id="L144">        List&lt; String &gt; result = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L145">        Set&lt; String &gt; pages = context.getEngine().getReferenceManager().findCreated();</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        for ( Iterator&lt;String&gt; i = pages.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L147">            String pageName = i.next();</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            if ( excludePtrn.matcher( pageName ).matches() ) continue;</span>
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            if ( includePtrn.matcher( pageName ).matches() ) {</span>
+<span class="nc" id="L150">                result.add( pageName );</span>
+            }
+<span class="nc" id="L152">        }</span>
+<span class="nc" id="L153">        return result;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

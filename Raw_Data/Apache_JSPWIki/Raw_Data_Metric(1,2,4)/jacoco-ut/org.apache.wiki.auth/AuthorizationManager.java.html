@@ -1,0 +1,744 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AuthorizationManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth</a> &gt; <span class="el_source">AuthorizationManager.java</span></div><h1>AuthorizationManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.auth;
+
+
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.security.AccessControlException;
+import java.security.AccessController;
+import java.security.CodeSource;
+import java.security.Permission;
+import java.security.Principal;
+import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
+import java.security.cert.Certificate;
+import java.text.MessageFormat;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.WeakHashMap;
+
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.acl.Acl;
+import org.apache.wiki.auth.acl.AclEntry;
+import org.apache.wiki.auth.acl.UnresolvedPrincipal;
+import org.apache.wiki.auth.authorize.Role;
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiSecurityEvent;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.tags.WikiTagBase;
+import org.apache.wiki.util.ClassUtil;
+import org.freshcookies.security.policy.LocalPolicy;
+
+/**
+ * &lt;p&gt;Manages all access control and authorization; determines what authenticated
+ * users are allowed to do.&lt;/p&gt;
+ * &lt;p&gt;Privileges in JSPWiki are expressed as Java-standard {@link java.security.Permission}
+ * classes. There are two types of permissions:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;{@link org.apache.wiki.auth.permissions.WikiPermission} - privileges that apply
+ *   to an entire wiki instance: &lt;em&gt;e.g.,&lt;/em&gt; editing user profiles, creating pages, creating groups&lt;/li&gt;
+ *   &lt;li&gt;{@link org.apache.wiki.auth.permissions.PagePermission} - privileges that apply
+ *   to a single wiki page or range of pages: &lt;em&gt;e.g.,&lt;/em&gt; reading, editing, renaming
+ * &lt;/ul&gt;
+ * &lt;p&gt;Calling classes determine whether they are entitled to perform a particular action
+ * by constructing the appropriate permission first, then passing it and the current
+ * {@link org.apache.wiki.WikiSession} to the
+ * {@link #checkPermission(WikiSession, Permission)} method. If the session's
+ * Subject possesses the permission, the action is allowed.&lt;/p&gt;
+ * &lt;p&gt;For WikiPermissions, the decision criteria is relatively simple: the caller either
+ * possesses the permission, as granted by the wiki security policy -- or not.&lt;/p&gt;
+ * &lt;p&gt;For PagePermissions, the logic is exactly the same if the page being checked
+ * does not have an access control list. However, if the page does have an ACL, the
+ * authorization decision is made based the &lt;em&gt;union&lt;/em&gt; of the permissions
+ * granted in the ACL and in the security policy. In other words, the user must
+ * be named in the ACL (or belong to a group or role that is named in the ACL)
+ * &lt;em&gt;and&lt;/em&gt; be granted (at least) the same permission in the security policy. We
+ * do this to prevent a user from gaining more permissions than they already
+ * have, based on the security policy.&lt;/p&gt;
+ * &lt;p&gt;See the {@link #checkPermission(WikiSession, Permission)} and
+ * {@link #hasRoleOrPrincipal(WikiSession, Principal)} methods for more information
+ * on the authorization logic.&lt;/p&gt;
+ * @since 2.3
+ * @see AuthenticationManager
+ */
+public class AuthorizationManager {
+
+<span class="fc" id="L100">    private static final Logger log = Logger.getLogger( AuthorizationManager.class );</span>
+    /**
+     * The default external Authorizer is the {@link org.apache.wiki.auth.authorize.WebContainerAuthorizer}
+     */
+    public static final String                DEFAULT_AUTHORIZER = &quot;org.apache.wiki.auth.authorize.WebContainerAuthorizer&quot;;
+
+    /** Property that supplies the security policy file name, in WEB-INF. */
+    protected static final String             POLICY      = &quot;jspwiki.policy.file&quot;;
+
+    /** Name of the default security policy file, in WEB-INF. */
+    protected static final String             DEFAULT_POLICY      = &quot;jspwiki.policy&quot;;
+
+    /**
+     * The property name in jspwiki.properties for specifying the external {@link Authorizer}.
+     */
+    public static final String                PROP_AUTHORIZER   = &quot;jspwiki.authorizer&quot;;
+
+<span class="fc" id="L117">    private Authorizer                        m_authorizer      = null;</span>
+
+    /** Cache for storing ProtectionDomains used to evaluate the local policy. */
+<span class="fc" id="L120">    private Map&lt;Principal, ProtectionDomain&gt;                               m_cachedPds       = new WeakHashMap&lt;Principal, ProtectionDomain&gt;();</span>
+
+<span class="fc" id="L122">    private WikiEngine                        m_engine          = null;</span>
+
+<span class="fc" id="L124">    private LocalPolicy                       m_localPolicy     = null;</span>
+
+    /**
+     * Constructs a new AuthorizationManager instance.
+     */
+    public AuthorizationManager()
+<span class="fc" id="L130">    {</span>
+<span class="fc" id="L131">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; or &lt;code&gt;false&lt;/code&gt;, depending on
+     * whether a Permission is allowed for the Subject associated with
+     * a supplied WikiSession. The access control algorithm works this way:
+     * &lt;ol&gt;
+     * &lt;li&gt;The {@link org.apache.wiki.auth.acl.Acl} for the page is obtained&lt;/li&gt;
+     * &lt;li&gt;The Subject associated with the current
+     * {@link org.apache.wiki.WikiSession} is obtained&lt;/li&gt;
+     * &lt;li&gt;If the Subject's Principal set includes the Role Principal that is
+     * the administrator group, always allow the Permission&lt;/li&gt;
+     * &lt;li&gt;For all permissions, check to see if the Permission is allowed according
+     * to the default security policy. If it isn't, deny the permission and halt
+     * further processing.&lt;/li&gt;
+     * &lt;li&gt;If there is an Acl, get the list of Principals assigned this
+     * Permission in the Acl: these will be role, group or user Principals, or
+     * {@link org.apache.wiki.auth.acl.UnresolvedPrincipal}s (see below).
+     * Then iterate through the Subject's Principal set and determine whether
+     * the user (Subject) possesses any one of these specified Roles or
+     * Principals. The matching process delegates to
+     * {@link #hasRoleOrPrincipal(WikiSession, Principal)}.
+     * &lt;/ol&gt;
+     * &lt;p&gt;
+     * Note that when iterating through the Acl's list of authorized Principals,
+     * it is possible that one or more of the Acl's Principal entries are of
+     * type &lt;code&gt;UnresolvedPrincipal&lt;/code&gt;. This means that the last time
+     * the ACL was read, the Principal (user, built-in Role, authorizer Role, or
+     * wiki Group) could not be resolved: the Role was not valid, the user
+     * wasn't found in the UserDatabase, or the Group wasn't known to (e.g.,
+     * cached) in the GroupManager. If an &lt;code&gt;UnresolvedPrincipal&lt;/code&gt; is
+     * encountered, this method will attempt to resolve it first &lt;em&gt;before&lt;/em&gt;
+     * checking to see if the Subject possesses this principal, by calling
+     * {@link #resolvePrincipal(String)}. If the (re-)resolution does not
+     * succeed, the access check for the principal will fail by definition (the
+     * Subject should never contain UnresolvedPrincipals).
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * If security not set to JAAS, will return true.
+     * &lt;/p&gt;
+     * @param session the current wiki session
+     * @param permission the Permission being checked
+     * @see #hasRoleOrPrincipal(WikiSession, Principal)
+     * @return the result of the Permission check
+     */
+    public boolean checkPermission( WikiSession session, Permission permission )
+    {
+        //
+        //  A slight sanity check.
+        //
+<span class="pc bpc" id="L181" title="2 of 4 branches missed.">        if ( session == null || permission == null )</span>
+        {
+<span class="nc" id="L183">            fireEvent( WikiSecurityEvent.ACCESS_DENIED, null, permission );</span>
+<span class="nc" id="L184">            return false;</span>
+        }
+
+<span class="fc" id="L187">        Principal user = session.getLoginPrincipal();</span>
+
+        // Always allow the action if user has AllPermission
+<span class="fc" id="L190">        Permission allPermission = new AllPermission( m_engine.getApplicationName() );</span>
+<span class="fc" id="L191">        boolean hasAllPermission = checkStaticPermission( session, allPermission );</span>
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        if ( hasAllPermission )</span>
+        {
+<span class="fc" id="L194">            fireEvent( WikiSecurityEvent.ACCESS_ALLOWED, user, permission );</span>
+<span class="fc" id="L195">            return true;</span>
+        }
+
+        // If the user doesn't have *at least* the permission
+        // granted by policy, return false.
+<span class="fc" id="L200">        boolean hasPolicyPermission = checkStaticPermission( session, permission );</span>
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if ( !hasPolicyPermission )</span>
+        {
+<span class="nc" id="L203">            fireEvent( WikiSecurityEvent.ACCESS_DENIED, user, permission );</span>
+<span class="nc" id="L204">            return false;</span>
+        }
+
+        // If this isn't a PagePermission, it's allowed
+<span class="fc bfc" id="L208" title="All 2 branches covered.">        if ( ! ( permission instanceof PagePermission ) )</span>
+        {
+<span class="fc" id="L210">            fireEvent( WikiSecurityEvent.ACCESS_ALLOWED, user, permission );</span>
+<span class="fc" id="L211">            return true;</span>
+        }
+
+        //
+        // If the page or ACL is null, it's allowed.
+        //
+<span class="fc" id="L217">        String pageName = ((PagePermission)permission).getPage();</span>
+<span class="fc" id="L218">        WikiPage page = m_engine.getPage( pageName );</span>
+<span class="fc bfc" id="L219" title="All 2 branches covered.">        Acl acl = ( page == null) ? null : m_engine.getAclManager().getPermissions( page );</span>
+<span class="pc bpc" id="L220" title="1 of 6 branches missed.">        if ( page == null ||  acl == null || acl.isEmpty() )</span>
+        {
+<span class="fc" id="L222">            fireEvent( WikiSecurityEvent.ACCESS_ALLOWED, user, permission );</span>
+<span class="fc" id="L223">            return true;</span>
+        }
+
+        //
+        //  Next, iterate through the Principal objects assigned
+        //  this permission. If the context's subject possesses
+        //  any of these, the action is allowed.
+
+<span class="fc" id="L231">        Principal[] aclPrincipals = acl.findPrincipals( permission );</span>
+
+<span class="fc" id="L233">        log.debug( &quot;Checking ACL entries...&quot; );</span>
+<span class="fc" id="L234">        log.debug( &quot;Acl for this page is: &quot; + acl );</span>
+<span class="fc" id="L235">        log.debug( &quot;Checking for principal: &quot; + Arrays.toString( aclPrincipals ) );</span>
+<span class="fc" id="L236">        log.debug( &quot;Permission: &quot; + permission );</span>
+
+<span class="fc bfc" id="L238" title="All 2 branches covered.">        for( Principal aclPrincipal : aclPrincipals )</span>
+        {
+            // If the ACL principal we're looking at is unresolved,
+            // try to resolve it here &amp; correct the Acl
+<span class="fc bfc" id="L242" title="All 2 branches covered.">            if ( aclPrincipal instanceof UnresolvedPrincipal )</span>
+            {
+<span class="fc" id="L244">                AclEntry aclEntry = acl.getEntry( aclPrincipal );</span>
+<span class="fc" id="L245">                aclPrincipal = resolvePrincipal( aclPrincipal.getName() );</span>
+<span class="pc bpc" id="L246" title="2 of 4 branches missed.">                if ( aclEntry != null &amp;&amp; !( aclPrincipal instanceof UnresolvedPrincipal ) )</span>
+                {
+<span class="nc" id="L248">                    aclEntry.setPrincipal( aclPrincipal );</span>
+                }
+            }
+
+<span class="fc bfc" id="L252" title="All 2 branches covered.">            if ( hasRoleOrPrincipal( session, aclPrincipal ) )</span>
+            {
+<span class="fc" id="L254">                fireEvent( WikiSecurityEvent.ACCESS_ALLOWED, user, permission );</span>
+<span class="fc" id="L255">                return true;</span>
+            }
+        }
+<span class="fc" id="L258">        fireEvent( WikiSecurityEvent.ACCESS_DENIED, user, permission );</span>
+<span class="fc" id="L259">        return false;</span>
+    }
+
+    /**
+     * &lt;p&gt;Determines if the Subject associated with a
+     * supplied WikiSession contains a desired Role or GroupPrincipal.
+     * The algorithm simply checks to see if the Subject possesses
+     * the Role or GroupPrincipal it in its Principal set. Note that
+     * any user (anonymous, asserted, authenticated) can possess
+     * a built-in role. But a user &lt;em&gt;must&lt;/em&gt; be authenticated to
+     * possess a role other than one of the built-in ones.
+     * We do this to prevent privilege escalation.&lt;/p&gt;
+     * &lt;p&gt;For all other cases, this method returns &lt;code&gt;false&lt;/code&gt;.&lt;/p&gt;
+     * &lt;p&gt;Note that this method does &lt;em&gt;not&lt;/em&gt; consult the external
+     * Authorizer or GroupManager; it relies on the Principals that
+     * have been injected into the user's Subject at login time, or
+     * after group creation/modification/deletion.&lt;/p&gt;
+     * @param session the current wiki session, which must be non-null. If null,
+     *            the result of this method always returns &lt;code&gt;false&lt;/code&gt;
+     * @param principal the Principal (role or group principal) to look
+     *            for, which must be non-&lt;code&gt;null&lt;/code&gt;. If &lt;code&gt;null&lt;/code&gt;,
+     *            the result of this method always returns &lt;code&gt;false&lt;/code&gt;
+     * @return &lt;code&gt;true&lt;/code&gt; if the Subject supplied with the WikiContext
+     *         posesses the Role or GroupPrincipal, &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    public boolean isUserInRole( WikiSession session, Principal principal )
+    {
+<span class="pc bpc" id="L286" title="2 of 4 branches missed.">        if ( session == null || principal == null ||</span>
+<span class="fc bfc" id="L287" title="All 2 branches covered.">             AuthenticationManager.isUserPrincipal( principal ) )</span>
+        {
+<span class="fc" id="L289">            return false;</span>
+        }
+
+        // Any type of user can possess a built-in role
+<span class="fc bfc" id="L293" title="All 4 branches covered.">        if ( principal instanceof Role &amp;&amp; Role.isBuiltInRole( (Role)principal ) )</span>
+        {
+<span class="fc" id="L295">            return session.hasPrincipal( principal );</span>
+        }
+
+        // Only authenticated users can possess groups or custom roles
+<span class="pc bpc" id="L299" title="1 of 4 branches missed.">        if ( session.isAuthenticated() &amp;&amp; AuthenticationManager.isRolePrincipal( principal ) )</span>
+        {
+<span class="fc" id="L301">            return session.hasPrincipal( principal );</span>
+        }
+<span class="fc" id="L303">        return false;</span>
+    }
+
+    /**
+     * Returns the current external {@link Authorizer} in use. This method
+     * is guaranteed to return a properly-initialized Authorizer, unless
+     * it could not be initialized. In that case, this method throws
+     * a {@link org.apache.wiki.auth.WikiSecurityException}.
+     * @throws org.apache.wiki.auth.WikiSecurityException if the Authorizer could
+     * not be initialized
+     * @return the current Authorizer
+     */
+    public Authorizer getAuthorizer() throws WikiSecurityException
+    {
+<span class="pc bpc" id="L317" title="1 of 2 branches missed.">        if ( m_authorizer != null )</span>
+        {
+<span class="fc" id="L319">            return m_authorizer;</span>
+        }
+<span class="nc" id="L321">        throw new WikiSecurityException( &quot;Authorizer did not initialize properly. Check the logs.&quot; );</span>
+    }
+
+    /**
+     * &lt;p&gt;Determines if the Subject associated with a supplied WikiSession contains
+     * a desired user Principal or built-in Role principal, OR is a member a
+     * Group or external Role. The rules are as follows:&lt;/p&gt;
+     * &lt;ol&gt;
+     * &lt;li&gt;First, if desired Principal is a Role or GroupPrincipal, delegate to
+     * {@link #isUserInRole(WikiSession, Principal)} and
+     * return the result.&lt;/li&gt;
+     * &lt;li&gt;Otherwise, we're looking for a user Principal,
+     * so iterate through the Principal set and see if
+     * any share the same name as the one we are looking for.&lt;/li&gt;
+     * &lt;/ol&gt;
+     * &lt;p&gt;&lt;em&gt;Note: if the Principal parameter is a user principal, the session
+     * must be authenticated in order for the user to &quot;possess it&quot;. Anonymous
+     * or asserted sessions will never posseess a named user principal.&lt;/em&gt;&lt;/p&gt;
+     * @param session the current wiki session, which must be non-null. If null,
+     *            the result of this method always returns &lt;code&gt;false&lt;/code&gt;
+     * @param principal the Principal (role, group, or user principal) to look
+     *            for, which must be non-null. If null, the result of this
+     *            method always returns &lt;code&gt;false&lt;/code&gt;
+     * @return &lt;code&gt;true&lt;/code&gt; if the Subject supplied with the WikiContext
+     *         posesses the Role, GroupPrincipal or desired
+     *         user Principal, &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    protected boolean hasRoleOrPrincipal( WikiSession session, Principal principal )
+    {
+        // If either parameter is null, always deny
+<span class="pc bpc" id="L351" title="2 of 4 branches missed.">        if( session == null || principal == null )</span>
+        {
+<span class="nc" id="L353">            return false;</span>
+        }
+
+        // If principal is role, delegate to isUserInRole
+<span class="fc bfc" id="L357" title="All 2 branches covered.">        if( AuthenticationManager.isRolePrincipal( principal ) )</span>
+        {
+<span class="fc" id="L359">            return isUserInRole( session, principal );</span>
+        }
+
+        // We must be looking for a user principal, assuming that the user
+        // has been properly logged in.
+        // So just look for a name match.
+<span class="pc bpc" id="L365" title="1 of 4 branches missed.">        if( session.isAuthenticated() &amp;&amp; AuthenticationManager.isUserPrincipal( principal ) )</span>
+        {
+<span class="fc" id="L367">            String principalName = principal.getName();</span>
+<span class="fc" id="L368">            Principal[] userPrincipals = session.getPrincipals();</span>
+<span class="fc bfc" id="L369" title="All 2 branches covered.">            for( Principal userPrincipal : userPrincipals )</span>
+            {
+<span class="fc bfc" id="L371" title="All 2 branches covered.">                if( userPrincipal.getName().equals( principalName ) )</span>
+                {
+<span class="fc" id="L373">                    return true;</span>
+                }
+            }
+        }
+<span class="fc" id="L377">        return false;</span>
+    }
+
+    /**
+     * Checks whether the current user has access to the wiki context,
+     * by obtaining the required Permission ({@link WikiContext#requiredPermission()})
+     * and delegating the access check to {@link #checkPermission(WikiSession, Permission)}.
+     * If the user is allowed, this method returns &lt;code&gt;true&lt;/code&gt;;
+     * &lt;code&gt;false&lt;/code&gt; otherwise. If access is allowed,
+     * the wiki context will be added to the request as an attribute
+     * with the key name {@link org.apache.wiki.tags.WikiTagBase#ATTR_CONTEXT}.
+     * Note that this method will automatically redirect the user to
+     * a login or error page, as appropriate, if access fails. This is
+     * NOT guaranteed to be default behavior in the future.
+     *
+     * @param context wiki context to check if it is accesible
+     * @param response the http response
+     * @return the result of the access check
+     * @throws IOException In case something goes wrong
+     */
+    public boolean hasAccess( WikiContext context, HttpServletResponse response ) throws IOException
+    {
+<span class="nc" id="L399">        return hasAccess( context, response, true );</span>
+    }
+
+    /**
+     * Checks whether the current user has access to the wiki context (and
+     * optionally redirects if not), by obtaining the required Permission ({@link WikiContext#requiredPermission()})
+     * and delegating the access check to {@link #checkPermission(WikiSession, Permission)}.
+     * If the user is allowed, this method returns &lt;code&gt;true&lt;/code&gt;;
+     * &lt;code&gt;false&lt;/code&gt; otherwise. Also, the wiki context will be added to the request as attribute
+     * with the key name {@link org.apache.wiki.tags.WikiTagBase#ATTR_CONTEXT}.
+     *
+     * @param context wiki context to check if it is accesible
+     * @param response The servlet response object
+     * @param redirect If true, makes an automatic redirect to the response
+     * @return the result of the access check
+     * @throws IOException If something goes wrong
+     */
+    public boolean hasAccess( WikiContext context, HttpServletResponse response, boolean redirect ) throws IOException
+    {
+<span class="nc" id="L418">        boolean allowed = checkPermission( context.getWikiSession(), context.requiredPermission() );</span>
+<span class="nc" id="L419">        ResourceBundle rb = Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE );</span>
+
+        // Stash the wiki context
+<span class="nc bnc" id="L422" title="All 4 branches missed.">        if ( context.getHttpRequest() != null &amp;&amp; context.getHttpRequest().getAttribute( WikiTagBase.ATTR_CONTEXT ) == null )</span>
+        {
+<span class="nc" id="L424">            context.getHttpRequest().setAttribute( WikiTagBase.ATTR_CONTEXT, context );</span>
+        }
+
+        // If access not allowed, redirect
+<span class="nc bnc" id="L428" title="All 4 branches missed.">        if( !allowed &amp;&amp; redirect )</span>
+        {
+<span class="nc" id="L430">            Principal currentUser  = context.getWikiSession().getUserPrincipal();</span>
+<span class="nc" id="L431">            String pageurl = context.getPage().getName();</span>
+<span class="nc bnc" id="L432" title="All 2 branches missed.">            if( context.getWikiSession().isAuthenticated() )</span>
+            {
+<span class="nc" id="L434">                log.info(&quot;User &quot;+currentUser.getName()+&quot; has no access - forbidden (permission=&quot; + context.requiredPermission() + &quot;)&quot; );</span>
+<span class="nc" id="L435">                context.getWikiSession().addMessage(</span>
+<span class="nc" id="L436">                               MessageFormat.format( rb.getString(&quot;security.error.noaccess.logged&quot;), context.getName()) );</span>
+            }
+            else
+            {
+<span class="nc" id="L440">                log.info(&quot;User &quot;+currentUser.getName()+&quot; has no access - redirecting (permission=&quot; + context.requiredPermission() + &quot;)&quot;);</span>
+<span class="nc" id="L441">                context.getWikiSession().addMessage(</span>
+<span class="nc" id="L442">                               MessageFormat.format( rb.getString(&quot;security.error.noaccess&quot;), context.getName()) );</span>
+            }
+<span class="nc" id="L444">            response.sendRedirect( m_engine.getURL(WikiContext.LOGIN, pageurl, null, false ) );</span>
+        }
+<span class="nc" id="L446">        return allowed;</span>
+    }
+
+    /**
+     * Initializes AuthorizationManager with an engine and set of properties.
+     * Expects to find property 'jspwiki.authorizer' with a valid Authorizer
+     * implementation name to take care of role lookup operations.
+     * @param engine the wiki engine
+     * @param properties the set of properties used to initialize the wiki engine
+     * @throws WikiException if the AuthorizationManager cannot be initialized
+     */
+    public void initialize( WikiEngine engine, Properties properties ) throws WikiException
+    {
+<span class="fc" id="L459">        m_engine = engine;</span>
+
+        //
+        //  JAAS authorization continues
+        //
+<span class="fc" id="L464">        m_authorizer = getAuthorizerImplementation( properties );</span>
+<span class="fc" id="L465">        m_authorizer.initialize( engine, properties );</span>
+
+        // Initialize local security policy
+        try
+        {
+<span class="fc" id="L470">            String policyFileName = properties.getProperty( POLICY, DEFAULT_POLICY );</span>
+<span class="fc" id="L471">            URL policyURL = AuthenticationManager.findConfigFile( engine, policyFileName );</span>
+
+<span class="pc bpc" id="L473" title="1 of 2 branches missed.">            if (policyURL != null)</span>
+            {
+<span class="fc" id="L475">                File policyFile = new File( policyURL.toURI().getPath() );</span>
+<span class="fc" id="L476">                log.info(&quot;We found security policy URL: &quot; + policyURL + &quot; and transformed it to file &quot; + policyFile.getAbsolutePath());</span>
+<span class="fc" id="L477">                m_localPolicy = new LocalPolicy( policyFile, engine.getContentEncoding() );</span>
+<span class="fc" id="L478">                m_localPolicy.refresh();</span>
+<span class="fc" id="L479">                log.info( &quot;Initialized default security policy: &quot; + policyFile.getAbsolutePath() );</span>
+<span class="fc" id="L480">            }</span>
+            else
+            {
+<span class="nc" id="L483">                String sb = &quot;JSPWiki was unable to initialize the default security policy (WEB-INF/jspwiki.policy) file. &quot; +</span>
+                            &quot;Please ensure that the jspwiki.policy file exists in the default location. &quot; +
+                		    &quot;This file should exist regardless of the existance of a global policy file. &quot; +
+                            &quot;The global policy file is identified by the java.security.policy variable. &quot;;
+<span class="nc" id="L487">                WikiSecurityException wse = new WikiSecurityException( sb );</span>
+<span class="nc" id="L488">                log.fatal( sb, wse );</span>
+<span class="nc" id="L489">                throw wse;</span>
+            }
+        }
+<span class="nc" id="L492">        catch ( Exception e)</span>
+        {
+<span class="nc" id="L494">            log.error(&quot;Could not initialize local security policy: &quot; + e.getMessage() );</span>
+<span class="nc" id="L495">            throw new WikiException( &quot;Could not initialize local security policy: &quot; + e.getMessage(), e );</span>
+<span class="fc" id="L496">        }</span>
+<span class="fc" id="L497">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if JSPWiki's JAAS authorization system
+     * is used for authorization in addition to container controls.
+     * @return the result
+     * @deprecated functionality deprecated - returns true always. To be removed on 2.11.0
+     */
+    @Deprecated
+    protected boolean isJAASAuthorized()
+    {
+<span class="nc" id="L508">        return true;</span>
+    }
+
+    /**
+     * Attempts to locate and initialize a Authorizer to use with this manager.
+     * Throws a WikiException if no entry is found, or if one fails to
+     * initialize.
+     * @param props jspwiki.properties, containing a
+     *            'jspwiki.authorization.provider' class name
+     * @return a Authorizer used to get page authorization information
+     * @throws WikiException
+     */
+    private Authorizer getAuthorizerImplementation( Properties props ) throws WikiException
+    {
+<span class="fc" id="L522">        String authClassName = props.getProperty( PROP_AUTHORIZER, DEFAULT_AUTHORIZER );</span>
+<span class="fc" id="L523">        return (Authorizer) locateImplementation( authClassName );</span>
+    }
+
+    private Object locateImplementation( String clazz ) throws WikiException
+    {
+<span class="pc bpc" id="L528" title="1 of 2 branches missed.">        if ( clazz != null )</span>
+        {
+            try
+            {
+<span class="fc" id="L532">                Class&lt;?&gt; authClass = ClassUtil.findClass( &quot;org.apache.wiki.auth.authorize&quot;, clazz );</span>
+<span class="fc" id="L533">                Object impl = authClass.newInstance();</span>
+<span class="fc" id="L534">                return impl;</span>
+            }
+<span class="nc" id="L536">            catch( ClassNotFoundException e )</span>
+            {
+<span class="nc" id="L538">                log.fatal( &quot;Authorizer &quot; + clazz + &quot; cannot be found&quot;, e );</span>
+<span class="nc" id="L539">                throw new WikiException( &quot;Authorizer &quot; + clazz + &quot; cannot be found&quot;, e );</span>
+            }
+<span class="nc" id="L541">            catch( InstantiationException e )</span>
+            {
+<span class="nc" id="L543">                log.fatal( &quot;Authorizer &quot; + clazz + &quot; cannot be created&quot;, e );</span>
+<span class="nc" id="L544">                throw new WikiException( &quot;Authorizer &quot; + clazz + &quot; cannot be created&quot;, e );</span>
+            }
+<span class="nc" id="L546">            catch( IllegalAccessException e )</span>
+            {
+<span class="nc" id="L548">                log.fatal( &quot;You are not allowed to access this authorizer class&quot;, e );</span>
+<span class="nc" id="L549">                throw new WikiException( &quot;You are not allowed to access this authorizer class&quot;, e );</span>
+            }
+        }
+
+<span class="nc" id="L553">        throw new NoRequiredPropertyException( &quot;Unable to find a &quot; + PROP_AUTHORIZER + &quot; entry in the properties.&quot;,</span>
+                                               PROP_AUTHORIZER );
+    }
+
+    /**
+     * Checks to see if the local security policy allows a particular static Permission.
+     * Do not use this method for normal permission checks; use
+     * {@link #checkPermission(WikiSession, Permission)} instead.
+     * @param principals the Principals to check
+     * @param permission the Permission
+     * @return the result
+     */
+    protected boolean allowedByLocalPolicy( Principal[] principals, Permission permission )
+    {
+<span class="fc bfc" id="L567" title="All 2 branches covered.">        for ( Principal principal : principals )</span>
+        {
+            // Get ProtectionDomain for this Principal from cache, or create new one
+<span class="fc" id="L570">            ProtectionDomain pd = m_cachedPds.get( principal );</span>
+<span class="fc bfc" id="L571" title="All 2 branches covered.">            if ( pd == null )</span>
+            {
+<span class="fc" id="L573">                ClassLoader cl = this.getClass().getClassLoader();</span>
+<span class="fc" id="L574">                CodeSource cs = new CodeSource( null, (Certificate[])null );</span>
+<span class="fc" id="L575">                pd = new ProtectionDomain( cs, null, cl, new Principal[]{ principal } );</span>
+<span class="fc" id="L576">                m_cachedPds.put( principal, pd );</span>
+            }
+
+            // Consult the local policy and get the answer
+<span class="fc bfc" id="L580" title="All 2 branches covered.">            if ( m_localPolicy.implies( pd, permission ) )</span>
+            {
+<span class="fc" id="L582">                return true;</span>
+            }
+        }
+<span class="fc" id="L585">        return false;</span>
+    }
+
+    /**
+     * Determines whether a Subject possesses a given &quot;static&quot; Permission as
+     * defined in the security policy file. This method uses standard Java 2
+     * security calls to do its work. Note that the current access control
+     * context's &lt;code&gt;codeBase&lt;/code&gt; is effectively &lt;em&gt;this class&lt;/em&gt;,
+     * not that of the caller. Therefore, this method will work best when what
+     * matters in the policy is &lt;em&gt;who&lt;/em&gt; makes the permission check, not
+     * what the caller's code source is. Internally, this method works by
+     * executing &lt;code&gt;Subject.doAsPrivileged&lt;/code&gt; with a privileged action
+     * that simply calls {@link java.security.AccessController#checkPermission(Permission)}.
+     * @see AccessController#checkPermission(java.security.Permission) . A
+     *       caught exception (or lack thereof) determines whether the privilege
+     *       is absent (or present).
+     * @param session the WikiSession whose permission status is being queried
+     * @param permission the Permission the Subject must possess
+     * @return &lt;code&gt;true&lt;/code&gt; if the Subject possesses the permission,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    protected boolean checkStaticPermission( final WikiSession session, final Permission permission )
+    {
+<span class="fc" id="L608">        Boolean allowed = (Boolean) WikiSession.doPrivileged( session, new PrivilegedAction&lt;Boolean&gt;()</span>
+<span class="fc" id="L609">        {</span>
+            public Boolean run()
+            {
+                try
+                {
+                    // Check the JVM-wide security policy first
+<span class="nc" id="L615">                    AccessController.checkPermission( permission );</span>
+<span class="nc" id="L616">                    return Boolean.TRUE;</span>
+                }
+<span class="fc" id="L618">                catch( AccessControlException e )</span>
+                {
+                    // Global policy denied the permission
+                }
+
+                // Try the local policy - check each Role/Group and User Principal
+<span class="fc bfc" id="L624" title="All 2 branches covered.">                if ( allowedByLocalPolicy( session.getRoles(), permission ) ||</span>
+<span class="fc bfc" id="L625" title="All 2 branches covered.">                     allowedByLocalPolicy( session.getPrincipals(), permission ) )</span>
+                {
+<span class="fc" id="L627">                    return Boolean.TRUE;</span>
+                }
+<span class="fc" id="L629">                return Boolean.FALSE;</span>
+            }
+        } );
+<span class="fc" id="L632">        return allowed.booleanValue();</span>
+    }
+
+    /**
+     * &lt;p&gt;Given a supplied string representing a Principal's name from an Acl, this
+     * method resolves the correct type of Principal (role, group, or user).
+     * This method is guaranteed to always return a Principal.
+     * The algorithm is straightforward:&lt;/p&gt;
+     * &lt;ol&gt;
+     * &lt;li&gt;If the name matches one of the built-in {@link org.apache.wiki.auth.authorize.Role} names,
+     * return that built-in Role&lt;/li&gt;
+     * &lt;li&gt;If the name matches one supplied by the current
+     * {@link org.apache.wiki.auth.Authorizer}, return that Role&lt;/li&gt;
+     * &lt;li&gt;If the name matches a group managed by the
+     * current {@link org.apache.wiki.auth.authorize.GroupManager}, return that Group&lt;/li&gt;
+     * &lt;li&gt;Otherwise, assume that the name represents a user
+     * principal. Using the current {@link org.apache.wiki.auth.user.UserDatabase}, find the
+     * first user who matches the supplied name by calling
+     * {@link org.apache.wiki.auth.user.UserDatabase#find(String)}.&lt;/li&gt;
+     * &lt;li&gt;Finally, if a user cannot be found, manufacture
+     * and return a generic {@link org.apache.wiki.auth.acl.UnresolvedPrincipal}&lt;/li&gt;
+     * &lt;/ol&gt;
+     * @param name the name of the Principal to resolve
+     * @return the fully-resolved Principal
+     */
+    public Principal resolvePrincipal( String name )
+    {
+        // Check built-in Roles first
+<span class="fc" id="L660">        Role role = new Role(name);</span>
+<span class="fc bfc" id="L661" title="All 2 branches covered.">        if ( Role.isBuiltInRole( role ) )</span>
+        {
+<span class="fc" id="L663">            return role;</span>
+        }
+
+        // Check Authorizer Roles
+<span class="fc" id="L667">        Principal principal = m_authorizer.findRole( name );</span>
+<span class="pc bpc" id="L668" title="1 of 2 branches missed.">        if ( principal != null )</span>
+        {
+<span class="nc" id="L670">            return principal;</span>
+        }
+
+        // Check Groups
+<span class="fc" id="L674">        principal = m_engine.getGroupManager().findRole( name );</span>
+<span class="fc bfc" id="L675" title="All 2 branches covered.">        if ( principal != null )</span>
+        {
+<span class="fc" id="L677">            return principal;</span>
+        }
+
+        // Ok, no luck---this must be a user principal
+<span class="fc" id="L681">        Principal[] principals = null;</span>
+<span class="fc" id="L682">        UserProfile profile = null;</span>
+<span class="fc" id="L683">        UserDatabase db = m_engine.getUserManager().getUserDatabase();</span>
+        try
+        {
+<span class="fc" id="L686">            profile = db.find( name );</span>
+<span class="fc" id="L687">            principals = db.getPrincipals( profile.getLoginName() );</span>
+<span class="pc bpc" id="L688" title="1 of 2 branches missed.">            for (int i = 0; i &lt; principals.length; i++)</span>
+            {
+<span class="fc" id="L690">                principal = principals[i];</span>
+<span class="fc bfc" id="L691" title="All 2 branches covered.">                if ( principal.getName().equals( name ) )</span>
+                {
+<span class="fc" id="L693">                    return principal;</span>
+                }
+            }
+        }
+<span class="fc" id="L697">        catch( NoSuchPrincipalException e )</span>
+        {
+            // We couldn't find the user...
+<span class="nc" id="L700">        }</span>
+        // Ok, no luck---mark this as unresolved and move on
+<span class="fc" id="L702">        return new UnresolvedPrincipal( name );</span>
+    }
+
+
+    // events processing .......................................................
+
+    /**
+     * Registers a WikiEventListener with this instance.
+     * @param listener the event listener
+     */
+    public synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L714">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="nc" id="L715">    }</span>
+
+    /**
+     * Un-registers a WikiEventListener with this instance.
+     * @param listener the event listener
+     */
+    public synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L723">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L724">    }</span>
+
+    /**
+     *  Fires a WikiSecurityEvent of the provided type, user,
+     *  and permission to all registered listeners.
+     *
+     * @see org.apache.wiki.event.WikiSecurityEvent
+     * @param type        the event type to be fired
+     * @param user        the user associated with the event
+     * @param permission  the permission the subject must possess
+     */
+    protected void fireEvent( int type, Principal user, Object permission )
+    {
+<span class="pc bpc" id="L737" title="1 of 2 branches missed.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="nc" id="L739">            WikiEventManager.fireEvent(this,new WikiSecurityEvent(this,type,user,permission));</span>
+        }
+<span class="fc" id="L741">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

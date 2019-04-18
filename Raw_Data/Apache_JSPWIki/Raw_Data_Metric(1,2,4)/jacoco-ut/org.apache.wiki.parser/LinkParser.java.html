@@ -1,0 +1,584 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LinkParser.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.parser</a> &gt; <span class="el_source">LinkParser.java</span></div><h1>LinkParser.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+
+package org.apache.wiki.parser;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.StringTokenizer;
+
+import org.apache.log4j.Logger;
+import org.jdom2.Attribute;
+
+/**
+ *  Parses JSPWiki-style &quot;augmented&quot; link markup into a Link object
+ *  containing the link text, link reference, and any optional link
+ *  attributes (as JDOM Attributes).
+ *  &lt;p&gt;
+ *  The parser recognizes three link forms:
+ *  &lt;/p&gt;
+ *  &lt;ol&gt;
+ *    &lt;li&gt;&lt;tt&gt; [Text] &lt;/tt&gt;&lt;/li&gt;
+ *    &lt;li&gt;&lt;tt&gt; [Text | Link] &lt;/tt&gt;&lt;/li&gt;
+ *    &lt;li&gt;&lt;tt&gt; [Text | Link | attributes] &lt;/tt&gt;&lt;/li&gt;
+ *  &lt;/ol&gt;
+ *  &lt;p&gt;
+ *  where the attributes are space-delimited, each in the form of
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *      name1='value1' name2='value2' name3='value3' (etc.) &lt;/pre&gt;
+ *  &lt;p&gt;
+ *  If the attribute parsing fails, the parser will still return the
+ *  basic link, writing a warning to the log.
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3&gt;Permitted Attributes&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Attributes that aren't declared on &lt;tt&gt;&amp;lt;a&amp;gt;&lt;/tt&gt; or those that
+ *  permit scripting in HTML (as this is a security risk) are ignored
+ *  and have no effect on parsing, nor show up in the resulting attribute
+ *  list). The 'href' and 'name' attributes are also ignored as spurious.
+ *  The permitted list is: 'accesskey', 'charset', 'class', 'hreflang',
+ *  'id', 'lang', 'dir', 'rel', 'rev', 'style' , 'tabindex', 'target' ,
+ *  'title', and 'type'. The declared attributes that will be ignored
+ *  are: 'href', 'name', 'shape', 'coords', 'onfocus', 'onblur', or any
+ *  of the other 'on*' event attributes.
+ *  &lt;/p&gt;
+ *  &lt;p&gt;
+ *  The permitted attributes and target attribute values are static
+ *  String arrays ({@link #PERMITTED_ATTRIBUTES} and
+ *  {@link #PERMITTED_TARGET_VALUES} resp.) that could be compile-time
+ *  modified (i.e., predeclared).
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3&gt;Permitted Values on Target Attribute&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  The following target names are reserved in HTML 4 and have special
+ *  meanings. These are the only values permitted by the parser.
+ *  &lt;dl&gt;
+ *    &lt;dt&gt;&lt;b&gt;_blank&lt;/b&gt;&lt;/dt&gt;
+ *    &lt;dd&gt; The user agent should load the designated document in a new,
+ *    unnamed window. &lt;/dd&gt;
+ *    &lt;dt&gt;&lt;b&gt;_self&lt;/b&gt;&lt;/dt&gt;
+ *    &lt;dd&gt; The user agent should load the document in the same frame as
+ *    the element that refers to this target. &lt;/dd&gt;
+ *    &lt;dt&gt;&lt;b&gt;_parent&lt;/b&gt;&lt;/dt&gt;
+ *    &lt;dd&gt; The user agent should load the document into the immediate
+ *    FRAMESET parent of the current frame. This value is equivalent to
+ *    _self if the current frame has no parent. &lt;/dd&gt;
+ *    &lt;dt&gt;&lt;b&gt;_top&lt;/b&gt;&lt;/dt&gt;
+ *    &lt;dd&gt; The user agent should load the document into the full,
+ *    original window (thus canceling all other frames). This value is
+ *    equivalent to _self if the current frame has no parent. &lt;/dd&gt;
+ *  &lt;/dl&gt;
+ *
+ *  &lt;h3&gt;Returned Value&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  This returns a &lt;b&gt;Link&lt;/b&gt; object, a public inner class with methods:
+ *  &lt;ul&gt;
+ *    &lt;li&gt; &lt;tt&gt;getText()&lt;/tt&gt; returns the link text. &lt;/li&gt;
+ *    &lt;li&gt; &lt;tt&gt;getReference()&lt;/tt&gt; returns the link reference value. &lt;/li&gt;
+ *    &lt;li&gt; &lt;tt&gt;attributeCount()&lt;/tt&gt; returns the number of declared attributes. &lt;/li&gt;
+ *    &lt;li&gt; &lt;tt&gt;getAttributes()&lt;/tt&gt; returns an iterator over any validated
+ *        XHTML-compliant attributes, returned as JDOM Attributes.
+ *    &lt;/li&gt;
+ *  &lt;/ul&gt;
+ *  &lt;p&gt;
+ *  The &lt;tt&gt;attributeCount()&lt;/tt&gt; method can be used to circumvent calling
+ *  &lt;tt&gt;getAttributes()&lt;/tt&gt;, which will create an empty Iterator rather
+ *  than return a null.
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3&gt;Example: Link Form 1&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  From an incoming wikitext link of:
+ *  &lt;pre&gt;
+ *     [Acme] &lt;/pre&gt;
+ *  returns:
+ *  &lt;pre&gt;
+ *    getText():         &quot;Acme&quot;
+ *    getReference():    &quot;Acme&quot;
+ *    attributeCount():  0
+ *    getAttributes():   an empty Iterator &lt;/pre&gt;
+ *
+ *  &lt;h3&gt;Example: Link Form 2&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  From an incoming wikitext link of:
+ *  &lt;pre&gt;
+ *     [Acme | http://www.acme.com/] &lt;/pre&gt;
+ *  returns:
+ *  &lt;pre&gt;
+ *    getText():         &quot;Acme&quot;
+ *    getReference():    &quot;http://www.acme.com/&quot;
+ *    attributeCount():  0
+ *    getAttributes():   an empty Iterator &lt;/pre&gt;
+ *
+ *  &lt;h3&gt;Example: Link Form 3&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  From an incoming wikitext link of:
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *    [Acme | http://www.acme.com/ | id='foo' rel='Next'] &lt;/pre&gt;
+ *  returns:
+ *  &lt;pre&gt;
+ *    getText():         &quot;Acme&quot;
+ *    getReference():    &quot;http://www.acme.com/&quot;
+ *    attributeCount():  2
+ *    getAttributes():   an Iterator containing:
+ *      JDOM Attribute:  id=&quot;foo&quot;
+ *      JDOM Attribute:  rel=&quot;Next&quot; &lt;/pre&gt;
+ *
+ *
+ *  @since  2.5.10
+ */
+<span class="fc" id="L153">public class LinkParser</span>
+{
+<span class="fc" id="L155">    private static Logger log = Logger.getLogger(LinkParser.class);</span>
+
+    /** Permitted attributes on links.  Keep this sorted. */
+<span class="fc" id="L158">    private static final String[] PERMITTED_ATTRIBUTES = new String[] {</span>
+            &quot;accesskey&quot;, &quot;charset&quot;, &quot;class&quot;, &quot;dir&quot;, &quot;hreflang&quot;, &quot;id&quot;, &quot;lang&quot;,
+            &quot;rel&quot;, &quot;rev&quot;, &quot;style&quot;, &quot;tabindex&quot;, &quot;target&quot;, &quot;title&quot;, &quot;type&quot; };
+
+    /** Permitted values on the 'target' attribute. */
+<span class="fc" id="L163">    private static final String[] PERMITTED_TARGET_VALUES = new String[] {</span>
+            &quot;_blank&quot;, &quot;_self&quot;, &quot;_parent&quot;, &quot;_top&quot; };
+
+    private static final String EQSQUO = &quot;='&quot;;
+    private static final String SQUO   = &quot;'&quot;;
+    private static final String EQ     = &quot;=&quot;;
+    private static final String TARGET = &quot;target&quot;;
+    private static final String DELIMS = &quot; \t\n\r\f=&quot;;
+
+<span class="fc" id="L172">    private static final List&lt; Attribute &gt; m_EMPTY = new ArrayList&lt; &gt;();</span>
+
+    // ............
+
+
+    /**
+     *  Processes incoming link text, separating out the link text, the link
+     *  URI, and then any specified attributes.
+     *
+     * @param  linktext  the wiki link text to be parsed
+     * @return a Link object containing the link text, reference, and any valid Attributes
+     * @throws ParseException if the parameter is null
+     */
+    public Link parse( String linktext ) throws ParseException
+    {
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">        if( linktext == null )</span>
+        {
+<span class="nc" id="L189">            throw new ParseException(&quot;null value passed to link parser&quot;);</span>
+        }
+
+<span class="fc" id="L192">        Link link = null;</span>
+
+        try
+        {
+            // establish link text and link ref
+<span class="fc" id="L197">            int cut1   = linktext.indexOf('|');</span>
+<span class="fc bfc" id="L198" title="All 2 branches covered.">            if( cut1 == -1 )</span>
+            {
+                //  link form 1:  [Acme]
+<span class="fc" id="L201">                return new Link( linktext );</span>
+            }
+
+<span class="fc bfc" id="L204" title="All 2 branches covered.">            int cut2 = cut1+1 &lt; linktext.length()</span>
+<span class="fc" id="L205">                    ? linktext.indexOf('|', cut1+1 )</span>
+                    : -1 ;
+
+<span class="fc bfc" id="L208" title="All 2 branches covered.">            if ( cut2 == -1 )</span>
+            {
+                // link form 2:  [Acme | http://www.acme.com/]
+                // text = Acme
+<span class="fc" id="L212">                String text = linktext.substring( 0, cut1 ).trim();</span>
+                // ref = http://www.acme.com/
+<span class="fc" id="L214">                String ref  = linktext.substring( cut1+1 ).trim();</span>
+<span class="fc" id="L215">                return new Link( text, ref );</span>
+            }
+
+            // link form 3:  [Acme | http://www.acme.com/ | id='foo' rel='Next']
+<span class="fc" id="L219">            String text    = linktext.substring( 0, cut1 ).trim();</span>
+<span class="fc" id="L220">            String ref     = linktext.substring( cut1+1, cut2 ).trim();</span>
+            // attribs = id='foo' rel='Next'
+<span class="fc" id="L222">            String attribs = linktext.substring( cut2+1 ).trim();</span>
+
+<span class="fc" id="L224">            link = new Link( text, ref );</span>
+
+            // parse attributes
+            // contains &quot;='&quot; that looks like attrib spec
+<span class="pc bpc" id="L228" title="1 of 2 branches missed.">            if( attribs.indexOf(EQSQUO) != -1 )</span>
+            {
+                try
+                {
+<span class="fc" id="L232">                    StringTokenizer tok = new StringTokenizer(attribs,DELIMS,true);</span>
+<span class="fc bfc" id="L233" title="All 2 branches covered.">                    while ( tok.hasMoreTokens() )</span>
+                    {
+                        // get attribute name token
+<span class="fc" id="L236">                        String token = tok.nextToken(DELIMS).trim();</span>
+<span class="pc bpc" id="L237" title="3 of 4 branches missed.">                        while ( isSpace(token) &amp;&amp; tok.hasMoreTokens() )</span>
+                        {
+                            // remove all whitespace
+<span class="nc" id="L240">                            token = tok.nextToken(DELIMS).trim();</span>
+                        }
+
+                        // eat '=', break after '='
+<span class="fc" id="L244">                        require( tok, EQ );</span>
+                        // eat opening delim
+<span class="fc" id="L246">                        require( tok, SQUO );</span>
+                        // using existing delim
+<span class="fc" id="L248">                        String value = tok.nextToken(SQUO);</span>
+                        // eat closing delim
+<span class="fc" id="L250">                        require( tok, SQUO );</span>
+
+<span class="pc bpc" id="L252" title="2 of 4 branches missed.">                        if( token != null &amp;&amp; value != null )</span>
+                        {
+<span class="pc bpc" id="L254" title="1 of 2 branches missed.">                            if( Arrays.binarySearch( PERMITTED_ATTRIBUTES, token ) &gt;= 0 )</span>
+                            {
+                                // _blank _self _parent _top
+<span class="fc bfc" id="L257" title="All 2 branches covered.">                                if( !token.equals(TARGET)</span>
+<span class="pc bpc" id="L258" title="1 of 2 branches missed.">                                        || Arrays.binarySearch( PERMITTED_TARGET_VALUES, value ) &gt;= 0 )</span>
+                                {
+<span class="fc" id="L260">                                    Attribute a = new Attribute(token,value);</span>
+<span class="fc" id="L261">                                    link.addAttribute(a);</span>
+<span class="fc" id="L262">                                }</span>
+                                else
+                                {
+<span class="fc" id="L265">                                    throw new ParseException(&quot;unknown target attribute value='&quot;</span>
+                                                             + value + &quot;' on link&quot;);
+                                }
+                            }
+                            else
+                            {
+<span class="nc" id="L271">                                throw new ParseException(&quot;unknown attribute name '&quot;</span>
+                                                         + token + &quot;' on link&quot;);
+                            }
+                        }
+                        else
+                        {
+<span class="nc" id="L277">                            throw new ParseException(&quot;unable to parse link attributes '&quot;</span>
+                                                     + attribs + &quot;'&quot;);
+
+                        }
+<span class="fc" id="L281">                    }</span>
+                }
+<span class="fc" id="L283">                catch( ParseException pe )</span>
+                {
+<span class="fc" id="L285">                    log.warn(&quot;syntax error parsing link attributes '&quot;+attribs+&quot;': &quot; + pe.getMessage());</span>
+                }
+<span class="nc" id="L287">                catch( NoSuchElementException nse )</span>
+                {
+<span class="nc" id="L289">                    log.warn(&quot;expected more tokens while parsing link attributes '&quot; + attribs + &quot;'&quot;);</span>
+<span class="fc" id="L290">                }</span>
+            }
+
+        }
+<span class="nc" id="L294">        catch( Exception e )</span>
+        {
+<span class="nc" id="L296">            log.warn( e.getClass().getName() + &quot; thrown by link parser: &quot; + e.getMessage() );</span>
+<span class="fc" id="L297">        }</span>
+
+<span class="fc" id="L299">        return link;</span>
+    }
+
+
+    private String require( StringTokenizer tok, String required )
+            throws ParseException, NoSuchElementException
+    {
+<span class="fc" id="L306">        String s = tok.nextToken(required);</span>
+<span class="pc bpc" id="L307" title="1 of 2 branches missed.">        if( !s.equals(required) )</span>
+        {
+<span class="nc" id="L309">            throw new ParseException(&quot;expected '&quot;+required+&quot;' not '&quot;+s+&quot;'&quot;);</span>
+        }
+<span class="fc" id="L311">        return s;</span>
+    }
+
+
+    /**
+     *  Returns true if the String &lt;tt&gt;s&lt;/tt&gt; is completely
+     *  composed of whitespace.
+     *
+     *  @param s The string to check
+     *  @return True, if &quot;s&quot; is all XML whitespace.
+     */
+    public static final boolean isSpace( String s )
+    {
+<span class="pc bpc" id="L324" title="1 of 2 branches missed.">        for( int i = 0 ; i &lt; s.length() ; i++ )</span>
+        {
+<span class="pc bpc" id="L326" title="1 of 2 branches missed.">            if( !isSpace( s.charAt(i)) ) return false;</span>
+        }
+<span class="nc" id="L328">        return true;</span>
+    }
+
+
+    /**
+     *  Returns true if char &lt;tt&gt;c&lt;/tt&gt; is a member of
+     *  &lt;tt&gt;S&lt;/tt&gt; (space) [XML 1.1 production 3].
+     *
+     *  @param c Character to check.
+     *  @return True, if the character is an XML space.
+     */
+    public static final boolean isSpace( char c )
+    {
+        // 0x20 = SPACE, 0x0A = LF, 0x0D = CR, 0x09 = TAB, 0x85 = NEL, 0x2028 = Line separator
+<span class="pc bpc" id="L342" title="6 of 12 branches missed.">        return</span>
+           0x20 == c
+        || 0x0A == c
+        || 0x0D == c
+        || 0x09 == c
+        || 0x85 == c
+        || 0x2028 == c;
+    }
+
+
+    // .........................................................................
+
+
+    /**
+     *  Inner class serving as a struct containing the parsed
+     *  components of a link.
+     */
+    public static class Link
+    {
+        private String            m_text;
+<span class="fc" id="L362">        private String            m_ref = null;</span>
+<span class="fc" id="L363">        private int               m_interwikiPoint = -1;</span>
+<span class="fc" id="L364">        private List&lt;Attribute&gt;   m_attribs = null;</span>
+
+        /**
+         *  Create a new Link with text but no reference.
+         *  @param text The link text.
+         *  @throws ParseException If the link text is illegal.
+         */
+        protected Link( String text ) throws ParseException
+<span class="fc" id="L372">        {</span>
+<span class="fc" id="L373">            setText(text);</span>
+<span class="fc" id="L374">        }</span>
+
+        /**
+         *  Create a new link with a given text and hyperlink (reference).
+         *
+         *  @param text The link text.
+         *  @param ref  The hypertext reference.
+         *  @throws ParseException If the link text or reference are illegal.
+         */
+        protected Link( String text, String ref ) throws ParseException
+<span class="fc" id="L384">        {</span>
+<span class="fc" id="L385">            setText(text);</span>
+<span class="fc" id="L386">            setReference(ref);</span>
+<span class="fc" id="L387">        }</span>
+
+        /**
+         *  Sets the link text.
+         *
+         *  @param text The link text.
+         *  @throws ParseException If the text is illegal (e.g. null).
+         */
+        protected void setText( String text ) throws ParseException
+        {
+<span class="pc bpc" id="L397" title="1 of 2 branches missed.">            if( text == null )</span>
+            {
+<span class="nc" id="L399">                throw new ParseException(&quot;null link text&quot;);</span>
+            }
+<span class="fc" id="L401">            m_text = text;</span>
+<span class="fc" id="L402">        }</span>
+
+        /**
+         *  Returns the link text.
+         *
+         *  @return Link text.
+         */
+        public String getText()
+        {
+<span class="fc" id="L411">            return m_text;</span>
+        }
+
+        /**
+         *  Sets the hypertext reference.  Typically, this is an URI or an interwiki link,
+         *  or a wikilink.
+         *
+         *  @param ref The reference.
+         *  @throws ParseException If the reference is illegal.
+         */
+        protected void setReference( String ref ) throws ParseException
+        {
+<span class="pc bpc" id="L423" title="1 of 2 branches missed.">            if( ref == null )</span>
+            {
+<span class="nc" id="L425">                throw new ParseException(&quot;null link reference value&quot;);</span>
+            }
+<span class="fc" id="L427">            m_ref = ref;</span>
+<span class="fc" id="L428">        }</span>
+
+        /**
+         *  Returns true, if there is a reference.
+         *
+         *  @return True, if there's a reference; false otherwise.
+         */
+        public boolean hasReference()
+        {
+<span class="fc bfc" id="L437" title="All 2 branches covered.">            return m_ref != null;</span>
+        }
+
+        /**
+         *  Returns the link reference, or the link text if null.
+         *
+         *  @return A link reference.
+         */
+        public String getReference()
+        {
+<span class="fc bfc" id="L447" title="All 2 branches covered.">            return m_ref != null</span>
+                    ? m_ref
+                    : m_text ;
+        }
+
+        /**
+         *  Returns true, if this Link represents an InterWiki link (of the form wiki:page).
+         *
+         *  @return True, if this Link represents an InterWiki link.
+         */
+        public boolean isInterwikiLink()
+        {
+<span class="fc" id="L459">            LinkParsingOperations lpo = new LinkParsingOperations( null );</span>
+<span class="fc bfc" id="L460" title="All 2 branches covered.">            if( !hasReference() ) m_ref = m_text;</span>
+<span class="fc" id="L461">            m_interwikiPoint = lpo.interWikiLinkAt( m_ref );</span>
+<span class="fc" id="L462">            return lpo.isInterWikiLink( m_ref );</span>
+        }
+
+        /**
+         *  Returns the name of the wiki if this is an interwiki link.
+         *  &lt;pre&gt;
+         *    Link link = new Link(&quot;Foo&quot;,&quot;Wikipedia:Foobar&quot;);
+         *    assert( link.getExternalWikiPage(), &quot;Wikipedia&quot; );
+         *  &lt;/pre&gt;
+         *
+         *  @return Name of the wiki, or null, if this is not an interwiki link.
+         */
+        public String getExternalWiki()
+        {
+<span class="pc bpc" id="L476" title="1 of 2 branches missed.">            if( isInterwikiLink() )</span>
+            {
+<span class="fc" id="L478">                return m_ref.substring( 0, m_interwikiPoint );</span>
+            }
+
+<span class="nc" id="L481">            return null;</span>
+        }
+
+        /**
+         *  Returns the wikiname part of an interwiki link. Used only with interwiki links.
+         *  &lt;pre&gt;
+         *    Link link = new Link(&quot;Foo&quot;,&quot;Wikipedia:Foobar&quot;);
+         *    assert( link.getExternalWikiPage(), &quot;Foobar&quot; );
+         *  &lt;/pre&gt;
+         *
+         *  @return Wikiname part, or null, if this is not an interwiki link.
+         */
+        public String getExternalWikiPage()
+        {
+<span class="pc bpc" id="L495" title="1 of 2 branches missed.">            if( isInterwikiLink() )</span>
+            {
+<span class="fc" id="L497">                return m_ref.substring( m_interwikiPoint+1 );</span>
+            }
+
+<span class="nc" id="L500">            return null;</span>
+        }
+
+        /**
+         *  Returns the number of attributes on this link.
+         *
+         *  @return The number of attributes.
+         */
+        public int attributeCount()
+        {
+<span class="nc bnc" id="L510" title="All 2 branches missed.">            return m_attribs != null</span>
+<span class="nc" id="L511">                    ? m_attribs.size()</span>
+                    : 0 ;
+        }
+
+        /**
+         *  Adds another attribute to the link.
+         *
+         *  @param attr A JDOM Attribute.
+         */
+        public void addAttribute( Attribute attr )
+        {
+<span class="pc bpc" id="L522" title="1 of 2 branches missed.">            if( m_attribs == null )</span>
+            {
+<span class="fc" id="L524">                m_attribs = new ArrayList&lt;&gt;();</span>
+            }
+<span class="fc" id="L526">            m_attribs.add(attr);</span>
+<span class="fc" id="L527">        }</span>
+
+        /**
+         *  Returns an Iterator over the list of JDOM Attributes.
+         *
+         *  @return Iterator over the attributes.
+         */
+        public Iterator&lt; Attribute &gt; getAttributes()
+        {
+<span class="fc bfc" id="L536" title="All 2 branches covered.">            return m_attribs != null</span>
+<span class="fc" id="L537">                    ? m_attribs.iterator()</span>
+<span class="fc" id="L538">                    : m_EMPTY.iterator() ;</span>
+        }
+
+        /**
+         *  Returns a wikitext string representation of this Link.
+         *  @return WikiText.
+         */
+        @Override
+        public String toString()
+        {
+<span class="nc" id="L548">            StringBuilder sb = new StringBuilder();</span>
+<span class="nc" id="L549">            sb.append( '[' );</span>
+<span class="nc" id="L550">            sb.append( m_text );</span>
+
+<span class="nc bnc" id="L552" title="All 2 branches missed.">            if( m_ref != null )</span>
+            {
+<span class="nc" id="L554">                sb.append( ' ' );</span>
+<span class="nc" id="L555">                sb.append( '|' );</span>
+<span class="nc" id="L556">                sb.append( ' ' );</span>
+<span class="nc" id="L557">                sb.append( m_ref );</span>
+            }
+
+<span class="nc bnc" id="L560" title="All 2 branches missed.">            if( m_attribs != null )</span>
+            {
+<span class="nc" id="L562">                sb.append( ' ' );</span>
+<span class="nc" id="L563">                sb.append( '|' );</span>
+<span class="nc" id="L564">                Iterator&lt; Attribute &gt; it = getAttributes();</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">                while ( it.hasNext() )</span>
+                {
+<span class="nc" id="L567">                    Attribute a = it.next();</span>
+<span class="nc" id="L568">                    sb.append( ' ' );</span>
+<span class="nc" id="L569">                    sb.append( a.getName() );</span>
+<span class="nc" id="L570">                    sb.append( '=' );</span>
+<span class="nc" id="L571">                    sb.append( '\'' );</span>
+<span class="nc" id="L572">                    sb.append( a.getValue() );</span>
+<span class="nc" id="L573">                    sb.append( '\'' );</span>
+<span class="nc" id="L574">                }</span>
+            }
+<span class="nc" id="L576">            sb.append( ']' );</span>
+<span class="nc" id="L577">            return sb.toString();</span>
+        }
+
+    }
+    // end inner class
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

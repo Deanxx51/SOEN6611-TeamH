@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PermissionTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">PermissionTag.java</span></div><h1>PermissionTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.security.Permission;
+
+import org.apache.commons.lang.StringUtils;
+
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.GroupPrincipal;
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.permissions.GroupPermission;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.wiki.auth.permissions.WikiPermission;
+import org.apache.wiki.ui.Command;
+import org.apache.wiki.ui.GroupCommand;
+
+/**
+ *  Tells whether the user in the current wiki context possesses a particular
+ *  permission. The permission is typically a PagePermission (e.g., &quot;edit&quot;, &quot;view&quot;,
+ *  &quot;delete&quot;, &quot;comment&quot;, &quot;upload&quot;). It may also be a wiki-wide WikiPermission
+ *  (&quot;createPages&quot;, &quot;createGroups&quot;, &quot;editProfile&quot;, &quot;editPreferences&quot;, &quot;login&quot;)
+ *  or the administrator permission (&quot;allPermission&quot;). GroupPermissions 
+ *  (e.g., &quot;viewGroup&quot;, &quot;editGroup&quot;, &quot;deleteGroup&quot;).
+ *  &lt;p&gt;
+ *  Since 2.6, it is possible to list several permissions or use negative permissions,
+ *  e.g.
+ *  &lt;pre&gt;
+ *     &amp;lt;wiki:Permission permission=&quot;edit|rename|view&quot;&amp;gt;
+ *        You have edit, rename, or  view permissions!
+ *     &amp;lt;/wiki:Permission&amp;gt;
+ *  &lt;/pre&gt;
+ *  
+ *  or
+ *
+ *  &lt;pre&gt;
+ *     &amp;lt;wiki:Permission permission=&quot;!upload&quot;&amp;gt;
+ *        You do not have permission to upload!
+ *     &amp;lt;/wiki:Permission&amp;gt;
+ *  &lt;/pre&gt;
+ *  
+ *  @since 2.0
+ */
+<span class="nc" id="L64">public class PermissionTag</span>
+    extends WikiTagBase
+{
+    private static final String ALL_PERMISSION   = &quot;allPermission&quot;;
+    private static final String CREATE_GROUPS    = &quot;createGroups&quot;;
+    private static final String CREATE_PAGES     = &quot;createPages&quot;;
+    private static final String DELETE_GROUP     = &quot;deleteGroup&quot;;
+    private static final String EDIT             = &quot;edit&quot;;
+    private static final String EDIT_GROUP       = &quot;editGroup&quot;;
+    private static final String EDIT_PREFERENCES = &quot;editPreferences&quot;;
+    private static final String EDIT_PROFILE     = &quot;editProfile&quot;;
+    private static final String LOGIN            = &quot;login&quot;;
+    private static final String VIEW_GROUP       = &quot;viewGroup&quot;;
+    
+    private static final long serialVersionUID = 3761412993048982325L;
+    
+    private String[] m_permissionList;
+
+    /**
+     * Initializes the tag.
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L88">        super.initTag();</span>
+<span class="nc" id="L89">        m_permissionList = null;</span>
+<span class="nc" id="L90">    }</span>
+
+    /**
+     * Sets the permissions to look for (case sensitive).  See above for the format.
+     * 
+     * @param permission A list of permissions
+     */
+    public void setPermission( String permission )
+    {
+<span class="nc" id="L99">        m_permissionList = StringUtils.split(permission,'|');</span>
+<span class="nc" id="L100">    }</span>
+
+    /**
+     *  Checks a single permission.
+     *  
+     *  @param permission
+     *  @return true if granted, false if not
+     */
+    private boolean checkPermission( String permission )
+    {
+<span class="nc" id="L110">        WikiSession session        = m_wikiContext.getWikiSession();</span>
+<span class="nc" id="L111">        WikiPage    page           = m_wikiContext.getPage();</span>
+<span class="nc" id="L112">        AuthorizationManager mgr   = m_wikiContext.getEngine().getAuthorizationManager();</span>
+<span class="nc" id="L113">        boolean gotPermission     = false;</span>
+        
+<span class="nc bnc" id="L115" title="All 4 branches missed.">        if ( CREATE_GROUPS.equals( permission ) || CREATE_PAGES.equals( permission )</span>
+<span class="nc bnc" id="L116" title="All 4 branches missed.">            || EDIT_PREFERENCES.equals( permission ) || EDIT_PROFILE.equals( permission )</span>
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            || LOGIN.equals( permission ) )</span>
+        {
+<span class="nc" id="L119">            gotPermission = mgr.checkPermission( session, new WikiPermission( page.getWiki(), permission ) );</span>
+        }
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        else if ( VIEW_GROUP.equals( permission ) </span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">            || EDIT_GROUP.equals( permission )</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">            || DELETE_GROUP.equals( permission ) )</span>
+        {
+<span class="nc" id="L125">            Command command = m_wikiContext.getCommand();</span>
+<span class="nc" id="L126">            gotPermission = false;</span>
+<span class="nc bnc" id="L127" title="All 4 branches missed.">            if ( command instanceof GroupCommand &amp;&amp; command.getTarget() != null )</span>
+            {
+<span class="nc" id="L129">                GroupPrincipal group = (GroupPrincipal)command.getTarget();</span>
+<span class="nc" id="L130">                String groupName = group.getName();</span>
+<span class="nc" id="L131">                String action = &quot;view&quot;;</span>
+<span class="nc bnc" id="L132" title="All 2 branches missed.">                if( EDIT_GROUP.equals( permission ) )</span>
+                {
+<span class="nc" id="L134">                    action = &quot;edit&quot;;</span>
+                }
+<span class="nc bnc" id="L136" title="All 2 branches missed.">                else if ( DELETE_GROUP.equals( permission ) )</span>
+                {
+<span class="nc" id="L138">                    action = &quot;delete&quot;;</span>
+                }
+<span class="nc" id="L140">                gotPermission = mgr.checkPermission( session, new GroupPermission( groupName, action ) );</span>
+            }
+<span class="nc" id="L142">        }</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">        else if ( ALL_PERMISSION.equals( permission ) )</span>
+        {
+<span class="nc" id="L145">            gotPermission = mgr.checkPermission( session, new AllPermission( m_wikiContext.getEngine().getApplicationName() ) );</span>
+        }
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        else if ( page != null )</span>
+        {
+            //
+            //  Edit tag also checks that we're not trying to edit an
+            //  old version: they cannot be edited.
+            //
+<span class="nc bnc" id="L153" title="All 2 branches missed.">            if( EDIT.equals(permission) )</span>
+            {
+<span class="nc" id="L155">                WikiPage latest = m_wikiContext.getEngine().getPage( page.getName() );</span>
+<span class="nc bnc" id="L156" title="All 2 branches missed.">                if( page.getVersion() != WikiProvider.LATEST_VERSION &amp;&amp;</span>
+<span class="nc bnc" id="L157" title="All 2 branches missed.">                    latest.getVersion() != page.getVersion() )</span>
+                {
+<span class="nc" id="L159">                    return false;</span>
+                }
+            }
+
+<span class="nc" id="L163">            Permission p = PermissionFactory.getPagePermission( page, permission );</span>
+<span class="nc" id="L164">            gotPermission = mgr.checkPermission( session,</span>
+                                                  p );
+        }
+        
+<span class="nc" id="L168">        return gotPermission;</span>
+    }
+    
+    /**
+     * Initializes the tag.
+     * @return the result of the tag: SKIP_BODY or EVAL_BODY_CONTINUE
+     * @throws IOException this exception will never be thrown
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        for( int i = 0; i &lt; m_permissionList.length; i++ )</span>
+        {
+<span class="nc" id="L182">            String perm = m_permissionList[i];</span>
+         
+<span class="nc" id="L184">            boolean hasPermission = false;</span>
+
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            if( perm.charAt(0) == '!' )</span>
+            {
+<span class="nc bnc" id="L188" title="All 2 branches missed.">                hasPermission = !checkPermission( perm.substring(1) );</span>
+            }
+            else
+            {
+<span class="nc" id="L192">                hasPermission = checkPermission( perm );</span>
+            }
+            
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            if( hasPermission )</span>
+<span class="nc" id="L196">                return EVAL_BODY_INCLUDE;</span>
+        }
+
+<span class="nc" id="L199">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

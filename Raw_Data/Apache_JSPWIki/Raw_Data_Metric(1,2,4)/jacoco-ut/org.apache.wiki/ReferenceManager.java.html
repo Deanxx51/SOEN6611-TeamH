@@ -1,0 +1,1123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ReferenceManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">ReferenceManager.java</span></div><h1>ReferenceManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.ConcurrentModificationException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+
+import org.apache.commons.lang.time.StopWatch;
+import org.apache.log4j.Logger;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventUtils;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.modules.InternalModule;
+import org.apache.wiki.providers.WikiPageProvider;
+import org.apache.wiki.util.TextUtil;
+
+/*
+  BUGS
+
+  - if a wikilink is added to a page, then removed, RefMan still thinks that
+    the page refers to the wikilink page. Hm.
+
+  - if a page is deleted, gets very confused.
+
+  - Serialization causes page attributes to be missing, when InitializablePlugins
+    are not executed properly.  Thus, serialization should really also mark whether
+    a page is serializable or not...
+ */
+
+
+/*
+   A word about synchronizing:
+
+   I expect this object to be accessed in three situations:
+   - when a WikiEngine is created and it scans its wikipages
+   - when the WE saves a page
+   - when a JSP page accesses one of the WE's ReferenceManagers
+     to display a list of (un)referenced pages.
+
+   So, access to this class is fairly rare, and usually triggered by
+   user interaction. OTOH, the methods in this class use their storage
+   objects intensively (and, sorry to say, in an unoptimized manner =).
+   My deduction: using unsynchronized HashMaps etc and syncing methods
+   or code blocks is preferrable to using slow, synced storage objects.
+   We don't have iterative code here, so I'm going to use synced methods
+   for now.
+
+   Please contact me if you notice problems with ReferenceManager, and
+   especially with synchronization, or if you have suggestions about
+   syncing.
+
+   ebu@memecry.net
+*/
+
+/**
+ *  Keeps track of wikipage references:
+ *  &lt;UL&gt;
+ *  &lt;LI&gt;What pages a given page refers to
+ *  &lt;LI&gt;What pages refer to a given page
+ *  &lt;/UL&gt;
+ *
+ *  This is a quick'n'dirty approach without any finesse in storage and
+ *  searching algorithms; we trust java.util.*.
+ *  &lt;P&gt;
+ *  This class contains two HashMaps, m_refersTo and m_referredBy. The
+ *  first is indexed by WikiPage names and contains a Collection of all
+ *  WikiPages the page refers to. (Multiple references are not counted,
+ *  naturally.) The second is indexed by WikiPage names and contains
+ *  a Set of all pages that refer to the indexing page. (Notice -
+ *  the keys of both Maps should be kept in sync.)
+ *  &lt;P&gt;
+ *  When a page is added or edited, its references are parsed, a Collection
+ *  is received, and we crudely replace anything previous with this new
+ *  Collection. We then check each referenced page name and make sure they
+ *  know they are referred to by the new page.
+ *  &lt;P&gt;
+ *  Based on this information, we can perform non-optimal searches for
+ *  e.g. unreferenced pages, top ten lists, etc.
+ *  &lt;P&gt;
+ *  The owning class must take responsibility of filling in any pre-existing
+ *  information, probably by loading each and every WikiPage and calling this
+ *  class to update the references when created.
+ *
+ *  @since 1.6.1
+ */
+
+// FIXME: The way that we save attributes is now a major booboo, and must be
+//        replace forthwith.  However, this is a workaround for the great deal
+//        of problems that occur here...
+
+public class ReferenceManager
+    extends BasicPageFilter
+    implements InternalModule, WikiEventListener
+{
+    /** Maps page wikiname to a Collection of pages it refers to. The Collection
+     *  must contain Strings. The Collection may contain names of non-existing
+     *  pages.
+     */
+    private Map&lt;String,Collection&lt;String&gt;&gt; m_refersTo;
+    private Map&lt;String,Collection&lt;String&gt;&gt; m_unmutableRefersTo;
+
+    /** Maps page wikiname to a Set of referring pages. The Set must
+     *  contain Strings. Non-existing pages (a reference exists, but not a file
+     *  for the page contents) may have an empty Set in m_referredBy.
+     */
+    private Map&lt;String,Set&lt;String&gt;&gt; m_referredBy;
+    private Map&lt;String,Set&lt;String&gt;&gt; m_unmutableReferredBy;
+
+    /** The WikiEngine that owns this object. */
+    private WikiEngine     m_engine;
+
+<span class="fc" id="L153">    private boolean        m_matchEnglishPlurals = false;</span>
+
+<span class="fc" id="L155">    private static Logger log = Logger.getLogger(ReferenceManager.class);</span>
+
+    private static final String SERIALIZATION_FILE = &quot;refmgr.ser&quot;;
+    private static final String SERIALIZATION_DIR  = &quot;refmgr-attr&quot;;
+
+    /** We use this also a generic serialization id */
+    private static final long serialVersionUID = 4L;
+
+    /**
+     *  Builds a new ReferenceManager.
+     *
+     *  @param engine The WikiEngine to which this is managing references to.
+     */
+    public ReferenceManager( WikiEngine engine )
+<span class="fc" id="L169">    {</span>
+<span class="fc" id="L170">        m_refersTo   = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L171">        m_referredBy = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L172">        m_engine = engine;</span>
+
+<span class="fc" id="L174">        m_matchEnglishPlurals = TextUtil.getBooleanProperty( engine.getWikiProperties(),</span>
+                                                             WikiEngine.PROP_MATCHPLURALS,
+                                                             m_matchEnglishPlurals );
+
+        //
+        //  Create two maps that contain unmutable versions of the two basic maps.
+        //
+<span class="fc" id="L181">        m_unmutableReferredBy = Collections.unmodifiableMap( m_referredBy );</span>
+<span class="fc" id="L182">        m_unmutableRefersTo   = Collections.unmodifiableMap( m_refersTo );</span>
+<span class="fc" id="L183">    }</span>
+
+    /**
+     *  Does a full reference update.  Does not sync; assumes that you do it afterwards.
+     */
+    private void updatePageReferences( WikiPage page ) throws ProviderException
+    {
+<span class="nc" id="L190">        String content = m_engine.getPageManager().getPageText( page.getName(),</span>
+                                                                WikiPageProvider.LATEST_VERSION );
+
+<span class="nc" id="L193">        TreeSet&lt;String&gt; res = new TreeSet&lt;String&gt;();</span>
+<span class="nc" id="L194">        Collection&lt;String&gt; links = m_engine.scanWikiLinks( page, content );</span>
+
+<span class="nc" id="L196">        res.addAll( links );</span>
+<span class="nc" id="L197">        List&lt; Attachment &gt; attachments = m_engine.getAttachmentManager().listAttachments( page );</span>
+
+<span class="nc bnc" id="L199" title="All 2 branches missed.">        for( Iterator&lt; Attachment &gt; atti = attachments.iterator(); atti.hasNext(); )</span>
+        {
+<span class="nc" id="L201">            res.add( atti.next().getName() );</span>
+        }
+
+<span class="nc" id="L204">        internalUpdateReferences( page.getName(), res );</span>
+<span class="nc" id="L205">    }</span>
+
+    /**
+     *  Initializes the entire reference manager with the initial set of pages
+     *  from the collection.
+     *
+     *  @param pages A collection of all pages you want to be included in the reference
+     *               count.
+     *  @since 2.2
+     *  @throws ProviderException If reading of pages fail.
+     */
+    public void initialize( Collection&lt; WikiPage &gt; pages ) throws ProviderException
+    {
+<span class="fc" id="L218">        log.debug( &quot;Initializing new ReferenceManager with &quot;+pages.size()+&quot; initial pages.&quot; );</span>
+<span class="fc" id="L219">        StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L220">        sw.start();</span>
+<span class="fc" id="L221">        log.info( &quot;Starting cross reference scan of WikiPages&quot; );</span>
+
+        //
+        //  First, try to serialize old data from disk.  If that fails,
+        //  we'll go and update the entire reference lists (which'll take
+        //  time)
+        //
+        try
+        {
+            //
+            //  Unserialize things.  The loop below cannot be combined with
+            //  the other loop below, simply because engine.getPage() has
+            //  side effects such as loading initializing the user databases,
+            //  which in turn want all of the pages to be read already...
+            //
+            //  Yes, this is a kludge.  We know.  Will be fixed.
+            //
+<span class="fc" id="L238">            long saved = unserializeFromDisk();</span>
+
+<span class="fc bfc" id="L240" title="All 2 branches covered.">            for( Iterator&lt; WikiPage &gt; it = pages.iterator(); it.hasNext(); )</span>
+            {
+<span class="fc" id="L242">                WikiPage page = it.next();</span>
+
+<span class="fc" id="L244">                unserializeAttrsFromDisk( page );</span>
+<span class="fc" id="L245">            }</span>
+
+            //
+            //  Now we must check if any of the pages have been changed
+            //  while we were in the electronic la-la-land, and update
+            //  the references for them.
+            //
+
+<span class="fc" id="L253">            Iterator&lt; WikiPage &gt; it = pages.iterator();</span>
+
+<span class="fc bfc" id="L255" title="All 2 branches covered.">            while( it.hasNext() )</span>
+            {
+<span class="fc" id="L257">                WikiPage page = it.next();</span>
+
+<span class="fc bfc" id="L259" title="All 2 branches covered.">                if( page instanceof Attachment )</span>
+                {
+                    // Skip attachments
+                }
+                else
+                {
+
+                    // Refresh with the latest copy
+<span class="fc" id="L267">                    page = m_engine.getPage( page.getName() );</span>
+
+<span class="pc bpc" id="L269" title="1 of 2 branches missed.">                    if( page.getLastModified() == null )</span>
+                    {
+<span class="nc" id="L271">                        log.fatal( &quot;Provider returns null lastModified.  Please submit a bug report.&quot; );</span>
+                    }
+<span class="pc bpc" id="L273" title="1 of 2 branches missed.">                    else if( page.getLastModified().getTime() &gt; saved )</span>
+                    {
+<span class="nc" id="L275">                        updatePageReferences( page );</span>
+                    }
+                }
+<span class="fc" id="L278">            }</span>
+
+        }
+<span class="fc" id="L281">        catch( Exception e )</span>
+        {
+<span class="fc" id="L283">            log.info(&quot;Unable to unserialize old refmgr information, rebuilding database: &quot;+e.getMessage());</span>
+<span class="fc" id="L284">            buildKeyLists( pages );</span>
+
+            // Scan the existing pages from disk and update references in the manager.
+<span class="fc" id="L287">            Iterator&lt; WikiPage &gt; it = pages.iterator();</span>
+<span class="fc bfc" id="L288" title="All 2 branches covered.">            while( it.hasNext() )</span>
+            {
+<span class="fc" id="L290">                WikiPage page  = it.next();</span>
+
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">                if( page instanceof Attachment )</span>
+                {
+                    // We cannot build a reference list from the contents
+                    // of attachments, so we skip them.
+                }
+                else
+                {
+<span class="nc" id="L299">                    updatePageReferences( page );</span>
+
+<span class="nc" id="L301">                    serializeAttrsToDisk( page );</span>
+                }
+
+<span class="fc" id="L304">            }</span>
+
+<span class="fc" id="L306">            serializeToDisk();</span>
+<span class="fc" id="L307">        }</span>
+
+<span class="fc" id="L309">        sw.stop();</span>
+<span class="fc" id="L310">        log.info( &quot;Cross reference scan done in &quot;+sw );</span>
+
+<span class="fc" id="L312">        WikiEventUtils.addWikiEventListener(m_engine.getPageManager(), WikiPageEvent.PAGE_DELETED, this);</span>
+<span class="fc" id="L313">    }</span>
+
+    /**
+     *  Reads the serialized data from the disk back to memory.
+     *  Returns the date when the data was last written on disk
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private synchronized long unserializeFromDisk()
+        throws IOException,
+               ClassNotFoundException
+    {
+<span class="fc" id="L324">        long saved = 0L;</span>
+
+<span class="fc" id="L326">        File f = new File( m_engine.getWorkDir(), SERIALIZATION_FILE );</span>
+<span class="fc" id="L327">        try( ObjectInputStream in = new ObjectInputStream( new BufferedInputStream(new FileInputStream(f)) ) )</span>
+        {
+<span class="fc" id="L329">            StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L330">            sw.start();</span>
+
+<span class="fc" id="L332">            long ver     = in.readLong();</span>
+
+<span class="pc bpc" id="L334" title="1 of 2 branches missed.">            if( ver != serialVersionUID )</span>
+            {
+<span class="nc" id="L336">                throw new IOException(&quot;File format has changed; I need to recalculate references.&quot;);</span>
+            }
+
+<span class="fc" id="L339">            saved        = in.readLong();</span>
+<span class="fc" id="L340">            m_refersTo   = ( Map&lt; String, Collection&lt; String &gt; &gt; ) in.readObject();</span>
+<span class="fc" id="L341">            m_referredBy = ( Map&lt; String, Set&lt; String &gt; &gt; ) in.readObject();</span>
+
+<span class="fc" id="L343">            in.close();</span>
+
+<span class="fc" id="L345">            m_unmutableReferredBy = Collections.unmodifiableMap( m_referredBy );</span>
+<span class="fc" id="L346">            m_unmutableRefersTo   = Collections.unmodifiableMap( m_refersTo );</span>
+
+<span class="fc" id="L348">            sw.stop();</span>
+<span class="fc" id="L349">            log.debug(&quot;Read serialized data successfully in &quot;+sw);</span>
+        }
+
+<span class="fc" id="L352">        return saved;</span>
+    }
+
+    /**
+     *  Serializes hashmaps to disk.  The format is private, don't touch it.
+     */
+    private synchronized void serializeToDisk()
+    {
+<span class="fc" id="L360">        File f = new File( m_engine.getWorkDir(), SERIALIZATION_FILE );</span>
+<span class="fc" id="L361">        try( ObjectOutputStream out = new ObjectOutputStream( new BufferedOutputStream( new FileOutputStream( f ) ) ) ) {</span>
+<span class="fc" id="L362">            StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L363">            sw.start();</span>
+
+<span class="fc" id="L365">            out.writeLong( serialVersionUID );</span>
+<span class="fc" id="L366">            out.writeLong( System.currentTimeMillis() ); // Timestamp</span>
+<span class="fc" id="L367">            out.writeObject( m_refersTo );</span>
+<span class="fc" id="L368">            out.writeObject( m_referredBy );</span>
+
+<span class="fc" id="L370">            out.close();</span>
+
+<span class="fc" id="L372">            sw.stop();</span>
+
+<span class="fc" id="L374">            log.debug(&quot;serialization done - took &quot;+sw);</span>
+        }
+<span class="nc" id="L376">        catch( IOException ioe )</span>
+        {
+<span class="nc" id="L378">            log.error(&quot;Unable to serialize!&quot;, ioe);</span>
+<span class="fc" id="L379">        }</span>
+<span class="fc" id="L380">    }</span>
+
+    private String getHashFileName( String pageName ) {
+		try {
+<span class="fc" id="L384">			MessageDigest digest = MessageDigest.getInstance(&quot;MD5&quot;);</span>
+<span class="fc" id="L385">			byte[] dig = digest.digest( pageName.getBytes(StandardCharsets.UTF_8) );</span>
+
+<span class="fc" id="L387">	        return TextUtil.toHexString(dig)+&quot;.cache&quot;;</span>
+<span class="nc" id="L388">		} catch( NoSuchAlgorithmException e ) {</span>
+<span class="nc" id="L389">			log.fatal( &quot;What do you mean - no such algorithm?&quot;, e );</span>
+<span class="nc" id="L390">			return null;</span>
+		}
+    }
+
+    /**
+     *  Reads the serialized data from the disk back to memory.
+     *  Returns the date when the data was last written on disk
+     */
+    private synchronized long unserializeAttrsFromDisk(WikiPage p)
+        throws IOException,
+               ClassNotFoundException
+    {
+<span class="fc" id="L402">        long saved = 0L;</span>
+
+        //
+        //  Find attribute cache, and check if it exists
+        //
+<span class="fc" id="L407">        String hashName = getHashFileName( p.getName() );</span>
+<span class="pc bpc" id="L408" title="1 of 2 branches missed.">        if( hashName != null ) {</span>
+<span class="fc" id="L409">        	File f = new File( m_engine.getWorkDir(), SERIALIZATION_DIR );</span>
+
+<span class="fc" id="L411">            f = new File( f, hashName );</span>
+
+<span class="pc bpc" id="L413" title="1 of 2 branches missed.">            if( !f.exists() )</span>
+            {
+<span class="fc" id="L415">                return 0L;</span>
+            }
+<span class="nc" id="L417">            try( ObjectInputStream in = new ObjectInputStream( new BufferedInputStream(new FileInputStream(f)) ))</span>
+            {
+<span class="nc" id="L419">                StopWatch sw = new StopWatch();</span>
+<span class="nc" id="L420">                sw.start();</span>
+
+<span class="nc" id="L422">                log.debug(&quot;Deserializing attributes for &quot;+p.getName());</span>
+
+<span class="nc" id="L424">                long ver = in.readLong();</span>
+
+<span class="nc bnc" id="L426" title="All 2 branches missed.">                if( ver != serialVersionUID )</span>
+                {
+<span class="nc" id="L428">                    log.debug(&quot;File format has changed; cannot deserialize.&quot;);</span>
+<span class="nc" id="L429">                    return 0L;</span>
+                }
+
+<span class="nc" id="L432">                saved        = in.readLong();</span>
+
+<span class="nc" id="L434">                String name  = in.readUTF();</span>
+
+<span class="nc bnc" id="L436" title="All 2 branches missed.">                if( !name.equals(p.getName()) )</span>
+                {
+<span class="nc" id="L438">                    log.debug(&quot;File name does not match (&quot;+name+&quot;), skipping...&quot;);</span>
+<span class="nc" id="L439">                    return 0L; // Not here</span>
+                }
+
+<span class="nc" id="L442">                long entries = in.readLong();</span>
+
+<span class="nc bnc" id="L444" title="All 2 branches missed.">                for( int i = 0; i &lt; entries; i++ )</span>
+                {
+<span class="nc" id="L446">                    String key   = in.readUTF();</span>
+<span class="nc" id="L447">                    Object value = in.readObject();</span>
+
+<span class="nc" id="L449">                    p.setAttribute( key, value );</span>
+
+<span class="nc" id="L451">                    log.debug(&quot;   attr: &quot;+key+&quot;=&quot;+value);</span>
+                }
+
+<span class="nc" id="L454">                in.close();</span>
+
+<span class="nc" id="L456">                sw.stop();</span>
+<span class="nc" id="L457">                log.debug(&quot;Read serialized data for &quot;+name+&quot; successfully in &quot;+sw);</span>
+<span class="nc" id="L458">                p.setHasMetadata();</span>
+            }
+        }
+        
+
+<span class="nc" id="L463">        return saved;</span>
+    }
+
+    /**
+     *  Serializes hashmaps to disk.  The format is private, don't touch it.
+     */
+    private synchronized void serializeAttrsToDisk( WikiPage p )
+    {
+<span class="fc" id="L471">        StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L472">        sw.start();</span>
+
+<span class="fc" id="L474">        String hashName = getHashFileName( p.getName() );</span>
+<span class="pc bpc" id="L475" title="1 of 2 branches missed.">        if( hashName != null ) {</span>
+<span class="fc" id="L476">        	File f = new File( m_engine.getWorkDir(), SERIALIZATION_DIR );</span>
+
+<span class="fc bfc" id="L478" title="All 2 branches covered.">            if( !f.exists() ) f.mkdirs();</span>
+
+            //
+            //  Create a digest for the name
+            //
+<span class="fc" id="L483">            f = new File( f, hashName );</span>
+            
+<span class="fc" id="L485">            try( ObjectOutputStream out =  new ObjectOutputStream( new BufferedOutputStream( new FileOutputStream( f ) ) ) ) {</span>
+<span class="fc" id="L486">                Set&lt; Map.Entry &lt; String, Object &gt; &gt; entries = new HashSet&lt;&gt;( p.getAttributes().entrySet() ); // new Set to avoid concurrency issue</span>
+
+<span class="fc bfc" id="L488" title="All 2 branches covered.">                if( entries.size() == 0 ) </span>
+                {
+                    //  Nothing to serialize, therefore we will just simply remove the
+                    //  serialization file so that the next time we boot, we don't
+                    //  deserialize old data.
+<span class="fc" id="L493">                    f.delete();</span>
+<span class="fc" id="L494">                    return;</span>
+                }
+
+<span class="fc" id="L497">                out.writeLong( serialVersionUID );</span>
+<span class="fc" id="L498">                out.writeLong( System.currentTimeMillis() ); // Timestamp</span>
+
+<span class="fc" id="L500">                out.writeUTF( p.getName() );</span>
+<span class="fc" id="L501">                out.writeLong( entries.size() );</span>
+
+<span class="fc bfc" id="L503" title="All 2 branches covered.">                for( Iterator&lt; Map.Entry &lt; String, Object &gt; &gt; i = entries.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L504">                    Map.Entry&lt; String, Object &gt; e = i.next();</span>
+
+<span class="pc bpc" id="L506" title="1 of 2 branches missed.">                    if( e.getValue() instanceof Serializable ) {</span>
+<span class="fc" id="L507">                        out.writeUTF( e.getKey() );</span>
+<span class="fc" id="L508">                        out.writeObject( e.getValue() );</span>
+                    }
+<span class="fc" id="L510">                }</span>
+
+<span class="nc" id="L512">            } catch( IOException e ) {</span>
+<span class="nc" id="L513">                log.error( &quot;Unable to serialize!&quot;, e );</span>
+            } finally {
+<span class="fc" id="L515">                sw.stop();</span>
+<span class="fc" id="L516">                log.debug(&quot;serialization for &quot;+p.getName()+&quot; done - took &quot;+sw);</span>
+            }
+        }
+        
+<span class="fc" id="L520">    }</span>
+
+    /**
+     *  After the page has been saved, updates the reference lists.
+     *  
+     *  @param context {@inheritDoc}
+     *  @param content {@inheritDoc}
+     */
+    @Override
+	public void postSave( WikiContext context, String content )
+    {
+<span class="fc" id="L531">        WikiPage page = context.getPage();</span>
+
+<span class="fc" id="L533">        updateReferences( page.getName(),</span>
+<span class="fc" id="L534">                          context.getEngine().scanWikiLinks( page, content ) );</span>
+
+<span class="fc" id="L536">        serializeAttrsToDisk( page );</span>
+<span class="fc" id="L537">    }</span>
+
+    /**
+     * Updates the m_referedTo and m_referredBy hashmaps when a page has been
+     * deleted.
+     * &lt;P&gt;
+     * Within the m_refersTo map the pagename is a key. The whole key-value-set
+     * has to be removed to keep the map clean.
+     * Within the m_referredBy map the name is stored as a value. Since a key
+     * can have more than one value we have to delete just the key-value-pair
+     * referring page:deleted page.
+     *
+     *  @param page Name of the page to remove from the maps.
+     */
+    public synchronized void pageRemoved( WikiPage page )
+    {
+<span class="fc" id="L553">        String pageName = page.getName();</span>
+
+<span class="fc" id="L555">        pageRemoved(pageName);</span>
+<span class="fc" id="L556">    }</span>
+
+    private void pageRemoved(String pageName)
+    {
+<span class="fc" id="L560">        Collection&lt;String&gt; refTo = m_refersTo.get( pageName );</span>
+
+<span class="fc bfc" id="L562" title="All 2 branches covered.">        if( refTo != null )</span>
+        {
+<span class="fc" id="L564">            Iterator&lt; String &gt; itRefTo = refTo.iterator();</span>
+<span class="fc bfc" id="L565" title="All 2 branches covered.">            while( itRefTo.hasNext() )</span>
+            {
+<span class="fc" id="L567">                String referredPageName = itRefTo.next();</span>
+<span class="fc" id="L568">                Set&lt;String&gt; refBy = m_referredBy.get( referredPageName );</span>
+
+<span class="pc bpc" id="L570" title="1 of 2 branches missed.">                if( refBy == null )</span>
+<span class="nc" id="L571">                    throw new InternalWikiException(&quot;Refmgr out of sync: page &quot;+pageName+&quot; refers to &quot;+referredPageName+&quot;, which has null referrers.&quot;);</span>
+
+<span class="fc" id="L573">                refBy.remove(pageName);</span>
+
+<span class="fc" id="L575">                m_referredBy.remove( referredPageName );</span>
+
+                // We won't put it back again if it becomes empty and does not exist.  It will be added
+                // later on anyway, if it becomes referenced again.
+<span class="fc bfc" id="L579" title="All 4 branches covered.">                if( !(refBy.isEmpty() &amp;&amp; !m_engine.pageExists(referredPageName)) )</span>
+                {
+<span class="fc" id="L581">                    m_referredBy.put( referredPageName, refBy );</span>
+                }
+<span class="fc" id="L583">            }</span>
+
+<span class="fc" id="L585">            log.debug(&quot;Removing from m_refersTo HashMap key:value &quot;+pageName+&quot;:&quot;+m_refersTo.get( pageName ));</span>
+<span class="fc" id="L586">            m_refersTo.remove( pageName );</span>
+        }
+
+<span class="fc" id="L589">        Set&lt;String&gt; refBy = m_referredBy.get( pageName );</span>
+<span class="fc bfc" id="L590" title="All 4 branches covered.">        if( refBy == null || refBy.isEmpty() )</span>
+        {
+<span class="fc" id="L592">            m_referredBy.remove( pageName );</span>
+        }
+
+        //
+        //  Remove any traces from the disk, too
+        //
+<span class="fc" id="L598">        serializeToDisk();</span>
+
+<span class="fc" id="L600">        String hashName = getHashFileName( pageName );</span>
+<span class="pc bpc" id="L601" title="1 of 2 branches missed.">        if( hashName != null ) {</span>
+<span class="fc" id="L602">        	File f = new File( m_engine.getWorkDir(), SERIALIZATION_DIR );</span>
+
+<span class="fc" id="L604">            f = new File( f, getHashFileName(pageName) );</span>
+
+<span class="fc bfc" id="L606" title="All 2 branches covered.">            if( f.exists() ) f.delete();</span>
+        }
+<span class="fc" id="L608">    }</span>
+
+    /**
+     *  Updates the referred pages of a new or edited WikiPage. If a refersTo
+     *  entry for this page already exists, it is removed and a new one is built
+     *  from scratch. Also calls updateReferredBy() for each referenced page.
+     *  &lt;P&gt;
+     *  This is the method to call when a new page has been created and we
+     *  want to a) set up its references and b) notify the referred pages
+     *  of the references. Use this method during run-time.
+     *
+     *  @param page Name of the page to update.
+     *  @param references A Collection of Strings, each one pointing to a page this page references.
+     */
+    public synchronized void updateReferences( String page, Collection&lt; String &gt; references )
+    {
+<span class="fc" id="L624">        internalUpdateReferences(page, references);</span>
+
+<span class="fc" id="L626">        serializeToDisk();</span>
+<span class="fc" id="L627">    }</span>
+
+    /**
+     *  Updates the referred pages of a new or edited WikiPage. If a refersTo
+     *  entry for this page already exists, it is removed and a new one is built
+     *  from scratch. Also calls updateReferredBy() for each referenced page.
+     *  &lt;p&gt;
+     *  This method does not synchronize the database to disk.
+     *
+     *  @param page Name of the page to update.
+     *  @param references A Collection of Strings, each one pointing to a page this page references.
+     */
+
+    private void internalUpdateReferences(String page, Collection&lt; String &gt; references)
+    {
+<span class="fc" id="L642">        page = getFinalPageName( page );</span>
+
+        //
+        // Create a new entry in m_refersTo.
+        //
+<span class="fc" id="L647">        Collection&lt; String &gt; oldRefTo = m_refersTo.get( page );</span>
+<span class="fc" id="L648">        m_refersTo.remove( page );</span>
+
+<span class="fc" id="L650">        TreeSet&lt;String&gt; cleanedRefs = new TreeSet&lt;&gt;();</span>
+<span class="fc bfc" id="L651" title="All 2 branches covered.">        for( Iterator&lt; String &gt; i = references.iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L653">            String ref = i.next();</span>
+
+<span class="fc" id="L655">            ref = getFinalPageName( ref );</span>
+
+<span class="fc" id="L657">            cleanedRefs.add( ref );</span>
+<span class="fc" id="L658">        }</span>
+
+<span class="fc" id="L660">        m_refersTo.put( page, cleanedRefs );</span>
+
+        //
+        //  We know the page exists, since it's making references somewhere.
+        //  If an entry for it didn't exist previously in m_referredBy, make
+        //  sure one is added now.
+        //
+<span class="fc bfc" id="L667" title="All 2 branches covered.">        if( !m_referredBy.containsKey( page ) )</span>
+        {
+<span class="fc" id="L669">            m_referredBy.put( page, new TreeSet&lt;String&gt;() );</span>
+        }
+
+        //
+        //  Get all pages that used to be referred to by 'page' and
+        //  remove that reference. (We don't want to try to figure out
+        //  which particular references were removed...)
+        //
+<span class="fc" id="L677">        cleanReferredBy( page, oldRefTo, cleanedRefs );</span>
+
+        //
+        //  Notify all referred pages of their referinesshoodicity.
+        //
+<span class="fc" id="L682">        Iterator&lt;String&gt; it = cleanedRefs.iterator();</span>
+<span class="fc bfc" id="L683" title="All 2 branches covered.">        while( it.hasNext() )</span>
+        {
+<span class="fc" id="L685">            String referredPageName = it.next();</span>
+<span class="fc" id="L686">            updateReferredBy( getFinalPageName(referredPageName), page );</span>
+<span class="fc" id="L687">        }</span>
+<span class="fc" id="L688">    }</span>
+
+    /**
+     * Returns the refers-to list. For debugging.
+     * 
+     * @return The refers-to list.
+     */
+    protected Map&lt; String, Collection&lt; String &gt; &gt; getRefersTo()
+    {
+<span class="nc" id="L697">        return m_refersTo;</span>
+    }
+
+    /**
+     * Returns the referred-by list. For debugging.
+     * 
+     * @return Referred-by lists.
+     */
+    protected Map&lt; String, Set&lt; String &gt; &gt; getReferredBy()
+    {
+<span class="nc" id="L707">        return m_referredBy;</span>
+    }
+
+    /**
+     * Cleans the 'referred by' list, removing references by 'referrer' to
+     * any other page. Called after 'referrer' is removed.
+     */
+    private void cleanReferredBy( String referrer,
+                                  Collection&lt;String&gt; oldReferred,
+                                  Collection&lt;String&gt; newReferred )
+    {
+        // Two ways to go about this. One is to look up all pages previously
+        // referred by referrer and remove referrer from their lists, and let
+        // the update put them back in (except possibly removed ones).
+        // The other is to get the old referred to list, compare to the new,
+        // and tell the ones missing in the latter to remove referrer from
+        // their list. Hm. We'll just try the first for now. Need to come
+        // back and optimize this a bit.
+
+<span class="fc bfc" id="L726" title="All 2 branches covered.">        if( oldReferred == null )</span>
+<span class="fc" id="L727">            return;</span>
+
+<span class="fc" id="L729">        Iterator&lt; String &gt; it = oldReferred.iterator();</span>
+<span class="fc bfc" id="L730" title="All 2 branches covered.">        while( it.hasNext() )</span>
+        {
+<span class="fc" id="L732">            String referredPage = it.next();</span>
+<span class="fc" id="L733">            Set&lt; String &gt; oldRefBy = m_referredBy.get( referredPage );</span>
+<span class="pc bpc" id="L734" title="1 of 2 branches missed.">            if( oldRefBy != null )</span>
+            {
+<span class="fc" id="L736">                oldRefBy.remove( referrer );</span>
+            }
+
+            // If the page is referred to by no one AND it doesn't even
+            // exist, we might just as well forget about this entry.
+            // It will be added again elsewhere if new references appear.
+<span class="pc bpc" id="L742" title="1 of 4 branches missed.">            if( ( ( oldRefBy == null ) || ( oldRefBy.isEmpty() ) ) &amp;&amp;</span>
+<span class="fc bfc" id="L743" title="All 2 branches covered.">                ( m_engine.pageExists( referredPage ) == false ) )</span>
+            {
+<span class="fc" id="L745">                m_referredBy.remove( referredPage );</span>
+            }
+<span class="fc" id="L747">        }</span>
+
+<span class="fc" id="L749">    }</span>
+
+
+    /**
+     *  When initially building a ReferenceManager from scratch, call this method
+     * BEFORE calling updateReferences() with a full list of existing page names.
+     * It builds the refersTo and referredBy key lists, thus enabling
+     * updateReferences() to function correctly.
+     * &lt;P&gt;
+     * This method should NEVER be called after initialization. It clears all mappings
+     * from the reference tables.
+     *
+     * @param pages   a Collection containing WikiPage objects.
+     */
+    private synchronized void buildKeyLists( Collection&lt; WikiPage &gt; pages )
+    {
+<span class="fc" id="L765">        m_refersTo.clear();</span>
+<span class="fc" id="L766">        m_referredBy.clear();</span>
+
+<span class="pc bpc" id="L768" title="1 of 2 branches missed.">        if( pages == null )</span>
+<span class="nc" id="L769">            return;</span>
+
+<span class="fc" id="L771">        Iterator&lt; WikiPage &gt; it = pages.iterator();</span>
+        try
+        {
+<span class="fc bfc" id="L774" title="All 2 branches covered.">            while( it.hasNext() )</span>
+            {
+<span class="fc" id="L776">                WikiPage page = it.next();</span>
+                // We add a non-null entry to referredBy to indicate the referred page exists
+<span class="fc" id="L778">                m_referredBy.put( page.getName(), new TreeSet&lt;String&gt;() );</span>
+                // Just add a key to refersTo; the keys need to be in sync with referredBy.
+<span class="fc" id="L780">                m_refersTo.put( page.getName(), null );</span>
+<span class="fc" id="L781">            }</span>
+        }
+<span class="nc" id="L783">        catch( ClassCastException e )</span>
+        {
+<span class="nc" id="L785">            log.fatal( &quot;Invalid collection entry in ReferenceManager.buildKeyLists().&quot;, e );</span>
+<span class="fc" id="L786">        }</span>
+<span class="fc" id="L787">    }</span>
+
+
+    /**
+     * Marks the page as referred to by the referrer. If the page does not
+     * exist previously, nothing is done. (This means that some page, somewhere,
+     * has a link to a page that does not exist.)
+     * &lt;P&gt;
+     * This method is NOT synchronized. It should only be referred to from
+     * within a synchronized method, or it should be made synced if necessary.
+     */
+    private void updateReferredBy( String page, String referrer )
+    {
+        // We're not really interested in first level self-references.
+        /*
+        if( page.equals( referrer ) )
+        {
+            return;
+        }
+        */
+        // Neither are we interested if plural forms refer to each other.
+<span class="pc bpc" id="L808" title="1 of 2 branches missed.">        if( m_matchEnglishPlurals )</span>
+        {
+<span class="fc bfc" id="L810" title="All 2 branches covered.">            String p2 = page.endsWith(&quot;s&quot;) ? page.substring(0,page.length()-1) : page+&quot;s&quot;;</span>
+
+<span class="pc bpc" id="L812" title="1 of 2 branches missed.">            if( referrer.equals(p2) )</span>
+            {
+<span class="nc" id="L814">                return;</span>
+            }
+        }
+
+<span class="fc" id="L818">        Set&lt;String&gt; referrers = m_referredBy.get( page );</span>
+
+        // Even if 'page' has not been created yet, it can still be referenced.
+        // This requires we don't use m_referredBy keys when looking up missing
+        // pages, of course.
+<span class="fc bfc" id="L823" title="All 2 branches covered.">        if(referrers == null)</span>
+        {
+<span class="fc" id="L825">            referrers = new TreeSet&lt;String&gt;();</span>
+<span class="fc" id="L826">            m_referredBy.put( page, referrers );</span>
+        }
+<span class="fc" id="L828">        referrers.add( referrer );</span>
+<span class="fc" id="L829">    }</span>
+
+
+    /**
+     * Clears the references to a certain page so it's no longer in the map.
+     *
+     * @param pagename  Name of the page to clear references for.
+     */
+    public synchronized void clearPageEntries( String pagename )
+    {
+<span class="fc" id="L839">        pagename = getFinalPageName(pagename);</span>
+
+        //
+        //  Remove this item from the referredBy list of any page
+        //  which this item refers to.
+        //
+<span class="fc" id="L845">        Collection&lt;String&gt; c = m_refersTo.get( pagename );</span>
+
+<span class="fc bfc" id="L847" title="All 2 branches covered.">        if( c != null )</span>
+        {
+<span class="pc bpc" id="L849" title="1 of 2 branches missed.">            for( String key : c )</span>
+            {
+<span class="nc" id="L851">                Collection&lt;?&gt; dref = m_referredBy.get( key );</span>
+
+<span class="nc" id="L853">                dref.remove( pagename );</span>
+<span class="nc" id="L854">            }</span>
+        }
+
+        //
+        //  Finally, remove direct references.
+        //
+<span class="fc" id="L860">        m_referredBy.remove( pagename );</span>
+<span class="fc" id="L861">        m_refersTo.remove( pagename );</span>
+<span class="fc" id="L862">    }</span>
+
+
+    /**
+     *  Finds all unreferenced pages. This requires a linear scan through
+     *  m_referredBy to locate keys with null or empty values.
+     *  
+     *  @return The Collection of Strings
+     */
+    public synchronized Collection&lt; String &gt; findUnreferenced()
+    {
+<span class="fc" id="L873">        ArrayList&lt;String&gt; unref = new ArrayList&lt;String&gt;();</span>
+
+<span class="fc bfc" id="L875" title="All 2 branches covered.">        for( String key : m_referredBy.keySet() )</span>
+        {
+<span class="fc" id="L877">            Set&lt;?&gt; refs = getReferenceList( m_referredBy, key );</span>
+            
+<span class="pc bpc" id="L879" title="1 of 4 branches missed.">            if( refs == null || refs.isEmpty() )</span>
+            {
+<span class="fc" id="L881">                unref.add( key );</span>
+            }
+<span class="fc" id="L883">        }</span>
+
+<span class="fc" id="L885">        return unref;</span>
+    }
+
+
+    /**
+     * Finds all references to non-existant pages. This requires a linear
+     * scan through m_refersTo values; each value must have a corresponding
+     * key entry in the reference Maps, otherwise such a page has never
+     * been created.
+     * &lt;P&gt;
+     * Returns a Collection containing Strings of unreferenced page names.
+     * Each non-existant page name is shown only once - we don't return information
+     * on who referred to it.
+     * 
+     * @return A Collection of Strings
+     */
+    public synchronized Collection&lt; String &gt; findUncreated()
+    {
+<span class="fc" id="L903">        TreeSet&lt;String&gt; uncreated = new TreeSet&lt;String&gt;();</span>
+
+        // Go through m_refersTo values and check that m_refersTo has the corresponding keys.
+        // We want to reread the code to make sure our HashMaps are in sync...
+
+<span class="fc" id="L908">        Collection&lt;Collection&lt;String&gt;&gt; allReferences = m_refersTo.values();</span>
+
+<span class="fc bfc" id="L910" title="All 2 branches covered.">        for( Collection&lt;String&gt; refs : allReferences )</span>
+        {
+<span class="pc bpc" id="L912" title="1 of 2 branches missed.">            if( refs != null )</span>
+            {
+<span class="fc bfc" id="L914" title="All 2 branches covered.">                for( String aReference : refs )</span>
+                {
+<span class="fc bfc" id="L916" title="All 2 branches covered.">                    if( m_engine.pageExists( aReference ) == false )</span>
+                    {
+<span class="fc" id="L918">                        uncreated.add( aReference );</span>
+                    }
+<span class="fc" id="L920">                }</span>
+            }
+<span class="fc" id="L922">        }</span>
+
+<span class="fc" id="L924">        return uncreated;</span>
+    }
+
+    /**
+     *  Searches for the given page in the given Map, and returns
+     *  the set of references.  This method also takes care of English plural
+     *  matching.
+     *  
+     *  @param coll The Map to search in
+     *  @param pagename The name to find.
+     *  @return The references list.
+     */
+    private &lt;T&gt; Set&lt;T&gt; getReferenceList( Map&lt;String,Set&lt;T&gt;&gt; coll, String pagename )
+    {
+<span class="fc" id="L938">        Set&lt;T&gt; refs = coll.get( pagename );</span>
+
+<span class="pc bpc" id="L940" title="1 of 2 branches missed.">        if( m_matchEnglishPlurals )</span>
+        {
+            //
+            //  We'll add also matches from the &quot;other&quot; page.
+            //
+            Set&lt;T&gt; refs2;
+
+<span class="fc bfc" id="L947" title="All 2 branches covered.">            if( pagename.endsWith(&quot;s&quot;) )</span>
+            {
+<span class="fc" id="L949">                refs2 = coll.get( pagename.substring(0,pagename.length()-1) );</span>
+            }
+            else
+            {
+<span class="fc" id="L953">                refs2 = coll.get( pagename+&quot;s&quot; );</span>
+            }
+
+<span class="fc bfc" id="L956" title="All 2 branches covered.">            if( refs2 != null )</span>
+            {
+<span class="fc bfc" id="L958" title="All 2 branches covered.">                if( refs != null )</span>
+<span class="fc" id="L959">                    refs.addAll( refs2 );</span>
+                else
+<span class="fc" id="L961">                    refs = refs2;</span>
+            }
+        }
+<span class="fc" id="L964">        return refs;</span>
+    }
+
+    /**
+     * Find all pages that refer to this page. Returns null if the page
+     * does not exist or is not referenced at all, otherwise returns a
+     * collection containing page names (String) that refer to this one.
+     * &lt;p&gt;
+     * @param pagename The page to find referrers for.
+     * @return A Set of Strings.  May return null, if the page
+     *         does not exist, or if it has no references.
+     */
+    public synchronized Set&lt; String &gt; findReferrers( String pagename )
+    {
+<span class="fc" id="L978">        Set&lt;String&gt; refs = getReferenceList( m_referredBy, pagename );</span>
+
+<span class="fc bfc" id="L980" title="All 4 branches covered.">        if( refs == null || refs.isEmpty() )</span>
+        {
+<span class="fc" id="L982">            return null;</span>
+        }
+
+<span class="fc" id="L985">        return refs;</span>
+
+    }
+
+    /**
+     *  Returns all pages that refer to this page.  Note that this method
+     *  returns an unmodifiable Map, which may be abruptly changed.  So any
+     *  access to any iterator may result in a ConcurrentModificationException.
+     *  &lt;p&gt;
+     *  The advantages of using this method over findReferrers() is that
+     *  it is very fast, as it does not create a new object.  The disadvantages
+     *  are that it does not do any mapping between plural names, and you
+     *  may end up getting a ConcurrentModificationException.
+     *
+     * @param pageName Page name to query.
+     * @return A Set of Strings containing the names of all the pages that refer
+     *         to this page.  May return null, if the page does not exist or
+     *         has not been indexed yet.
+     * @since 2.2.33
+     */
+    public Set&lt; String &gt; findReferredBy( String pageName )
+    {
+<span class="nc" id="L1007">        return m_unmutableReferredBy.get( getFinalPageName(pageName) );</span>
+    }
+
+    /**
+     *  Returns all pages that this page refers to.  You can use this as a quick
+     *  way of getting the links from a page, but note that it does not link any
+     *  InterWiki, image, or external links.  It does contain attachments, though.
+     *  &lt;p&gt;
+     *  The Collection returned is unmutable, so you cannot change it.  It does reflect
+     *  the current status and thus is a live object.  So, if you are using any
+     *  kind of an iterator on it, be prepared for ConcurrentModificationExceptions.
+     *  &lt;p&gt;
+     *  The returned value is a Collection, because a page may refer to another page
+     *  multiple times.
+     *
+     * @param pageName Page name to query
+     * @return A Collection of Strings containing the names of the pages that this page
+     *         refers to. May return null, if the page does not exist or has not
+     *         been indexed yet.
+     * @since 2.2.33
+     */
+    public Collection&lt; String &gt; findRefersTo( String pageName )
+    {
+<span class="fc" id="L1030">        return m_unmutableRefersTo.get( getFinalPageName(pageName) );</span>
+    }
+
+    /**
+     * This 'deepHashCode' can be used to determine if there were any
+     * modifications made to the underlying to and by maps of the
+     * ReferenceManager. The maps of the ReferenceManager are not
+     * synchronized, so someone could add/remove entries in them while the
+     * hashCode is being computed.
+     *
+     * @return Sum of the hashCodes for the to and by maps of the
+     *         ReferenceManager
+     * @since 2.3.24
+     */
+    //
+    //   This method traps and retries if a concurrent
+    //   modifcaition occurs.
+    //   TODO: It is unnecessary to calculate the hashcode; it should be calculated only
+    //         when the hashmaps are changed.  This is slow.
+    //
+    public int deepHashCode()
+    {
+<span class="nc" id="L1052">        boolean failed = true;</span>
+<span class="nc" id="L1053">        int signature = 0;</span>
+
+<span class="nc bnc" id="L1055" title="All 2 branches missed.">        while (failed)</span>
+        {
+<span class="nc" id="L1057">            signature = 0;</span>
+            try
+            {
+<span class="nc" id="L1060">                signature ^= m_referredBy.hashCode();</span>
+<span class="nc" id="L1061">                signature ^= m_refersTo.hashCode();</span>
+<span class="nc" id="L1062">                failed = false;</span>
+            }
+<span class="nc" id="L1064">            catch (ConcurrentModificationException e)</span>
+            {
+<span class="nc" id="L1066">                Thread.yield();</span>
+<span class="nc" id="L1067">            }</span>
+        }
+
+<span class="nc" id="L1070">        return signature;</span>
+    }
+
+    /**
+     *  Returns a list of all pages that the ReferenceManager knows about.
+     *  This should be roughly equivalent to PageManager.getAllPages(), but without
+     *  the potential disk access overhead.  Note that this method is not guaranteed
+     *  to return a Set of really all pages (especially during startup), but it is
+     *  very fast.
+     *
+     *  @return A Set of all defined page names that ReferenceManager knows about.
+     *  @since 2.3.24
+     */
+    public Set&lt; String &gt; findCreated()
+    {
+<span class="fc" id="L1085">        return new HashSet&lt;String&gt;( m_refersTo.keySet() );</span>
+    }
+
+    private String getFinalPageName( String orig )
+    {
+        try
+        {
+<span class="fc" id="L1092">            String s = m_engine.getFinalPageName( orig );</span>
+
+<span class="fc bfc" id="L1094" title="All 2 branches covered.">            if( s == null ) s = orig;</span>
+
+<span class="fc" id="L1096">            return s;</span>
+        }
+<span class="nc" id="L1098">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L1100">            log.error(&quot;Error while trying to fetch a page name; trying to cope with the situation.&quot;,e);</span>
+
+<span class="nc" id="L1102">            return orig;</span>
+        }
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+	public void actionPerformed(WikiEvent event)
+    {
+<span class="pc bpc" id="L1112" title="1 of 4 branches missed.">        if( (event instanceof WikiPageEvent) &amp;&amp; (event.getType() == WikiPageEvent.PAGE_DELETED) )</span>
+        {
+<span class="fc" id="L1114">            String pageName = ((WikiPageEvent) event).getPageName();</span>
+
+<span class="pc bpc" id="L1116" title="1 of 2 branches missed.">            if( pageName != null )</span>
+            {
+<span class="fc" id="L1118">                pageRemoved( pageName );</span>
+            }
+        }
+<span class="fc" id="L1121">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

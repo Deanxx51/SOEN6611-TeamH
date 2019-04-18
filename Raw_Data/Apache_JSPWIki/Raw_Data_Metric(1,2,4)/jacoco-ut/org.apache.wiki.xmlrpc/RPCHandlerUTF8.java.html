@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RPCHandlerUTF8.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.xmlrpc</a> &gt; <span class="el_source">RPCHandlerUTF8.java</span></div><h1>RPCHandlerUTF8.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.xmlrpc;
+
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.Vector;
+
+import org.apache.wiki.LinkCollector;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.xmlrpc.XmlRpcException;
+
+/**
+ *  Provides handlers for all RPC routines.  These routines are used by
+ *  the UTF-8 interface.
+ *
+ *  @since 1.6.13
+ */
+
+<span class="nc" id="L44">public class RPCHandlerUTF8</span>
+    extends AbstractRPCHandler
+{
+    public String getApplicationName()
+    {
+<span class="nc" id="L49">        checkPermission( PagePermission.VIEW );</span>
+
+<span class="nc" id="L51">        return m_engine.getApplicationName();</span>
+    }
+
+    public Vector getAllPages()
+    {
+<span class="nc" id="L56">        checkPermission( PagePermission.VIEW );</span>
+
+<span class="nc" id="L58">        Collection&lt; WikiPage &gt; pages = m_engine.getRecentChanges();</span>
+<span class="nc" id="L59">        Vector&lt;String&gt; result = new Vector&lt;String&gt;();</span>
+
+<span class="nc bnc" id="L61" title="All 2 branches missed.">        for( WikiPage p : pages )</span>
+        {
+<span class="nc bnc" id="L63" title="All 2 branches missed.">            if( !(p instanceof Attachment) )</span>
+            {
+<span class="nc" id="L65">                result.add( p.getName() );</span>
+            }
+<span class="nc" id="L67">        }</span>
+
+<span class="nc" id="L69">        return result;</span>
+    }
+
+    /**
+     *  Encodes a single wiki page info into a Hashtable.
+     */
+    protected Hashtable&lt;String, Object&gt; encodeWikiPage( WikiPage page )
+    {
+<span class="nc" id="L77">        Hashtable&lt;String, Object&gt; ht = new Hashtable&lt;String, Object&gt;();</span>
+
+<span class="nc" id="L79">        ht.put( &quot;name&quot;, page.getName() );</span>
+
+<span class="nc" id="L81">        Date d = page.getLastModified();</span>
+
+        //
+        //  Here we reset the DST and TIMEZONE offsets of the
+        //  calendar.  Unfortunately, I haven't thought of a better
+        //  way to ensure that we're getting the proper date
+        //  from the XML-RPC thingy, except to manually adjust the date.
+        //
+
+<span class="nc" id="L90">        Calendar cal = Calendar.getInstance();</span>
+<span class="nc" id="L91">        cal.setTime( d );</span>
+<span class="nc" id="L92">        cal.add( Calendar.MILLISECOND,</span>
+<span class="nc" id="L93">                 - (cal.get( Calendar.ZONE_OFFSET ) +</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">                    (cal.getTimeZone().inDaylightTime( d ) ? cal.get( Calendar.DST_OFFSET ) : 0 )) );</span>
+
+<span class="nc" id="L96">        ht.put( &quot;lastModified&quot;, cal.getTime() );</span>
+<span class="nc" id="L97">        ht.put( &quot;version&quot;, page.getVersion() );</span>
+
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if( page.getAuthor() != null )</span>
+        {
+<span class="nc" id="L101">            ht.put( &quot;author&quot;, page.getAuthor() );</span>
+        }
+
+<span class="nc" id="L104">        return ht;</span>
+    }
+
+    public Vector getRecentChanges( Date since )
+    {
+<span class="nc" id="L109">        checkPermission( PagePermission.VIEW );</span>
+
+<span class="nc" id="L111">        Collection&lt; WikiPage &gt; pages = m_engine.getRecentChanges();</span>
+<span class="nc" id="L112">        Vector&lt;Hashtable&lt;String, Object&gt;&gt; result = new Vector&lt;Hashtable&lt;String, Object&gt;&gt;();</span>
+
+<span class="nc" id="L114">        Calendar cal = Calendar.getInstance();</span>
+<span class="nc" id="L115">        cal.setTime( since );</span>
+
+        //
+        //  Convert UTC to our time.
+        //
+<span class="nc" id="L120">        cal.add( Calendar.MILLISECOND,</span>
+<span class="nc" id="L121">                 (cal.get( Calendar.ZONE_OFFSET ) +</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">                  (cal.getTimeZone().inDaylightTime(since) ? cal.get( Calendar.DST_OFFSET ) : 0 ) ) );</span>
+<span class="nc" id="L123">        since = cal.getTime();</span>
+
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        for( WikiPage page : pages )</span>
+        {
+<span class="nc bnc" id="L127" title="All 4 branches missed.">            if( page.getLastModified().after( since ) &amp;&amp; !(page instanceof Attachment) )</span>
+            {
+<span class="nc" id="L129">                result.add( encodeWikiPage( page ) );</span>
+            }
+<span class="nc" id="L131">        }</span>
+
+<span class="nc" id="L133">        return result;</span>
+    }
+
+    /**
+     *  Simple helper method, turns the incoming page name into
+     *  normal Java string, then checks page condition.
+     *
+     *  @param pagename Page Name as an RPC string (URL-encoded UTF-8)
+     *  @return Real page name, as Java string.
+     *  @throws XmlRpcException, if there is something wrong with the page.
+     */
+    private String parsePageCheckCondition( String pagename )
+        throws XmlRpcException
+    {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if( !m_engine.pageExists(pagename) )</span>
+        {
+<span class="nc" id="L149">            throw new XmlRpcException( ERR_NOPAGE, &quot;No such page '&quot;+pagename+&quot;' found, o master.&quot; );</span>
+        }
+
+<span class="nc" id="L152">        WikiPage p = m_engine.getPage( pagename );</span>
+
+<span class="nc" id="L154">        checkPermission( PermissionFactory.getPagePermission( p, PagePermission.VIEW_ACTION ) );</span>
+<span class="nc" id="L155">        return pagename;</span>
+    }
+
+    public Hashtable getPageInfo( String pagename )
+        throws XmlRpcException
+    {
+<span class="nc" id="L161">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L163">        return encodeWikiPage( m_engine.getPage(pagename) );</span>
+    }
+
+    public Hashtable getPageInfoVersion( String pagename, int version )
+        throws XmlRpcException
+    {
+<span class="nc" id="L169">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L171">        return encodeWikiPage( m_engine.getPage( pagename, version ) );</span>
+    }
+
+    public String getPage( String pagename )
+        throws XmlRpcException
+    {
+<span class="nc" id="L177">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L179">        String text = m_engine.getPureText( pagename, -1 );</span>
+
+<span class="nc" id="L181">        return text;</span>
+    }
+
+    public String getPageVersion( String pagename, int version )
+        throws XmlRpcException
+    {
+<span class="nc" id="L187">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L189">        return m_engine.getPureText( pagename, version );</span>
+    }
+
+    public String getPageHTML( String pagename )
+        throws XmlRpcException
+    {
+<span class="nc" id="L195">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L197">        return m_engine.getHTML( pagename );</span>
+    }
+
+    public String getPageHTMLVersion( String pagename, int version )
+        throws XmlRpcException
+    {
+<span class="nc" id="L203">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L205">        return m_engine.getHTML( pagename, version );</span>
+    }
+
+    public Vector listLinks( String pagename )
+        throws XmlRpcException
+    {
+<span class="nc" id="L211">        pagename = parsePageCheckCondition( pagename );</span>
+
+<span class="nc" id="L213">        WikiPage page = m_engine.getPage( pagename );</span>
+<span class="nc" id="L214">        String pagedata = m_engine.getPureText( page );</span>
+
+<span class="nc" id="L216">        LinkCollector localCollector = new LinkCollector();</span>
+<span class="nc" id="L217">        LinkCollector extCollector   = new LinkCollector();</span>
+<span class="nc" id="L218">        LinkCollector attCollector   = new LinkCollector();</span>
+
+<span class="nc" id="L220">        WikiContext context = new WikiContext( m_engine, page );</span>
+<span class="nc" id="L221">        context.setVariable( WikiEngine.PROP_REFSTYLE, &quot;absolute&quot; );</span>
+
+<span class="nc" id="L223">        m_engine.textToHTML( context,</span>
+                             pagedata,
+                             localCollector,
+                             extCollector,
+                             attCollector );
+
+<span class="nc" id="L229">        Vector&lt;Hashtable&lt;String, String&gt;&gt; result = new Vector&lt;Hashtable&lt;String, String&gt;&gt;();</span>
+
+        // FIXME: Contains far too much common with RPCHandler.  Refactor!
+
+        //
+        //  Add local links.
+        //
+<span class="nc bnc" id="L236" title="All 2 branches missed.">        for( Iterator&lt; String &gt; i = localCollector.getLinks().iterator(); i.hasNext(); )</span>
+        {
+<span class="nc" id="L238">            String link = i.next();</span>
+<span class="nc" id="L239">            Hashtable&lt; String, String &gt; ht = new Hashtable&lt; String, String &gt;();</span>
+<span class="nc" id="L240">            ht.put( &quot;page&quot;, link );</span>
+<span class="nc" id="L241">            ht.put( &quot;type&quot;, LINK_LOCAL );</span>
+
+<span class="nc bnc" id="L243" title="All 2 branches missed.">            if( m_engine.pageExists(link) )</span>
+            {
+<span class="nc" id="L245">                ht.put( &quot;href&quot;, context.getViewURL(link) );</span>
+            }
+            else
+            {
+<span class="nc" id="L249">                ht.put( &quot;href&quot;, context.getURL(WikiContext.EDIT,link) );</span>
+            }
+
+<span class="nc" id="L252">            result.add( ht );</span>
+<span class="nc" id="L253">        }</span>
+
+        //
+        // Add links to inline attachments
+        //
+<span class="nc bnc" id="L258" title="All 2 branches missed.">        for( String link : attCollector.getLinks() )</span>
+        {
+<span class="nc" id="L260">            Hashtable&lt;String, String&gt; ht = new Hashtable&lt;String, String&gt;();</span>
+
+<span class="nc" id="L262">            ht.put( &quot;page&quot;, link );</span>
+<span class="nc" id="L263">            ht.put( &quot;type&quot;, LINK_LOCAL );</span>
+<span class="nc" id="L264">            ht.put( &quot;href&quot;, context.getURL(WikiContext.ATTACH,link) );</span>
+
+<span class="nc" id="L266">            result.add( ht );</span>
+<span class="nc" id="L267">        }</span>
+
+        //
+        // External links don't need to be changed into XML-RPC strings,
+        // simply because URLs are by definition ASCII.
+        //
+
+<span class="nc bnc" id="L274" title="All 2 branches missed.">        for( String link : extCollector.getLinks() )</span>
+        {
+<span class="nc" id="L276">            Hashtable&lt;String, String&gt; ht = new Hashtable&lt;String, String&gt;();</span>
+
+<span class="nc" id="L278">            ht.put( &quot;page&quot;, link );</span>
+<span class="nc" id="L279">            ht.put( &quot;type&quot;, LINK_EXTERNAL );</span>
+<span class="nc" id="L280">            ht.put( &quot;href&quot;, link );</span>
+
+<span class="nc" id="L282">            result.add( ht );</span>
+<span class="nc" id="L283">        }</span>
+
+<span class="nc" id="L285">        return result;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

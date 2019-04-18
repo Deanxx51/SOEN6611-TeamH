@@ -1,0 +1,844 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultPluginManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">DefaultPluginManager.java</span></div><h1>DefaultPluginManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+
+package org.apache.wiki.plugin;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StreamTokenizer;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.text.MessageFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.StringTokenizer;
+
+import javax.servlet.http.HttpServlet;
+
+import org.apache.commons.lang.ClassUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.MatchResult;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Compiler;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.ajax.WikiAjaxDispatcherServlet;
+import org.apache.wiki.ajax.WikiAjaxServlet;
+import org.apache.wiki.api.engine.PluginManager;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.InitializablePlugin;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.modules.ModuleManager;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.TextUtil;
+import org.apache.wiki.util.XHTML;
+import org.apache.wiki.util.XhtmlUtil;
+import org.apache.wiki.util.XmlUtil;
+import org.jdom2.Element;
+
+/**
+ *  Manages plugin classes.  There exists a single instance of PluginManager
+ *  per each instance of WikiEngine, that is, each JSPWiki instance.
+ *  &lt;P&gt;
+ *  A plugin is defined to have three parts:
+ *  &lt;OL&gt;
+ *    &lt;li&gt;The plugin class
+ *    &lt;li&gt;The plugin parameters
+ *    &lt;li&gt;The plugin body
+ *  &lt;/ol&gt;
+ *
+ *  For example, in the following line of code:
+ *  &lt;pre&gt;
+ *  [{INSERT org.apache.wiki.plugin.FunnyPlugin  foo='bar'
+ *  blob='goo'
+ *
+ *  abcdefghijklmnopqrstuvw
+ *  01234567890}]
+ *  &lt;/pre&gt;
+ *
+ *  The plugin class is &quot;org.apache.wiki.plugin.FunnyPlugin&quot;, the
+ *  parameters are &quot;foo&quot; and &quot;blob&quot; (having values &quot;bar&quot; and &quot;goo&quot;,
+ *  respectively), and the plugin body is then
+ *  &quot;abcdefghijklmnopqrstuvw\n01234567890&quot;.   The plugin body is
+ *  accessible via a special parameter called &quot;_body&quot;.
+ *  &lt;p&gt;
+ *  If the parameter &quot;debug&quot; is set to &quot;true&quot; for the plugin,
+ *  JSPWiki will output debugging information directly to the page if there
+ *  is an exception.
+ *  &lt;P&gt;
+ *  The class name can be shortened, and marked without the package.
+ *  For example, &quot;FunnyPlugin&quot; would be expanded to
+ *  &quot;org.apache.wiki.plugin.FunnyPlugin&quot; automatically.  It is also
+ *  possible to define other packages, by setting the
+ *  &quot;jspwiki.plugin.searchPath&quot; property.  See the included
+ *  jspwiki.properties file for examples.
+ *  &lt;P&gt;
+ *  Even though the nominal way of writing the plugin is
+ *  &lt;pre&gt;
+ *  [{INSERT pluginclass WHERE param1=value1...}],
+ *  &lt;/pre&gt;
+ *  it is possible to shorten this quite a lot, by skipping the
+ *  INSERT, and WHERE words, and dropping the package name.  For
+ *  example:
+ *
+ *  &lt;pre&gt;
+ *  [{INSERT org.apache.wiki.plugin.Counter WHERE name='foo'}]
+ *  &lt;/pre&gt;
+ *
+ *  is the same as
+ *  &lt;pre&gt;
+ *  [{Counter name='foo'}]
+ *  &lt;/pre&gt;
+ *  &lt;h3&gt;Plugin property files&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Since 2.3.25 you can also define a generic plugin XML properties file per
+ *  each JAR file.
+ *  &lt;pre&gt;
+ *  &lt;modules&gt;
+ *   &lt;plugin class=&quot;org.apache.wiki.foo.TestPlugin&quot;&gt;
+ *       &lt;author&gt;Janne Jalkanen&lt;/author&gt;
+ *       &lt;script&gt;foo.js&lt;/script&gt;
+ *       &lt;stylesheet&gt;foo.css&lt;/stylesheet&gt;
+ *       &lt;alias&gt;code&lt;/alias&gt;
+ *   &lt;/plugin&gt;
+ *   &lt;plugin class=&quot;org.apache.wiki.foo.TestPlugin2&quot;&gt;
+ *       &lt;author&gt;Janne Jalkanen&lt;/author&gt;
+ *   &lt;/plugin&gt;
+ *   &lt;/modules&gt;
+ *  &lt;/pre&gt;
+ *  &lt;h3&gt;Plugin lifecycle&lt;/h3&gt;
+ *
+ *  &lt;p&gt;Plugin can implement multiple interfaces to let JSPWiki know at which stages they should
+ *  be invoked:
+ *  &lt;ul&gt;
+ *  &lt;li&gt;InitializablePlugin: If your plugin implements this interface, the initialize()-method is
+ *      called once for this class
+ *      before any actual execute() methods are called.  You should use the initialize() for e.g.
+ *      precalculating things.  But notice that this method is really called only once during the
+ *      entire WikiEngine lifetime.  The InitializablePlugin is available from 2.5.30 onwards.&lt;/li&gt;
+ *  &lt;li&gt;ParserStagePlugin: If you implement this interface, the executeParse() method is called
+ *      when JSPWiki is forming the DOM tree.  You will receive an incomplete DOM tree, as well
+ *      as the regular parameters.  However, since JSPWiki caches the DOM tree to speed up later
+ *      places, which means that whatever this method returns would be irrelevant.  You can do some DOM
+ *      tree manipulation, though.  The ParserStagePlugin is available from 2.5.30 onwards.&lt;/li&gt;
+ *  &lt;li&gt;WikiPlugin: The regular kind of plugin which is executed at every rendering stage.  Each
+ *      new page load is guaranteed to invoke the plugin, unlike with the ParserStagePlugins.&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 1.6.1
+ */
+public class DefaultPluginManager extends ModuleManager implements PluginManager {
+
+    private static final String PLUGIN_INSERT_PATTERN = &quot;\\{?(INSERT)?\\s*([\\w\\._]+)[ \\t]*(WHERE)?[ \\t]*&quot;;
+
+<span class="fc" id="L166">    private static Logger log = Logger.getLogger( DefaultPluginManager.class );</span>
+
+    private static final String DEFAULT_FORMS_PACKAGE = &quot;org.apache.wiki.forms&quot;;
+
+<span class="fc" id="L170">    private ArrayList&lt;String&gt; m_searchPath = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L172">    private ArrayList&lt;String&gt; m_externalJars = new ArrayList&lt;&gt;();</span>
+
+    private Pattern m_pluginPattern;
+
+<span class="fc" id="L176">    private boolean m_pluginsEnabled = true;</span>
+
+    /**
+     *  Keeps a list of all known plugin classes.
+     */
+<span class="fc" id="L181">    private Map&lt;String, WikiPluginInfo&gt; m_pluginClassMap = new HashMap&lt;&gt;();</span>
+
+    /**
+     *  Create a new PluginManager.
+     *
+     *  @param engine WikiEngine which owns this manager.
+     *  @param props Contents of a &quot;jspwiki.properties&quot; file.
+     */
+    public DefaultPluginManager( WikiEngine engine, Properties props ) {
+<span class="fc" id="L190">        super( engine );</span>
+<span class="fc" id="L191">        String packageNames = props.getProperty( PROP_SEARCHPATH );</span>
+
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">        if ( packageNames != null ) {</span>
+<span class="fc" id="L194">            StringTokenizer tok = new StringTokenizer( packageNames, &quot;,&quot; );</span>
+
+<span class="fc bfc" id="L196" title="All 2 branches covered.">            while( tok.hasMoreTokens() ) {</span>
+<span class="fc" id="L197">                m_searchPath.add( tok.nextToken().trim() );</span>
+            }
+        }
+
+<span class="fc" id="L201">        String externalJars = props.getProperty( PROP_EXTERNALJARS );</span>
+
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">        if( externalJars != null ) {</span>
+<span class="fc" id="L204">            StringTokenizer tok = new StringTokenizer( externalJars, &quot;,&quot; );</span>
+
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">            while( tok.hasMoreTokens() ) {</span>
+<span class="nc" id="L207">                m_externalJars.add( tok.nextToken().trim() );</span>
+            }
+        }
+
+<span class="fc" id="L211">        registerPlugins();</span>
+
+        //
+        //  The default packages are always added.
+        //
+<span class="fc" id="L216">        m_searchPath.add( DEFAULT_PACKAGE );</span>
+<span class="fc" id="L217">        m_searchPath.add( DEFAULT_FORMS_PACKAGE );</span>
+
+<span class="fc" id="L219">        PatternCompiler compiler = new Perl5Compiler();</span>
+
+        try {
+<span class="fc" id="L222">            m_pluginPattern = compiler.compile( PLUGIN_INSERT_PATTERN );</span>
+<span class="nc" id="L223">        } catch( MalformedPatternException e ) {</span>
+<span class="nc" id="L224">            log.fatal( &quot;Internal error: someone messed with pluginmanager patterns.&quot;, e );</span>
+<span class="nc" id="L225">            throw new InternalWikiException( &quot;PluginManager patterns are broken&quot; , e);</span>
+<span class="fc" id="L226">        }</span>
+
+<span class="fc" id="L228">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void enablePlugins( boolean enabled ) {
+<span class="nc" id="L235">        m_pluginsEnabled = enabled;</span>
+<span class="nc" id="L236">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean pluginsEnabled() {
+<span class="fc" id="L243">        return m_pluginsEnabled;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Pattern getPluginPattern() {
+<span class="fc" id="L251">		return m_pluginPattern;</span>
+	}
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public String getPluginSearchPath() {
+<span class="nc" id="L259">    	return TextUtil.getStringProperty( m_engine.getWikiProperties(), PROP_SEARCHPATH, null );</span>
+    }
+
+	/**
+     *  Attempts to locate a plugin class from the class path set in the property file.
+     *
+     *  @param classname Either a fully fledged class name, or just the name of the file (that is,
+     *  &quot;org.apache.wiki.plugin.Counter&quot; or just plain &quot;Counter&quot;).
+     *
+     *  @return A found class.
+     *
+     *  @throws ClassNotFoundException if no such class exists.
+     */
+    private Class&lt; ? &gt; findPluginClass( String classname ) throws ClassNotFoundException {
+<span class="fc" id="L273">        return ClassUtil.findClass( m_searchPath, m_externalJars, classname );</span>
+    }
+
+    /**
+     *  Outputs a HTML-formatted version of a stack trace.
+     */
+    private String stackTrace( Map&lt;String,String&gt; params, Throwable t )
+    {
+<span class="nc" id="L281">        Element div = XhtmlUtil.element(XHTML.div,&quot;Plugin execution failed, stack trace follows:&quot;);</span>
+<span class="nc" id="L282">        div.setAttribute(XHTML.ATTR_class,&quot;debug&quot;);</span>
+
+
+<span class="nc" id="L285">        StringWriter out = new StringWriter();</span>
+<span class="nc" id="L286">        t.printStackTrace(new PrintWriter(out));</span>
+<span class="nc" id="L287">        div.addContent(XhtmlUtil.element(XHTML.pre,out.toString()));</span>
+<span class="nc" id="L288">        div.addContent(XhtmlUtil.element(XHTML.b,&quot;Parameters to the plugin&quot;));</span>
+
+<span class="nc" id="L290">        Element list = XhtmlUtil.element(XHTML.ul);</span>
+
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        for( Iterator&lt;Map.Entry&lt;String,String&gt;&gt; i = params.entrySet().iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L293">            Map.Entry&lt;String,String&gt; e = i.next();</span>
+<span class="nc" id="L294">            String key = e.getKey();</span>
+<span class="nc" id="L295">            list.addContent(XhtmlUtil.element(XHTML.li,key + &quot;'='&quot; + e.getValue()));</span>
+<span class="nc" id="L296">        }</span>
+
+<span class="nc" id="L298">        div.addContent(list);</span>
+
+<span class="nc" id="L300">        return XhtmlUtil.serialize(div);</span>
+    }
+
+    /**
+     *  Executes a plugin class in the given context.
+     *  &lt;P&gt;Used to be private, but is public since 1.9.21.
+     *
+     *  @param context The current WikiContext.
+     *  @param classname The name of the class.  Can also be a
+     *  shortened version without the package name, since the class name is searched from the
+     *  package search path.
+     *
+     *  @param params A parsed map of key-value pairs.
+     *
+     *  @return Whatever the plugin returns.
+     *
+     *  @throws PluginException If the plugin execution failed for
+     *  some reason.
+     *
+     *  @since 2.0
+     */
+    @Override
+    public String execute( WikiContext context, String classname, Map&lt; String, String &gt; params ) throws PluginException {
+<span class="pc bpc" id="L323" title="1 of 2 branches missed.">        if( !m_pluginsEnabled ) {</span>
+<span class="nc" id="L324">            return &quot;&quot;;</span>
+        }
+
+<span class="fc" id="L327">        ResourceBundle rb = Preferences.getBundle( context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+<span class="fc" id="L328">        boolean debug = TextUtil.isPositive( params.get( PARAM_DEBUG ) );</span>
+        try {
+            //
+            //   Create...
+            //
+<span class="fc" id="L333">            WikiPlugin plugin = newWikiPlugin( classname, rb );</span>
+<span class="pc bpc" id="L334" title="1 of 2 branches missed.">            if( plugin == null ) {</span>
+<span class="nc" id="L335">                return &quot;Plugin '&quot; + classname + &quot;' not compatible with this version of JSPWiki&quot;;</span>
+            }
+
+            //
+            //  ...and launch.
+            //
+            try {
+<span class="fc" id="L342">                return plugin.execute( context, params );</span>
+<span class="fc" id="L343">            } catch( PluginException e ) {</span>
+<span class="pc bpc" id="L344" title="1 of 2 branches missed.">                if( debug ) {</span>
+<span class="nc" id="L345">                    return stackTrace( params, e );</span>
+                }
+
+                // Just pass this exception onward.
+<span class="fc" id="L349">                throw ( PluginException )e.fillInStackTrace();</span>
+<span class="nc" id="L350">            } catch( Throwable t ) {</span>
+                // But all others get captured here.
+<span class="nc" id="L352">                log.info( &quot;Plugin failed while executing:&quot;, t );</span>
+<span class="nc bnc" id="L353" title="All 2 branches missed.">                if( debug ) {</span>
+<span class="nc" id="L354">                    return stackTrace( params, t );</span>
+                }
+
+<span class="nc" id="L357">                throw new PluginException( rb.getString( &quot;plugin.error.failed&quot; ), t );</span>
+            }
+
+<span class="nc" id="L360">        } catch( ClassCastException e ) {</span>
+<span class="nc" id="L361">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.notawikiplugin&quot; ), classname ), e );</span>
+        }
+    }
+
+    /**
+     *  Parses plugin arguments.  Handles quotes and all other kewl stuff.
+     *
+     *  &lt;h3&gt;Special parameters&lt;/h3&gt;
+     *  The plugin body is put into a special parameter defined by {@link #PARAM_BODY};
+     *  the plugin's command line into a parameter defined by {@link #PARAM_CMDLINE};
+     *  and the bounds of the plugin within the wiki page text by a parameter defined
+     *  by {@link #PARAM_BOUNDS}, whose value is stored as a two-element int[] array,
+     *  i.e., &lt;tt&gt;[start,end]&lt;/tt&gt;.
+     *
+     * @param argstring The argument string to the plugin.  This is
+     *  typically a list of key-value pairs, using &quot;'&quot; to escape
+     *  spaces in strings, followed by an empty line and then the
+     *  plugin body.  In case the parameter is null, will return an
+     *  empty parameter list.
+     *
+     * @return A parsed list of parameters.
+     *
+     * @throws IOException If the parsing fails.
+     */
+    @Override
+    public Map&lt; String, String &gt; parseArgs( String argstring ) throws IOException {
+<span class="fc" id="L387">        Map&lt; String, String &gt; arglist = new HashMap&lt; &gt;();</span>
+
+        //
+        //  Protection against funny users.
+        //
+<span class="pc bpc" id="L392" title="1 of 2 branches missed.">        if( argstring == null ) return arglist;</span>
+
+<span class="fc" id="L394">        arglist.put( PARAM_CMDLINE, argstring );</span>
+
+<span class="fc" id="L396">        StringReader    in      = new StringReader(argstring);</span>
+<span class="fc" id="L397">        StreamTokenizer tok     = new StreamTokenizer(in);</span>
+        int             type;
+
+
+<span class="fc" id="L401">        String param = null;</span>
+<span class="fc" id="L402">        String value = null;</span>
+
+<span class="fc" id="L404">        tok.eolIsSignificant( true );</span>
+
+<span class="fc" id="L406">        boolean potentialEmptyLine = false;</span>
+<span class="fc" id="L407">        boolean quit               = false;</span>
+
+<span class="fc bfc" id="L409" title="All 2 branches covered.">        while( !quit ) {</span>
+            String s;
+<span class="fc" id="L411">            type = tok.nextToken();</span>
+
+<span class="fc bfc" id="L413" title="All 6 branches covered.">            switch( type ) {</span>
+              case StreamTokenizer.TT_EOF:
+<span class="fc" id="L415">                quit = true;</span>
+<span class="fc" id="L416">                s = null;</span>
+<span class="fc" id="L417">                break;</span>
+
+              case StreamTokenizer.TT_WORD:
+<span class="fc" id="L420">                s = tok.sval;</span>
+<span class="fc" id="L421">                potentialEmptyLine = false;</span>
+<span class="fc" id="L422">                break;</span>
+
+              case StreamTokenizer.TT_EOL:
+<span class="fc" id="L425">                quit = potentialEmptyLine;</span>
+<span class="fc" id="L426">                potentialEmptyLine = true;</span>
+<span class="fc" id="L427">                s = null;</span>
+<span class="fc" id="L428">                break;</span>
+
+              case StreamTokenizer.TT_NUMBER:
+<span class="fc" id="L431">                s = Integer.toString( (int) tok.nval );</span>
+<span class="fc" id="L432">                potentialEmptyLine = false;</span>
+<span class="fc" id="L433">                break;</span>
+
+              case '\'':
+<span class="fc" id="L436">                s = tok.sval;</span>
+<span class="fc" id="L437">                break;</span>
+
+              default:
+<span class="fc" id="L440">                s = null;</span>
+            }
+
+            //
+            //  Assume that alternate words on the line are
+            //  parameter and value, respectively.
+            //
+<span class="fc bfc" id="L447" title="All 2 branches covered.">            if( s != null ) {</span>
+<span class="fc bfc" id="L448" title="All 2 branches covered.">                if( param == null ) {</span>
+<span class="fc" id="L449">                    param = s;</span>
+                } else {
+<span class="fc" id="L451">                    value = s;</span>
+
+<span class="fc" id="L453">                    arglist.put( param, value );</span>
+
+                    // log.debug(&quot;ARG: &quot;+param+&quot;=&quot;+value);
+<span class="fc" id="L456">                    param = null;</span>
+                }
+            }
+<span class="fc" id="L459">        }</span>
+
+        //
+        //  Now, we'll check the body.
+        //
+<span class="fc bfc" id="L464" title="All 2 branches covered.">        if( potentialEmptyLine ) {</span>
+<span class="fc" id="L465">            StringWriter out = new StringWriter();</span>
+<span class="fc" id="L466">            FileUtil.copyContents( in, out );</span>
+
+<span class="fc" id="L468">            String bodyContent = out.toString();</span>
+
+<span class="pc bpc" id="L470" title="1 of 2 branches missed.">            if( bodyContent != null ) {</span>
+<span class="fc" id="L471">                arglist.put( PARAM_BODY, bodyContent );</span>
+            }
+        }
+
+<span class="fc" id="L475">        return arglist;</span>
+    }
+
+    /**
+     *  Parses a plugin.  Plugin commands are of the form:
+     *  [{INSERT myplugin WHERE param1=value1, param2=value2}]
+     *  myplugin may either be a class name or a plugin alias.
+     *  &lt;P&gt;
+     *  This is the main entry point that is used.
+     *
+     *  @param context The current WikiContext.
+     *  @param commandline The full command line, including plugin name, parameters and body.
+     *
+     *  @return HTML as returned by the plugin, or possibly an error message.
+     *
+     *  @throws PluginException From the plugin itself, it propagates, waah!
+     */
+    @Override
+    public String execute( WikiContext context, String commandline ) throws PluginException {
+<span class="pc bpc" id="L494" title="1 of 2 branches missed.">        if( !m_pluginsEnabled ) {</span>
+<span class="nc" id="L495">            return &quot;&quot;;</span>
+        }
+
+<span class="fc" id="L498">        ResourceBundle rb = Preferences.getBundle( context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+<span class="fc" id="L499">        PatternMatcher matcher = new Perl5Matcher();</span>
+
+        try {
+<span class="pc bpc" id="L502" title="1 of 2 branches missed.">            if( matcher.contains( commandline, m_pluginPattern ) ) {</span>
+<span class="fc" id="L503">                MatchResult res = matcher.getMatch();</span>
+
+<span class="fc" id="L505">                String plugin   = res.group(2);</span>
+<span class="fc" id="L506">                String args     = commandline.substring(res.endOffset(0),</span>
+<span class="fc" id="L507">                                                        commandline.length() -</span>
+<span class="fc bfc" id="L508" title="All 2 branches covered.">                                                        (commandline.charAt(commandline.length()-1) == '}' ? 1 : 0 ) );</span>
+<span class="fc" id="L509">                Map&lt;String, String&gt; arglist  = parseArgs( args );</span>
+
+<span class="fc" id="L511">                return execute( context, plugin, arglist );</span>
+            }
+<span class="nc" id="L513">        } catch( NoSuchElementException e ) {</span>
+<span class="nc" id="L514">            String msg =  &quot;Missing parameter in plugin definition: &quot;+commandline;</span>
+<span class="nc" id="L515">            log.warn( msg, e );</span>
+<span class="nc" id="L516">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.missingparameter&quot; ), commandline ) );</span>
+<span class="nc" id="L517">        } catch( IOException e ) {</span>
+<span class="nc" id="L518">            String msg = &quot;Zyrf.  Problems with parsing arguments: &quot;+commandline;</span>
+<span class="nc" id="L519">            log.warn( msg, e );</span>
+<span class="nc" id="L520">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.parsingarguments&quot; ), commandline ) );</span>
+<span class="nc" id="L521">        }</span>
+
+        // FIXME: We could either return an empty string &quot;&quot;, or
+        // the original line.  If we want unsuccessful requests
+        // to be invisible, then we should return an empty string.
+<span class="nc" id="L526">        return commandline;</span>
+    }
+
+    /**
+     *  Register a plugin.
+     */
+    private void registerPlugin( WikiPluginInfo pluginClass ) {
+        String name;
+
+        // Registrar the plugin with the className without the package-part
+<span class="fc" id="L536">        name = pluginClass.getName();</span>
+<span class="pc bpc" id="L537" title="1 of 2 branches missed.">        if( name != null ) {</span>
+<span class="fc" id="L538">            log.debug( &quot;Registering plugin [name]: &quot; + name );</span>
+<span class="fc" id="L539">            m_pluginClassMap.put( name, pluginClass );</span>
+        }
+
+        // Registrar the plugin with a short convenient name.
+<span class="fc" id="L543">        name = pluginClass.getAlias();</span>
+<span class="fc bfc" id="L544" title="All 2 branches covered.">        if( name != null ) {</span>
+<span class="fc" id="L545">            log.debug( &quot;Registering plugin [shortName]: &quot; + name );</span>
+<span class="fc" id="L546">            m_pluginClassMap.put( name, pluginClass );</span>
+        }
+
+        // Registrar the plugin with the className with the package-part
+<span class="fc" id="L550">        name = pluginClass.getClassName();</span>
+<span class="pc bpc" id="L551" title="1 of 2 branches missed.">        if( name != null ) {</span>
+<span class="fc" id="L552">            log.debug( &quot;Registering plugin [className]: &quot; + name );</span>
+<span class="fc" id="L553">            m_pluginClassMap.put( name, pluginClass );</span>
+        }
+
+<span class="fc" id="L556">        pluginClass.initializePlugin( pluginClass, m_engine , m_searchPath, m_externalJars);</span>
+<span class="fc" id="L557">    }</span>
+
+    private void registerPlugins() {
+<span class="fc" id="L560">        log.info( &quot;Registering plugins&quot; );</span>
+<span class="fc" id="L561">        List&lt; Element &gt; plugins = XmlUtil.parse( PLUGIN_RESOURCE_LOCATION, &quot;/modules/plugin&quot; );</span>
+
+        //
+        // Register all plugins which have created a resource containing its properties.
+        //
+        // Get all resources of all plugins.
+        //
+<span class="fc bfc" id="L568" title="All 2 branches covered.">        for( Element pluginEl : plugins ) {</span>
+<span class="fc" id="L569">            String className = pluginEl.getAttributeValue( &quot;class&quot; );</span>
+<span class="fc" id="L570">            WikiPluginInfo pluginInfo = WikiPluginInfo.newInstance( className, pluginEl ,m_searchPath, m_externalJars);</span>
+
+<span class="pc bpc" id="L572" title="1 of 2 branches missed.">            if( pluginInfo != null ) {</span>
+<span class="fc" id="L573">                registerPlugin( pluginInfo );</span>
+            }
+<span class="fc" id="L575">        }</span>
+<span class="fc" id="L576">    }</span>
+
+    /**
+     *  Contains information about a bunch of plugins.
+     *
+     *
+     */
+    // FIXME: This class needs a better interface to return all sorts of possible
+    //        information from the plugin XML.  In fact, it probably should have
+    //        some sort of a superclass system.
+    public static final class WikiPluginInfo extends WikiModuleInfo {
+
+        private String    m_className;
+        private String    m_alias;
+        private String    m_ajaxAlias;
+        private Class&lt;?&gt;  m_clazz;
+
+<span class="fc" id="L593">        private boolean m_initialized = false;</span>
+
+        /**
+         *  Creates a new plugin info object which can be used to access a plugin.
+         *
+         *  @param className Either a fully qualified class name, or a &quot;short&quot; name which is then
+         *                   checked against the internal list of plugin packages.
+         *  @param el A JDOM Element containing the information about this class.
+         *  @param searchPath A List of Strings, containing different package names.
+         *  @param externalJars the list of external jars to search
+         *  @return A WikiPluginInfo object.
+         */
+        protected static WikiPluginInfo newInstance( String className, Element el, List&lt;String&gt; searchPath, List&lt;String&gt; externalJars ) {
+<span class="pc bpc" id="L606" title="2 of 4 branches missed.">            if( className == null || className.length() == 0 ) return null;</span>
+
+<span class="fc" id="L608">            WikiPluginInfo info = new WikiPluginInfo( className );</span>
+<span class="fc" id="L609">            info.initializeFromXML( el );</span>
+<span class="fc" id="L610">            return info;</span>
+        }
+
+        /**
+         *  Initializes a plugin, if it has not yet been initialized.
+         *  If the plugin extends {@link HttpServlet} it will automatically
+         *  register it as AJAX using {@link WikiAjaxDispatcherServlet#registerServlet(String, WikiAjaxServlet)}.
+         *
+         *  @param engine The WikiEngine
+         *  @param searchPath A List of Strings, containing different package names.
+         *  @param externalJars the list of external jars to search
+         */
+        protected void initializePlugin( WikiPluginInfo info, WikiEngine engine , List&lt;String&gt; searchPath, List&lt;String&gt; externalJars) {
+<span class="pc bpc" id="L623" title="1 of 2 branches missed.">            if( !m_initialized ) {</span>
+                // This makes sure we only try once per class, even if init fails.
+<span class="fc" id="L625">                m_initialized = true;</span>
+
+                try {
+<span class="fc" id="L628">                    WikiPlugin p = newPluginInstance(searchPath, externalJars);</span>
+<span class="fc bfc" id="L629" title="All 2 branches covered.">                    if( p instanceof InitializablePlugin ) {</span>
+<span class="fc" id="L630">                        ( ( InitializablePlugin )p ).initialize( engine );</span>
+                    }
+<span class="pc bpc" id="L632" title="1 of 2 branches missed.">                    if( p instanceof WikiAjaxServlet ) {</span>
+<span class="nc" id="L633">                    	WikiAjaxDispatcherServlet.registerServlet( (WikiAjaxServlet) p );</span>
+<span class="nc" id="L634">                    	String ajaxAlias = info.getAjaxAlias();</span>
+<span class="nc bnc" id="L635" title="All 2 branches missed.">                    	if (StringUtils.isNotBlank(ajaxAlias)) {</span>
+<span class="nc" id="L636">                    		WikiAjaxDispatcherServlet.registerServlet( info.getAjaxAlias(), (WikiAjaxServlet) p );</span>
+                    	}
+                    }
+<span class="nc" id="L639">                } catch( Exception e ) {</span>
+<span class="nc" id="L640">                    log.info( &quot;Cannot initialize plugin &quot; + m_className, e );</span>
+<span class="fc" id="L641">                }</span>
+            }
+<span class="fc" id="L643">        }</span>
+
+        /**
+         *  {@inheritDoc}
+         */
+        @Override
+        protected void initializeFromXML( Element el ) {
+<span class="fc" id="L650">            super.initializeFromXML( el );</span>
+<span class="fc" id="L651">            m_alias = el.getChildText( &quot;alias&quot; );</span>
+<span class="fc" id="L652">            m_ajaxAlias = el.getChildText( &quot;ajaxAlias&quot; );</span>
+<span class="fc" id="L653">        }</span>
+
+        /**
+         *  Create a new WikiPluginInfo based on the Class information.
+         *
+         *  @param clazz The class to check
+         *  @return A WikiPluginInfo instance
+         */
+        protected static WikiPluginInfo newInstance( Class&lt; ? &gt; clazz ) {
+<span class="fc" id="L662">        	return new WikiPluginInfo( clazz.getName() );</span>
+        }
+
+        private WikiPluginInfo( String className ) {
+<span class="fc" id="L666">            super( className );</span>
+<span class="fc" id="L667">            setClassName( className );</span>
+<span class="fc" id="L668">        }</span>
+
+        private void setClassName( String fullClassName ) {
+<span class="fc" id="L671">            m_name = ClassUtils.getShortClassName( fullClassName );</span>
+<span class="fc" id="L672">            m_className = fullClassName;</span>
+<span class="fc" id="L673">        }</span>
+
+        /**
+         *  Returns the full class name of this object.
+         *  @return The full class name of the object.
+         */
+        public String getClassName() {
+<span class="fc" id="L680">            return m_className;</span>
+        }
+
+        /**
+         *  Returns the alias name for this object.
+         *  @return An alias name for the plugin.
+         */
+        public String getAlias() {
+<span class="fc" id="L688">            return m_alias;</span>
+        }
+
+        /**
+         *  Returns the ajax alias name for this object.
+         *  @return An ajax alias name for the plugin.
+         */
+        public String getAjaxAlias() {
+<span class="nc" id="L696">            return m_ajaxAlias;</span>
+        }
+
+        /**
+         *  Creates a new plugin instance.
+         *
+         *  @param searchPath A List of Strings, containing different package names.
+         *  @param externalJars the list of external jars to search
+
+         *  @return A new plugin.
+         *  @throws ClassNotFoundException If the class declared was not found.
+         *  @throws InstantiationException If the class cannot be instantiated-
+         *  @throws IllegalAccessException If the class cannot be accessed.
+         */
+
+        public WikiPlugin newPluginInstance(List&lt;String&gt; searchPath, List&lt;String&gt; externalJars) throws ClassNotFoundException, InstantiationException, IllegalAccessException {
+<span class="fc bfc" id="L712" title="All 2 branches covered.">            if( m_clazz == null ) {</span>
+<span class="fc" id="L713">                m_clazz = ClassUtil.findClass(searchPath, externalJars ,m_className);</span>
+            }
+
+<span class="fc" id="L716">            return (WikiPlugin) m_clazz.newInstance();</span>
+        }
+
+        /**
+         *  Returns a text for IncludeResources.
+         *
+         *  @param type Either &quot;script&quot; or &quot;stylesheet&quot;
+         *  @return Text, or an empty string, if there is nothing to be included.
+         */
+        public String getIncludeText( String type ) {
+            try {
+<span class="nc bnc" id="L727" title="All 2 branches missed.">                if( &quot;script&quot;.equals( type ) ) {</span>
+<span class="nc" id="L728">                    return getScriptText();</span>
+<span class="nc bnc" id="L729" title="All 2 branches missed.">                } else if( &quot;stylesheet&quot;.equals( type ) ) {</span>
+<span class="nc" id="L730">                    return getStylesheetText();</span>
+                }
+<span class="nc" id="L732">            } catch( Exception ex ) {</span>
+                // We want to fail gracefully here
+<span class="nc" id="L734">                return ex.getMessage();</span>
+<span class="nc" id="L735">            }</span>
+
+<span class="nc" id="L737">            return null;</span>
+        }
+
+        private String getScriptText() throws IOException {
+<span class="nc bnc" id="L741" title="All 2 branches missed.">            if( m_scriptText != null ) {</span>
+<span class="nc" id="L742">                return m_scriptText;</span>
+            }
+
+<span class="nc bnc" id="L745" title="All 2 branches missed.">            if( m_scriptLocation == null ) {</span>
+<span class="nc" id="L746">                return &quot;&quot;;</span>
+            }
+
+            try {
+<span class="nc" id="L750">                m_scriptText = getTextResource(m_scriptLocation);</span>
+<span class="nc" id="L751">            } catch( IOException ex ) {</span>
+                // Only throw this exception once!
+<span class="nc" id="L753">                m_scriptText = &quot;&quot;;</span>
+<span class="nc" id="L754">                throw ex;</span>
+<span class="nc" id="L755">            }</span>
+
+<span class="nc" id="L757">            return m_scriptText;</span>
+        }
+
+        private String getStylesheetText() throws IOException {
+<span class="nc bnc" id="L761" title="All 2 branches missed.">            if( m_stylesheetText != null ) {</span>
+<span class="nc" id="L762">                return m_stylesheetText;</span>
+            }
+
+<span class="nc bnc" id="L765" title="All 2 branches missed.">            if( m_stylesheetLocation == null ) {</span>
+<span class="nc" id="L766">                return &quot;&quot;;</span>
+            }
+
+            try {
+<span class="nc" id="L770">                m_stylesheetText = getTextResource(m_stylesheetLocation);</span>
+<span class="nc" id="L771">            } catch( IOException ex ) {</span>
+                // Only throw this exception once!
+<span class="nc" id="L773">                m_stylesheetText = &quot;&quot;;</span>
+<span class="nc" id="L774">                throw ex;</span>
+<span class="nc" id="L775">            }</span>
+
+<span class="nc" id="L777">            return m_stylesheetText;</span>
+        }
+
+        /**
+         *  Returns a string suitable for debugging.  Don't assume that the format would stay the same.
+         *
+         *  @return Something human-readable
+         */
+        @Override
+        public String toString() {
+<span class="nc" id="L787">            return &quot;Plugin :[name=&quot; + m_name + &quot;][className=&quot; + m_className + &quot;]&quot;;</span>
+        }
+    } // WikiPluginClass
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiModuleInfo &gt; modules() {
+<span class="fc" id="L796">        return modules( m_pluginClassMap.values().iterator() );</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public WikiPluginInfo getModuleInfo(String moduleName) {
+<span class="nc" id="L804">        return m_pluginClassMap.get(moduleName);</span>
+    }
+
+    /**
+     * Creates a {@link WikiPlugin}.
+     *
+     * @param pluginName plugin's classname
+     * @param rb {@link ResourceBundle} with i18ned text for exceptions.
+     * @return a {@link WikiPlugin}.
+     * @throws PluginException if there is a problem building the {@link WikiPlugin}.
+     */
+    @Override
+    public WikiPlugin newWikiPlugin( String pluginName, ResourceBundle rb ) throws PluginException {
+<span class="fc" id="L817">        WikiPlugin plugin = null;</span>
+<span class="fc" id="L818">        WikiPluginInfo pluginInfo = m_pluginClassMap.get( pluginName );</span>
+        try {
+<span class="fc bfc" id="L820" title="All 2 branches covered.">            if( pluginInfo == null ) {</span>
+<span class="fc" id="L821">                pluginInfo = WikiPluginInfo.newInstance( findPluginClass( pluginName ) );</span>
+<span class="fc" id="L822">                registerPlugin( pluginInfo );</span>
+            }
+
+<span class="pc bpc" id="L825" title="1 of 2 branches missed.">            if( !checkCompatibility( pluginInfo ) ) {</span>
+<span class="nc" id="L826">                String msg = &quot;Plugin '&quot; + pluginInfo.getName() + &quot;' not compatible with this version of JSPWiki&quot;;</span>
+<span class="nc" id="L827">                log.info( msg );</span>
+<span class="nc" id="L828">            } else {</span>
+<span class="fc" id="L829">                plugin = pluginInfo.newPluginInstance(m_searchPath, m_externalJars);</span>
+            }
+<span class="fc" id="L831">        } catch( ClassNotFoundException e ) {</span>
+<span class="fc" id="L832">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.couldnotfind&quot; ), pluginName ), e );</span>
+<span class="nc" id="L833">        } catch( InstantiationException e ) {</span>
+<span class="nc" id="L834">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.cannotinstantiate&quot; ), pluginName ), e );</span>
+<span class="nc" id="L835">        } catch( IllegalAccessException e ) {</span>
+<span class="nc" id="L836">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.notallowed&quot; ), pluginName ), e );</span>
+<span class="nc" id="L837">        } catch( Exception e ) {</span>
+<span class="nc" id="L838">            throw new PluginException( MessageFormat.format( rb.getString( &quot;plugin.error.instantationfailed&quot; ), pluginName ), e );</span>
+<span class="fc" id="L839">        }</span>
+<span class="fc" id="L840">        return plugin;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

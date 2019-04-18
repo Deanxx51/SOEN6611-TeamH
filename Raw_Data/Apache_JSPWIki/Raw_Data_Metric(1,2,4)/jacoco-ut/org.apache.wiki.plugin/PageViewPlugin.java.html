@@ -1,0 +1,787 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PageViewPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">PageViewPlugin.java</span></div><h1>PageViewPlugin.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.text.MessageFormat;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
+import java.util.TreeMap;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.math.NumberUtils;
+import org.apache.log4j.Logger;
+import org.apache.oro.text.GlobCompiler;
+import org.apache.oro.text.regex.MalformedPatternException;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.PatternCompiler;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.ReferenceManager;
+import org.apache.wiki.WikiBackgroundThread;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.InitializablePlugin;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.event.WikiEngineEvent;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.event.WikiPageRenameEvent;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ * This plugin counts the number of times a page has been viewed.&lt;br/&gt;
+ * Parameters:
+ * &lt;ul&gt;
+ * &lt;li&gt;count=yes|no&lt;/li&gt;
+ * &lt;li&gt;show=none|count|list&lt;/li&gt;
+ * &lt;li&gt;entries=maximum number of list entries to be returned&lt;/li&gt;
+ * &lt;li&gt;min=minimum page count to be listed&lt;/li&gt;
+ * &lt;li&gt;max=maximum page count to be listed&lt;/li&gt;
+ * &lt;li&gt;sort=name|count&lt;/li&gt;
+ * &lt;/ul&gt;
+ * Default values:&lt;br/&gt;
+ * &lt;code&gt;show=none  sort=name&lt;/code&gt;
+ * 
+ * @since 2.8
+ */
+<span class="fc" id="L79">public class PageViewPlugin extends AbstractReferralPlugin implements WikiPlugin, InitializablePlugin</span>
+{
+<span class="fc" id="L81">    private static final Logger log = Logger.getLogger( PageViewPlugin.class );</span>
+
+    /** The page view manager. */
+<span class="fc" id="L84">    private static PageViewManager c_singleton = null;</span>
+
+    /** Constant for the 'count' parameter / value. */
+    private static final String PARAM_COUNT = &quot;count&quot;;
+
+    /** Name of the 'entries' parameter. */
+    private static final String PARAM_MAX_ENTRIES = &quot;entries&quot;;
+
+    /** Name of the 'max' parameter. */
+    private static final String PARAM_MAX_COUNT = &quot;max&quot;;
+
+    /** Name of the 'min' parameter. */
+    private static final String PARAM_MIN_COUNT = &quot;min&quot;;
+
+    /** Name of the 'refer' parameter. */
+    private static final String PARAM_REFER = &quot;refer&quot;;
+
+    /** Name of the 'sort' parameter. */
+    private static final String PARAM_SORT = &quot;sort&quot;;
+
+    /** Constant for the 'none' parameter value. */
+    private static final String STR_NONE = &quot;none&quot;;
+
+    /** Constant for the 'list' parameter value. */
+    private static final String STR_LIST = &quot;list&quot;;
+
+    /** Constant for the 'yes' parameter value. */
+    private static final String STR_YES = &quot;yes&quot;;
+
+    /** Constant for empty string. */
+    private static final String STR_EMPTY = &quot;&quot;;
+
+    /** Constant for Wiki markup separator. */
+    private static final String STR_SEPARATOR = &quot;----&quot;;
+
+    /** Constant for comma-separated list separator. */
+    private static final String STR_COMMA = &quot;,&quot;;
+
+    /** Constant for no-op glob expression. */
+    private static final String STR_GLOBSTAR = &quot;*&quot;;
+
+    /** Constant for file storage. */
+    private static final String COUNTER_PAGE = &quot;PageCount.txt&quot;;
+
+    /** Constant for storage interval in seconds. */
+    private static final int STORAGE_INTERVAL = 60;
+
+    /**
+     * Initialize the PageViewPlugin and its singleton.
+     * 
+     * @param engine The wiki engine.
+     */
+    public void initialize( WikiEngine engine )
+    {
+
+<span class="fc" id="L139">        log.info( &quot;initializing PageViewPlugin&quot; );</span>
+
+<span class="fc" id="L141">        synchronized( this )</span>
+        {
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if( c_singleton == null )</span>
+            {
+<span class="fc" id="L145">                c_singleton = new PageViewManager(  );</span>
+            }
+<span class="fc" id="L147">            c_singleton.initialize( engine );</span>
+<span class="fc" id="L148">        }</span>
+<span class="fc" id="L149">    }</span>
+
+    /**
+     * Cleanup the singleton reference.
+     */
+    private void cleanup()
+    {
+<span class="nc" id="L156">        log.info( &quot;cleaning up PageView Manager&quot; );</span>
+
+<span class="nc" id="L158">        c_singleton = null;</span>
+<span class="nc" id="L159">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params ) throws PluginException
+    {
+<span class="fc" id="L166">        PageViewManager manager = c_singleton;</span>
+<span class="fc" id="L167">        String result = STR_EMPTY;</span>
+
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        if( manager != null )</span>
+        {
+<span class="fc" id="L171">            result = manager.execute( context, params );</span>
+        }
+
+<span class="fc" id="L174">        return result;</span>
+    }
+
+    /**
+     * Page view manager, handling all storage.
+     */
+<span class="fc" id="L180">    public final class PageViewManager implements WikiEventListener</span>
+    {
+        /** Are we initialized? */
+<span class="fc" id="L183">        private boolean m_initialized = false;</span>
+
+        /** The page counters. */
+<span class="fc" id="L186">        private Map&lt;String, Counter&gt; m_counters = null;</span>
+
+        /** The page counters in storage format. */
+<span class="fc" id="L189">        private Properties m_storage = null;</span>
+
+        /** Are all changes stored? */
+<span class="fc" id="L192">        private boolean m_dirty = false;</span>
+
+        /** The page count storage background thread. */
+<span class="fc" id="L195">        private Thread m_pageCountSaveThread = null;</span>
+
+        /** The work directory. */
+<span class="fc" id="L198">        private String m_workDir = null;</span>
+
+        /** Comparator for descending sort on page count. */
+<span class="fc" id="L201">        private final Comparator&lt;Object&gt; m_compareCountDescending = new Comparator&lt;Object&gt;() {</span>
+            public int compare( Object o1, Object o2 )
+            {
+<span class="fc" id="L204">                final int v1 = getCount( o1 );</span>
+<span class="fc" id="L205">                final int v2 = getCount( o2 );</span>
+<span class="pc bpc" id="L206" title="1 of 4 branches missed.">                return (v1 == v2) ? ((String) o1).compareTo( (String) o2 ) : (v1 &lt; v2) ? 1 : -1;</span>
+            }
+        };
+
+        /**
+         * Initialize the page view manager.
+         * 
+         * @param engine The wiki engine.
+         */
+        public synchronized void initialize( WikiEngine engine )
+        {
+<span class="fc" id="L217">            log.info( &quot;initializing PageView Manager&quot; );</span>
+
+<span class="fc" id="L219">            m_workDir = engine.getWorkDir();</span>
+
+<span class="fc" id="L221">            engine.addWikiEventListener( this );</span>
+
+<span class="fc bfc" id="L223" title="All 2 branches covered.">            if( m_counters == null )</span>
+            {
+                // Load the counters into a collection
+<span class="fc" id="L226">                m_storage = new Properties();</span>
+<span class="fc" id="L227">                m_counters = new TreeMap&lt;String, Counter&gt;();</span>
+
+<span class="fc" id="L229">                loadCounters();</span>
+            }
+
+            // backup counters every 5 minutes
+<span class="fc bfc" id="L233" title="All 2 branches covered.">            if( m_pageCountSaveThread == null )</span>
+            {
+<span class="fc" id="L235">                m_pageCountSaveThread = new CounterSaveThread( engine, 5 * STORAGE_INTERVAL, this );</span>
+<span class="fc" id="L236">                m_pageCountSaveThread.start();</span>
+            }
+
+<span class="fc" id="L239">            m_initialized = true;</span>
+<span class="fc" id="L240">        }</span>
+
+        /**
+         * Handle the shutdown event via the page counter thread.
+         * 
+         */
+        private synchronized void handleShutdown()
+        {
+<span class="nc" id="L248">            log.info( &quot;handleShutdown: The counter store thread was shut down.&quot; );</span>
+
+<span class="nc" id="L250">            cleanup();</span>
+
+<span class="nc bnc" id="L252" title="All 2 branches missed.">            if( m_counters != null )</span>
+            {
+
+<span class="nc" id="L255">                m_dirty = true;</span>
+<span class="nc" id="L256">                storeCounters();</span>
+
+<span class="nc" id="L258">                m_counters.clear();</span>
+<span class="nc" id="L259">                m_counters = null;</span>
+
+<span class="nc" id="L261">                m_storage.clear();</span>
+<span class="nc" id="L262">                m_storage = null;</span>
+            }
+
+<span class="nc" id="L265">            m_initialized = false;</span>
+
+<span class="nc" id="L267">            m_pageCountSaveThread = null;</span>
+<span class="nc" id="L268">        }</span>
+
+        /**
+         * Inspect wiki events for shutdown.
+         * 
+         * @param event The wiki event to inspect.
+         */
+        public void actionPerformed( WikiEvent event )
+        {
+<span class="pc bpc" id="L277" title="1 of 2 branches missed.">            if( event instanceof WikiEngineEvent )</span>
+            {
+<span class="nc bnc" id="L279" title="All 2 branches missed.">                if( event.getType() == WikiEngineEvent.SHUTDOWN )</span>
+                {
+<span class="nc" id="L281">                    log.info( &quot;Detected wiki engine shutdown&quot; );</span>
+<span class="nc" id="L282">                    handleShutdown();</span>
+                }
+            } 
+<span class="pc bpc" id="L285" title="3 of 4 branches missed.">            else if( (event instanceof WikiPageRenameEvent) &amp;&amp; (event.getType() == WikiPageRenameEvent.PAGE_RENAMED) )</span>
+            {
+<span class="nc" id="L287">                String oldPageName = ((WikiPageRenameEvent) event).getOldPageName();</span>
+<span class="nc" id="L288">                String newPageName = ((WikiPageRenameEvent) event).getNewPageName();</span>
+<span class="nc" id="L289">                Counter oldCounter = m_counters.get(oldPageName);</span>
+<span class="nc bnc" id="L290" title="All 2 branches missed.">                if ( oldCounter != null )</span>
+                {
+<span class="nc" id="L292">                    m_storage.remove(oldPageName);</span>
+<span class="nc" id="L293">                    m_counters.put(newPageName, oldCounter);</span>
+<span class="nc" id="L294">                    m_storage.setProperty(newPageName, oldCounter.toString());</span>
+<span class="nc" id="L295">                    m_counters.remove(oldPageName);</span>
+<span class="nc" id="L296">                    m_dirty = true;</span>
+                }
+<span class="nc" id="L298">            }</span>
+<span class="pc bpc" id="L299" title="2 of 4 branches missed.">            else if( (event instanceof WikiPageEvent) &amp;&amp; (event.getType() == WikiPageEvent.PAGE_DELETED) )</span>
+            {
+<span class="fc" id="L301">                 String pageName = ((WikiPageEvent) event).getPageName();</span>
+<span class="fc" id="L302">                 m_storage.remove(pageName);</span>
+<span class="fc" id="L303">                 m_counters.remove(pageName);</span>
+            }
+<span class="fc" id="L305">        }</span>
+
+        /**
+         * Count a page hit, present a pages' counter or output a list of page counts.
+         * 
+         * @param context the wiki context
+         * @param params the plugin parameters
+         * @return String Wiki page snippet
+         * @throws PluginException Malformed pattern parameter.
+         */
+        public String execute( WikiContext context, Map&lt;String, String&gt; params ) throws PluginException
+        {
+<span class="fc" id="L317">            WikiEngine engine = context.getEngine();</span>
+<span class="fc" id="L318">            WikiPage page = context.getPage();</span>
+<span class="fc" id="L319">            String result = STR_EMPTY;</span>
+
+<span class="pc bpc" id="L321" title="1 of 2 branches missed.">            if( page != null )</span>
+            {
+                // get parameters
+<span class="fc" id="L324">                String pagename = page.getName();</span>
+<span class="fc" id="L325">                String count = params.get( PARAM_COUNT );</span>
+<span class="fc" id="L326">                String show = params.get( PARAM_SHOW );</span>
+<span class="fc" id="L327">                int entries = TextUtil.parseIntParameter( params.get( PARAM_MAX_ENTRIES ), Integer.MAX_VALUE );</span>
+<span class="fc" id="L328">                final int max = TextUtil.parseIntParameter( params.get( PARAM_MAX_COUNT ), Integer.MAX_VALUE );</span>
+<span class="fc" id="L329">                final int min = TextUtil.parseIntParameter( params.get( PARAM_MIN_COUNT ), Integer.MIN_VALUE );</span>
+<span class="fc" id="L330">                String sort = params.get( PARAM_SORT );</span>
+<span class="fc" id="L331">                String body = params.get( DefaultPluginManager.PARAM_BODY );</span>
+<span class="fc" id="L332">                Pattern[] exclude = compileGlobs( PARAM_EXCLUDE, params.get( PARAM_EXCLUDE ) );</span>
+<span class="fc" id="L333">                Pattern[] include = compileGlobs( PARAM_INCLUDE, params.get( PARAM_INCLUDE ) );</span>
+<span class="fc" id="L334">                Pattern[] refer = compileGlobs( PARAM_REFER, params.get( PARAM_REFER ) );</span>
+<span class="pc bpc" id="L335" title="2 of 6 branches missed.">                PatternMatcher matcher = (null != exclude || null != include || null != refer) ? new Perl5Matcher() : null;</span>
+<span class="fc" id="L336">                boolean increment = false;</span>
+
+                // increment counter?
+<span class="pc bpc" id="L339" title="1 of 2 branches missed.">                if( STR_YES.equals( count ) )</span>
+                {
+<span class="nc" id="L341">                    increment = true;</span>
+                }
+                else
+                {
+<span class="fc" id="L345">                    count = null;</span>
+                }
+
+                // default increment counter?
+<span class="pc bpc" id="L349" title="2 of 6 branches missed.">                if( (show == null || STR_NONE.equals( show )) &amp;&amp; count == null )</span>
+                {
+<span class="fc" id="L351">                    increment = true;</span>
+                }
+
+                // filter on referring pages?
+<span class="fc" id="L355">                Collection&lt;String&gt; referrers = null;</span>
+
+<span class="pc bpc" id="L357" title="1 of 2 branches missed.">                if( refer != null )</span>
+                {
+<span class="nc" id="L359">                    ReferenceManager refManager = engine.getReferenceManager();</span>
+
+<span class="nc" id="L361">                    Iterator&lt; String &gt; iter = refManager.findCreated().iterator();</span>
+
+<span class="nc bnc" id="L363" title="All 4 branches missed.">                    while ( iter != null &amp;&amp; iter.hasNext() )</span>
+                    {
+<span class="nc" id="L365">                        String name = iter.next();</span>
+<span class="nc" id="L366">                        boolean use = false;</span>
+
+<span class="nc bnc" id="L368" title="All 4 branches missed.">                        for( int n = 0; !use &amp;&amp; n &lt; refer.length; n++ )</span>
+                        {
+<span class="nc" id="L370">                            use = matcher.matches( name, refer[n] );</span>
+                        }
+
+<span class="nc bnc" id="L373" title="All 2 branches missed.">                        if( use )</span>
+                        {
+<span class="nc" id="L375">                            Collection&lt; String &gt; refs = engine.getReferenceManager().findReferrers( name );</span>
+
+<span class="nc bnc" id="L377" title="All 4 branches missed.">                            if( refs != null &amp;&amp; !refs.isEmpty() )</span>
+                            {
+<span class="nc bnc" id="L379" title="All 2 branches missed.">                                if( referrers == null )</span>
+                                {
+<span class="nc" id="L381">                                    referrers = new HashSet&lt;String&gt;();</span>
+                                }
+<span class="nc" id="L383">                                referrers.addAll( refs );</span>
+                            }
+                        }
+<span class="nc" id="L386">                    }</span>
+                }
+
+<span class="fc" id="L389">                synchronized( this )</span>
+                {
+<span class="fc" id="L391">                    Counter counter = m_counters.get( pagename );</span>
+
+                    // only count in view mode, keep storage values in sync
+<span class="pc bpc" id="L394" title="1 of 4 branches missed.">                    if( increment &amp;&amp; WikiContext.VIEW.equalsIgnoreCase( context.getRequestContext() ) )</span>
+                    {
+<span class="fc bfc" id="L396" title="All 2 branches covered.">                        if( counter == null )</span>
+                        {
+<span class="fc" id="L398">                            counter = new Counter();</span>
+<span class="fc" id="L399">                            m_counters.put( pagename, counter );</span>
+                        }
+<span class="fc" id="L401">                        counter.increment();</span>
+<span class="fc" id="L402">                        m_storage.setProperty( pagename, counter.toString() );</span>
+<span class="fc" id="L403">                        m_dirty = true;</span>
+                    }
+
+<span class="pc bpc" id="L406" title="1 of 4 branches missed.">                    if( show == null || STR_NONE.equals( show ) )</span>
+                    {
+                        // nothing to show
+
+                    }
+<span class="pc bpc" id="L411" title="1 of 2 branches missed.">                    else if( PARAM_COUNT.equals( show ) )</span>
+                    {
+                        // show page count
+<span class="nc bnc" id="L414" title="All 2 branches missed.">                        if( counter == null )</span>
+                        {
+<span class="nc" id="L416">                            counter = new Counter();</span>
+<span class="nc" id="L417">                            m_counters.put( pagename, counter );</span>
+<span class="nc" id="L418">                            m_storage.setProperty( pagename, counter.toString() );</span>
+<span class="nc" id="L419">                            m_dirty = true;</span>
+                        }
+<span class="nc" id="L421">                        result = counter.toString();</span>
+
+                    }
+<span class="pc bpc" id="L424" title="3 of 6 branches missed.">                    else if( body != null &amp;&amp; 0 &lt; body.length() &amp;&amp; STR_LIST.equals( show ) )</span>
+                    {
+                        // show list of counts
+<span class="fc" id="L427">                        String header = STR_EMPTY;</span>
+<span class="fc" id="L428">                        String line = body;</span>
+<span class="fc" id="L429">                        String footer = STR_EMPTY;</span>
+<span class="fc" id="L430">                        int start = body.indexOf( STR_SEPARATOR );</span>
+
+                        // split body into header, line, footer on ----
+                        // separator
+<span class="pc bpc" id="L434" title="1 of 2 branches missed.">                        if( 0 &lt; start )</span>
+                        {
+<span class="nc" id="L436">                            header = body.substring( 0, start );</span>
+
+<span class="nc" id="L438">                            start = skipWhitespace( start + STR_SEPARATOR.length(), body );</span>
+
+<span class="nc" id="L440">                            int end = body.indexOf( STR_SEPARATOR, start );</span>
+
+<span class="nc bnc" id="L442" title="All 2 branches missed.">                            if( start &gt;= end )</span>
+                            {
+<span class="nc" id="L444">                                line = body.substring( start );</span>
+
+                            }
+                            else
+                            {
+<span class="nc" id="L449">                                line = body.substring( start, end );</span>
+
+<span class="nc" id="L451">                                end = skipWhitespace( end + STR_SEPARATOR.length(), body );</span>
+
+<span class="nc" id="L453">                                footer = body.substring( end );</span>
+                            }
+                        }
+
+                        // sort on name or count?
+<span class="fc" id="L458">                        Map&lt;String, Counter&gt; sorted = m_counters;</span>
+
+<span class="pc bpc" id="L460" title="1 of 4 branches missed.">                        if( sort != null &amp;&amp; PARAM_COUNT.equals( sort ) )</span>
+                        {
+<span class="fc" id="L462">                            sorted = new TreeMap&lt;String, Counter&gt;( m_compareCountDescending );</span>
+
+<span class="fc" id="L464">                            sorted.putAll( m_counters );</span>
+                        }
+
+                        // build a messagebuffer with the list in wiki markup
+<span class="fc" id="L468">                        StringBuffer buf = new StringBuffer( header );</span>
+<span class="fc" id="L469">                        MessageFormat fmt = new MessageFormat( line );</span>
+<span class="fc" id="L470">                        Object[] args = new Object[] { pagename, STR_EMPTY, STR_EMPTY };</span>
+<span class="fc" id="L471">                        Iterator&lt; Entry&lt; String, Counter &gt; &gt; iter = sorted.entrySet().iterator();</span>
+
+<span class="pc bpc" id="L473" title="1 of 6 branches missed.">                        while ( iter != null &amp;&amp; 0 &lt; entries &amp;&amp; iter.hasNext() )</span>
+                        {
+<span class="fc" id="L475">                            Entry&lt; String, Counter &gt; entry = iter.next();</span>
+<span class="fc" id="L476">                            String name = entry.getKey();</span>
+
+                            // check minimum/maximum count
+<span class="fc" id="L479">                            final int value = entry.getValue().getValue();</span>
+<span class="pc bpc" id="L480" title="2 of 4 branches missed.">                            boolean use = min &lt;= value &amp;&amp; value &lt;= max;</span>
+
+                            // did we specify a refer-to page?
+<span class="pc bpc" id="L483" title="2 of 4 branches missed.">                            if( use &amp;&amp; referrers != null )</span>
+                            {
+<span class="nc" id="L485">                                use = referrers.contains( name );</span>
+                            }
+
+                            // did we specify what pages to include?
+<span class="pc bpc" id="L489" title="2 of 4 branches missed.">                            if( use &amp;&amp; include != null )</span>
+                            {
+<span class="nc" id="L491">                                use = false;</span>
+
+<span class="nc bnc" id="L493" title="All 4 branches missed.">                                for( int n = 0; !use &amp;&amp; n &lt; include.length; n++ )</span>
+                                {
+<span class="nc" id="L495">                                    use = matcher.matches( name, include[n] );</span>
+                                }
+                            }
+
+                            // did we specify what pages to exclude?
+<span class="pc bpc" id="L500" title="1 of 4 branches missed.">                            if( use &amp;&amp; null != exclude )</span>
+                            {
+<span class="fc bfc" id="L502" title="All 4 branches covered.">                                for( int n = 0; use &amp;&amp; n &lt; exclude.length; n++ )</span>
+                                {
+<span class="fc bfc" id="L504" title="All 2 branches covered.">                                    use &amp;= !matcher.matches( name, exclude[n] );</span>
+                                }
+                            }
+
+<span class="fc bfc" id="L508" title="All 2 branches covered.">                            if( use )</span>
+                            {
+<span class="fc" id="L510">                                args[1] = engine.beautifyTitle( name );</span>
+<span class="fc" id="L511">                                args[2] = entry.getValue();</span>
+
+<span class="fc" id="L513">                                fmt.format( args, buf, null );</span>
+
+<span class="fc" id="L515">                                entries--;</span>
+                            }
+<span class="fc" id="L517">                        }</span>
+<span class="fc" id="L518">                        buf.append( footer );</span>
+
+                        // let the engine render the list
+<span class="fc" id="L521">                        result = engine.textToHTML( context, buf.toString() );</span>
+                    }
+<span class="fc" id="L523">                }</span>
+            }
+<span class="fc" id="L525">            return result;</span>
+        }
+
+        /**
+         * Compile regexp parameter.
+         * 
+         * @param name The name of the parameter.
+         * @param value The parameter value.
+         * @return Pattern[] The compiled patterns, or &lt;code&gt;null&lt;/code&gt;.
+         * @throws PluginException On malformed patterns.
+         */
+        private Pattern[] compileGlobs( String name, String value ) throws PluginException
+        {
+<span class="fc" id="L538">            Pattern[] result = null;</span>
+
+<span class="pc bpc" id="L540" title="2 of 6 branches missed.">            if( value != null &amp;&amp; 0 &lt; value.length() &amp;&amp; !STR_GLOBSTAR.equals( value ) )</span>
+            {
+                try
+                {
+<span class="fc" id="L544">                    PatternCompiler pc = new GlobCompiler();</span>
+
+<span class="fc" id="L546">                    String[] ptrns = StringUtils.split( value, STR_COMMA );</span>
+
+<span class="fc" id="L548">                    result = new Pattern[ptrns.length];</span>
+
+<span class="fc bfc" id="L550" title="All 2 branches covered.">                    for( int n = 0; n &lt; ptrns.length; n++ )</span>
+                    {
+<span class="fc" id="L552">                        result[n] = pc.compile( ptrns[n] );</span>
+                    }
+                }
+<span class="nc" id="L555">                catch( MalformedPatternException e )</span>
+                {
+<span class="nc" id="L557">                    throw new PluginException( &quot;Parameter &quot; + name + &quot; has a malformed pattern: &quot; + e.getMessage() );</span>
+<span class="fc" id="L558">                }</span>
+            }
+
+<span class="fc" id="L561">            return result;</span>
+        }
+
+        /**
+         * Adjust offset skipping whitespace.
+         * 
+         * @param offset The offset in value to adjust.
+         * @param value String in which offset points.
+         * @return int Adjusted offset into value.
+         */
+        private int skipWhitespace( int offset, String value )
+        {
+<span class="nc bnc" id="L573" title="All 2 branches missed.">            while ( Character.isWhitespace( value.charAt( offset ) ) )</span>
+            {
+<span class="nc" id="L575">                offset++;</span>
+            }
+<span class="nc" id="L577">            return offset;</span>
+        }
+
+        /**
+         * Retrieve a page count.
+         * 
+         * @return int The page count for the given key.
+         * @param key the key for the Counter
+         */
+        protected int getCount( Object key )
+        {
+<span class="fc" id="L588">            return m_counters.get( key ).getValue();</span>
+        }
+
+        /**
+         * Load the page view counters from file.
+         */
+        private void loadCounters()
+        {
+<span class="pc bpc" id="L596" title="2 of 4 branches missed.">            if( m_counters != null &amp;&amp; m_storage != null )</span>
+            {
+<span class="fc" id="L598">                log.info( &quot;Loading counters.&quot; );</span>
+<span class="fc" id="L599">                synchronized( this )</span>
+                {
+<span class="fc" id="L601">                    InputStream fis = null;</span>
+                    try
+                    {
+<span class="nc" id="L604">                        fis = new FileInputStream( new File( m_workDir, COUNTER_PAGE ) );</span>
+<span class="nc" id="L605">                        m_storage.load( fis );</span>
+                    }
+<span class="fc" id="L607">                    catch( IOException ioe )</span>
+                    {
+<span class="fc" id="L609">                        log.error( &quot;Can't load page counter store: &quot; + ioe.getMessage() + &quot; , will create a new one!&quot; );</span>
+                    }
+                    finally
+                    {
+<span class="fc" id="L613">                        IOUtils.closeQuietly( fis );</span>
+                    }
+
+                    // Copy the collection into a sorted map
+<span class="fc" id="L617">                    Iterator&lt; Entry&lt; Object, Object &gt; &gt; iter = m_storage.entrySet().iterator();</span>
+
+<span class="pc bpc" id="L619" title="2 of 4 branches missed.">                    while ( iter != null &amp;&amp; iter.hasNext() )</span>
+                    {
+<span class="nc" id="L621">                        Entry&lt; ?, ? &gt; entry = iter.next();</span>
+
+<span class="nc" id="L623">                        m_counters.put( (String) entry.getKey(), new Counter( (String) entry.getValue() ) );</span>
+<span class="nc" id="L624">                    }</span>
+                    
+<span class="fc" id="L626">                    log.info( &quot;Loaded &quot; + m_counters.size() + &quot; counter values.&quot; );</span>
+<span class="fc" id="L627">                }</span>
+            }
+<span class="fc" id="L629">        }</span>
+
+        /**
+         * Save the page view counters to file.
+         * 
+         */
+        protected void storeCounters()
+        {
+<span class="pc bpc" id="L637" title="3 of 6 branches missed.">            if( m_counters != null &amp;&amp; m_storage != null &amp;&amp; m_dirty )</span>
+            {
+<span class="nc" id="L639">                log.info( &quot;Storing &quot; + m_counters.size() + &quot; counter values.&quot; );</span>
+
+<span class="nc" id="L641">                synchronized( this )</span>
+                {
+<span class="nc" id="L643">                    OutputStream fos = null;</span>
+
+                    // Write out the collection of counters
+                    try
+                    {
+<span class="nc" id="L648">                        fos = new FileOutputStream( new File( m_workDir, COUNTER_PAGE ) );</span>
+
+<span class="nc" id="L650">                        m_storage.store( fos, &quot;\n# The number of times each page has been viewed.\n# Do not modify.\n&quot; );</span>
+<span class="nc" id="L651">                        fos.flush();</span>
+
+<span class="nc" id="L653">                        m_dirty = false;</span>
+                    }
+<span class="nc" id="L655">                    catch( IOException ioe )</span>
+                    {
+<span class="nc" id="L657">                        log.error( &quot;Couldn't store counters values: &quot; + ioe.getMessage() );</span>
+                    }
+                    finally
+                    {
+<span class="nc" id="L661">                        IOUtils.closeQuietly( fos );</span>
+                    }
+<span class="nc" id="L663">                }</span>
+            }
+<span class="fc" id="L665">        }</span>
+
+        /**
+         * Is the given thread still current?
+         * 
+         * @return boolean &lt;code&gt;true&lt;/code&gt; if the thread is still the current
+         *         background thread.
+         * @param thrd
+         */
+        private synchronized boolean isRunning( Thread thrd )
+        {
+<span class="pc bpc" id="L676" title="2 of 4 branches missed.">            return m_initialized &amp;&amp; thrd == m_pageCountSaveThread;</span>
+        }
+
+    }
+
+
+    /**
+     * Counter for page hits collection.
+     */
+    private static final class Counter
+    {
+
+        /** The count value. */
+<span class="pc" id="L689">        private int m_count = 0;</span>
+
+        /**
+         * Create a new counter.
+         */
+        public Counter()
+<span class="fc" id="L695">        {</span>
+<span class="fc" id="L696">        }</span>
+
+        /**
+         * Create and initialize a new counter.
+         * 
+         * @param value Count value.
+         */
+        public Counter( String value )
+<span class="nc" id="L704">        {</span>
+<span class="nc" id="L705">            setValue( value );</span>
+<span class="nc" id="L706">        }</span>
+
+        /**
+         * Increment counter.
+         */
+        public void increment()
+        {
+<span class="fc" id="L713">            m_count++;</span>
+<span class="fc" id="L714">        }</span>
+
+        /**
+         * Get the count value.
+         * 
+         * @return int
+         */
+        public int getValue()
+        {
+<span class="fc" id="L723">            return m_count;</span>
+        }
+
+        /**
+         * Set the count value.
+         * 
+         * @param value String representation of the count.
+         */
+        public void setValue( String value )
+        {
+<span class="nc" id="L733">            m_count = NumberUtils.toInt( value );</span>
+<span class="nc" id="L734">        }</span>
+
+        /**
+         * @return String String representation of the count.
+         */
+        public String toString()
+        {
+<span class="fc" id="L741">            return String.valueOf( m_count );</span>
+        }
+    }
+
+    /**
+     * Background thread storing the page counters.
+     */
+    static final class CounterSaveThread extends WikiBackgroundThread
+    {
+
+        /** The page view manager. */
+        private final PageViewManager m_manager;
+
+        /**
+         * Create a wiki background thread to store the page counters.
+         * 
+         * @param engine The wiki engine.
+         * @param interval Delay in seconds between saves.
+         * @param pageViewManager
+         */
+        public CounterSaveThread( WikiEngine engine, int interval, PageViewManager pageViewManager )
+        {
+
+<span class="fc" id="L764">            super( engine, interval );</span>
+
+<span class="pc bpc" id="L766" title="1 of 2 branches missed.">            if( pageViewManager == null )</span>
+            {
+<span class="nc" id="L768">                throw new IllegalArgumentException( &quot;Manager cannot be null&quot; );</span>
+            }
+
+<span class="fc" id="L771">            m_manager = pageViewManager;</span>
+<span class="fc" id="L772">        }</span>
+
+        /**
+         * Save the page counters to file.
+         */
+        public void backgroundTask()
+        {
+
+<span class="pc bpc" id="L780" title="1 of 2 branches missed.">            if( m_manager.isRunning( this ) )</span>
+            {
+<span class="fc" id="L782">                m_manager.storeCounters();</span>
+            }
+<span class="fc" id="L784">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

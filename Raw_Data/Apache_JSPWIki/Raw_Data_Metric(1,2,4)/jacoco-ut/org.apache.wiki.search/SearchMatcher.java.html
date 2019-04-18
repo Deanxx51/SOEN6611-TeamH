@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SearchMatcher.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.search</a> &gt; <span class="el_source">SearchMatcher.java</span></div><h1>SearchMatcher.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.   
+ */
+package org.apache.wiki.search;
+
+import java.io.IOException;
+import java.io.BufferedReader;
+import java.io.StringReader;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+
+
+/**
+ * SearchMatcher performs the task of matching a search query to a page's
+ * contents. This utility class is isolated to simplify WikiPageProvider
+ * implementations and to offer an easy target for upgrades. The upcoming(?)
+ * TranslatorReader rewrite will presumably invalidate this, among other things.
+ *
+ * @since 2.1.5
+ */
+public class SearchMatcher {
+	
+    private QueryItem[] m_queries;
+    private WikiEngine m_engine;
+
+    /**
+     *  Creates a new SearchMatcher.
+     *  
+     *  @param engine The WikiEngine
+     *  @param queries A list of queries
+     */
+<span class="nc" id="L48">    public SearchMatcher( WikiEngine engine, QueryItem[] queries ) {</span>
+<span class="nc" id="L49">        m_engine = engine;</span>
+<span class="nc bnc" id="L50" title="All 2 branches missed.">        m_queries = queries != null ? queries.clone() : null;</span>
+<span class="nc" id="L51">    }</span>
+
+    /**
+     * Compares the page content, available through the given stream, to the
+     * query items of this matcher. Returns a search result object describing
+     * the quality of the match.
+     *
+     * &lt;p&gt;This method would benefit of regexps (1.4) and streaming. FIXME!
+     * 
+     * @param wikiname The name of the page
+     * @param pageText The content of the page
+     * @return A SearchResult item, or null, there are no queries
+     * @throws IOException If reading page content fails
+     */
+    public SearchResult matchPageContent( String wikiname, String pageText ) throws IOException {
+<span class="nc bnc" id="L66" title="All 2 branches missed.">        if( m_queries == null ) {</span>
+<span class="nc" id="L67">            return null;</span>
+        }
+
+<span class="nc" id="L70">        int[] scores = new int[ m_queries.length ];</span>
+<span class="nc" id="L71">        BufferedReader in = new BufferedReader( new StringReader( pageText ) );</span>
+<span class="nc" id="L72">        String line = null;</span>
+
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        while( (line = in.readLine() ) != null ) {</span>
+<span class="nc" id="L75">            line = line.toLowerCase();</span>
+
+<span class="nc bnc" id="L77" title="All 2 branches missed.">            for( int j = 0; j &lt; m_queries.length; j++ ) {</span>
+<span class="nc" id="L78">                int index = -1;</span>
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                while( (index = line.indexOf( m_queries[j].word, index + 1 ) ) != -1 ) {</span>
+<span class="nc bnc" id="L81" title="All 2 branches missed.">                    if( m_queries[j].type != QueryItem.FORBIDDEN ) {</span>
+<span class="nc" id="L82">                        scores[j]++; // Mark, found this word n times</span>
+                    } else {
+                        // Found something that was forbidden.
+<span class="nc" id="L85">                        return null;</span>
+                    }
+                }
+            }
+        }
+
+        //
+        //  Check that we have all required words.
+        //
+<span class="nc" id="L94">        int totalscore = 0;</span>
+
+<span class="nc bnc" id="L96" title="All 2 branches missed.">        for( int j = 0; j &lt; scores.length; j++ ) {</span>
+            // Give five points for each occurrence
+            // of the word in the wiki name.
+
+<span class="nc bnc" id="L100" title="All 4 branches missed.">            if( wikiname.toLowerCase().indexOf( m_queries[j].word ) != -1 &amp;&amp; m_queries[j].type != QueryItem.FORBIDDEN ) {</span>
+<span class="nc" id="L101">                scores[j] += 5;</span>
+            }
+
+            //  Filter out pages if the search word is marked 'required'
+            //  but they have no score.
+
+<span class="nc bnc" id="L107" title="All 4 branches missed.">            if( m_queries[j].type == QueryItem.REQUIRED &amp;&amp; scores[j] == 0 ) {</span>
+<span class="nc" id="L108">                return null;</span>
+            }
+
+            //
+            //  Count the total score for this page.
+            //
+<span class="nc" id="L114">            totalscore += scores[j];</span>
+        }
+
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        if( totalscore &gt; 0 ) {</span>
+<span class="nc" id="L118">            return new SearchResultImpl( wikiname, totalscore );</span>
+        }
+
+<span class="nc" id="L121">        return null;</span>
+    }
+
+    /**
+     *  A local search result.
+     */
+    public class SearchResultImpl implements SearchResult {
+    	
+        int      m_score;
+        WikiPage m_page;
+
+        /**
+         *  Create a new SearchResult with a given name and a score.
+         *  
+         *  @param name Page Name
+         *  @param score A score from 0+
+         */
+<span class="nc" id="L138">        public SearchResultImpl( String name, int score ) {</span>
+<span class="nc" id="L139">            m_page  = new WikiPage( m_engine, name );</span>
+<span class="nc" id="L140">            m_score = score;</span>
+<span class="nc" id="L141">        }</span>
+
+        /**
+         *  Returns Wikipage for this result.
+         *  @return WikiPage
+         */
+        public WikiPage getPage() {
+<span class="nc" id="L148">            return m_page;</span>
+        }
+
+        /**
+         *  Returns a score for this match.
+         *  
+         *  @return Score from 0+
+         */
+        public int getScore() {
+<span class="nc" id="L157">            return m_score;</span>
+        }
+
+        /**
+         *  Returns an empty array, since BasicSearchProvider does not support
+         *  context matching.
+         *  
+         *  @return an empty array
+         */
+        public String[] getContexts() {
+            // Unimplemented
+<span class="nc" id="L168">            return new String[0];</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

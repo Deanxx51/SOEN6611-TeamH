@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiTagBase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">WikiTagBase.java</span></div><h1>WikiTagBase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.tagext.TagSupport;
+import javax.servlet.jsp.tagext.TryCatchFinally;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Base class for JSPWiki tags.  You do not necessarily have
+ *  to derive from this class, since this does some initialization.
+ *  &lt;P&gt;
+ *  This tag is only useful if you're having an &quot;empty&quot; tag, with
+ *  no body content.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L40">public abstract class WikiTagBase</span>
+    extends TagSupport
+    implements TryCatchFinally
+{
+    private static final long serialVersionUID = -1409836349293777141L;
+
+    public static final String ATTR_CONTEXT = &quot;jspwiki.context&quot;;
+
+<span class="nc" id="L48">    private static final Logger log = Logger.getLogger( WikiTagBase.class );</span>
+
+    protected WikiContext m_wikiContext;
+
+    /**
+     *   This method calls the parent setPageContext() but it also
+     *   provides a way for a tag to initialize itself before
+     *   any of the setXXX() methods are called.
+     */
+    public void setPageContext(PageContext arg0)
+    {
+<span class="nc" id="L59">        super.setPageContext(arg0);</span>
+        
+<span class="nc" id="L61">        initTag();</span>
+<span class="nc" id="L62">    }</span>
+
+    /**
+     *  This method is called when the tag is encountered within a new request,
+     *  but before the setXXX() methods are called. 
+     *  The default implementation does nothing.
+     *  @since 2.3.92
+     */
+    public void initTag()
+    {
+<span class="nc" id="L72">        m_wikiContext = null;</span>
+<span class="nc" id="L73">        return;</span>
+    }
+    
+    public int doStartTag()
+        throws JspException
+    {
+        try
+        {
+<span class="nc" id="L81">            m_wikiContext = (WikiContext) pageContext.getAttribute( ATTR_CONTEXT,</span>
+                                                                    PageContext.REQUEST_SCOPE );
+
+<span class="nc bnc" id="L84" title="All 2 branches missed.">            if( m_wikiContext == null )</span>
+            {
+<span class="nc" id="L86">                throw new JspException(&quot;WikiContext may not be NULL - serious internal problem!&quot;);</span>
+            }
+
+<span class="nc" id="L89">            return doWikiStartTag();</span>
+        }
+<span class="nc" id="L91">        catch( Exception e )</span>
+        {
+<span class="nc" id="L93">            log.error( &quot;Tag failed&quot;, e );</span>
+<span class="nc" id="L94">            throw new JspException( &quot;Tag failed, check logs: &quot;+e.getMessage() );</span>
+        }
+    }
+
+    /**
+     *  This method is allowed to do pretty much whatever he wants.
+     *  We then catch all mistakes.
+     */
+    public abstract int doWikiStartTag() throws Exception;
+
+    public int doEndTag()
+        throws JspException
+    {
+<span class="nc" id="L107">        return EVAL_PAGE;</span>
+    }
+
+    public void doCatch( Throwable th ) throws Throwable
+    {
+<span class="nc" id="L112">    	log.error( th.getMessage(), th );</span>
+<span class="nc" id="L113">    }</span>
+
+    public void doFinally()
+    {
+<span class="nc" id="L117">        m_wikiContext = null;</span>
+<span class="nc" id="L118">    }</span>
+
+    public void setId(String id)
+    {
+<span class="nc" id="L122">        super.setId( TextUtil.replaceEntities( id ) );</span>
+<span class="nc" id="L123">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

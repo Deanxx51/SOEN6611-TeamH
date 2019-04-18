@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserCheckTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">UserCheckTag.java</span></div><h1>UserCheckTag.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.AuthenticationManager;
+
+/**
+ *  Includes the content if an user check validates.  This has
+ *  been considerably enhanced for 2.2.  The possibilities for the &quot;status&quot;-argument are:
+ *
+ * &lt;ul&gt;
+ * &lt;li&gt;&quot;anonymous&quot;     - the body of the tag is included 
+ *                       if the user is completely unknown (no cookie, no password)&lt;/li&gt;
+ * &lt;li&gt;&quot;asserted&quot;      - the body of the tag is included 
+ *                       if the user has either been named by a cookie, but
+ *                       not been authenticated.&lt;/li&gt;
+ * &lt;li&gt;&quot;authenticated&quot; - the body of the tag is included 
+ *                       if the user is validated either through the container,
+ *                       or by our own authentication.&lt;/li&gt;
+ * &lt;li&gt;&quot;assertionsAllowed&quot;
+ *                     - the body of the tag is included 
+ *                       if wiki allows identities to be asserted using cookies.&lt;/li&gt;
+ * &lt;li&gt;&quot;assertionsNotAllowed&quot;
+ *                     - the body of the tag is included 
+ *                       if wiki does &lt;i&gt;not&lt;/i&gt; allow identities to 
+ *                       be asserted using cookies.&lt;/li&gt;
+ * &lt;li&gt;&quot;containerAuth&quot; - the body of the tag is included 
+ *                       if the user is validated through the container.&lt;/li&gt;
+ * &lt;li&gt;&quot;customAuth&quot;    - the body of the tag is included 
+ *                       if the user is validated through our own authentication.&lt;/li&gt;
+ * &lt;li&gt;&quot;known&quot;         - if the user is not anonymous&lt;/li&gt;                      
+ * &lt;li&gt;&quot;notAuthenticated&quot;
+ *                     - the body of the tag is included 
+ *                       if the user is not yet authenticated.&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ *  If the old &quot;exists&quot; -argument is used, it corresponds as follows:
+ *  &lt;p&gt;
+ *  &lt;tt&gt;exists=&quot;true&quot; ==&gt; status=&quot;known&quot;&lt;br&gt;
+ *  &lt;tt&gt;exists=&quot;false&quot; ==&gt; status=&quot;unknown&quot;&lt;br&gt;
+ *
+ *  It is NOT a good idea to use BOTH of the arguments.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L65">public class UserCheckTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 3256438110127863858L;
+    private static final String ASSERTED = &quot;asserted&quot;;
+    private static final String AUTHENTICATED = &quot;authenticated&quot;;
+    private static final String ANONYMOUS = &quot;anonymous&quot;;
+    private static final String ASSERTIONS_ALLOWED = &quot;assertionsallowed&quot;;
+    private static final String ASSERTIONS_NOT_ALLOWED = &quot;assertionsnotallowed&quot;;
+    private static final String CONTAINER_AUTH = &quot;containerauth&quot;;
+    private static final String CUSTOM_AUTH = &quot;customauth&quot;;
+    private static final String KNOWN = &quot;known&quot;;
+    private static final String NOT_AUTHENTICATED = &quot;notauthenticated&quot;;
+
+    private String m_status;
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L87">        super.initTag();</span>
+<span class="nc" id="L88">        m_status = null;</span>
+<span class="nc" id="L89">    }</span>
+
+    /**
+     *  Get the status as defined above.
+     *  
+     *  @return The status to be checked.
+     */
+    public String getStatus()
+    {
+<span class="nc" id="L98">        return m_status;</span>
+    }
+
+    /**
+     *  Sets the status as defined above.
+     *  
+     *  @param status The status to be checked.
+     */
+    public void setStatus( String status )
+    {
+<span class="nc" id="L108">        m_status = status.toLowerCase();</span>
+<span class="nc" id="L109">    }</span>
+
+
+    /**
+     *  Sets the &quot;exists&quot; attribute, which is converted on-the-fly into
+     *  an equivalent &quot;status&quot; -attribute.  This is only for backwards compatibility.
+     *
+     *  @param arg If true, works exactly as status = authenticated.  If false, works
+     *             as if status = anonymous.
+     *  @deprecated
+     */
+    public void setExists( String arg )
+    {
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if(&quot;true&quot;.equals(arg))</span>
+        {
+<span class="nc" id="L124">            m_status = AUTHENTICATED;</span>
+        }
+        else
+        {
+<span class="nc" id="L128">            m_status = ANONYMOUS;</span>
+        }
+<span class="nc" id="L130">    }</span>
+
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.tags.WikiTagBase#doWikiStartTag()
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc" id="L141">        WikiSession session = m_wikiContext.getWikiSession();</span>
+<span class="nc" id="L142">        String status = session.getStatus();</span>
+<span class="nc" id="L143">        AuthenticationManager mgr = m_wikiContext.getEngine().getAuthenticationManager();</span>
+<span class="nc" id="L144">        boolean containerAuth = mgr.isContainerAuthenticated();</span>
+<span class="nc" id="L145">        boolean cookieAssertions = mgr.allowsCookieAssertions();</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if( m_status != null )</span>
+        {
+<span class="nc bnc" id="L149" title="All 2 branches missed.">            if ( ANONYMOUS.equals( m_status )) </span>
+            {
+<span class="nc bnc" id="L151" title="All 2 branches missed.">                if (status.equals(WikiSession.ANONYMOUS))</span>
+                {
+<span class="nc" id="L153">                    return EVAL_BODY_INCLUDE;</span>
+                }
+            }
+<span class="nc bnc" id="L156" title="All 2 branches missed.">            else if( AUTHENTICATED.equals( m_status ))</span>
+            { 
+<span class="nc bnc" id="L158" title="All 2 branches missed.">                if (status.equals(WikiSession.AUTHENTICATED)) </span>
+                {
+<span class="nc" id="L160">                    return EVAL_BODY_INCLUDE;</span>
+                }
+            }
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            else if( ASSERTED.equals( m_status )) </span>
+            { 
+<span class="nc bnc" id="L165" title="All 2 branches missed.">                if (status.equals(WikiSession.ASSERTED)) </span>
+                {
+<span class="nc" id="L167">                    return EVAL_BODY_INCLUDE;</span>
+                }
+            }
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            else if( ASSERTIONS_ALLOWED.equals( m_status ))</span>
+            { 
+<span class="nc bnc" id="L172" title="All 2 branches missed.">                if ( cookieAssertions )</span>
+                {
+<span class="nc" id="L174">                    return EVAL_BODY_INCLUDE;</span>
+                }
+<span class="nc" id="L176">                return SKIP_BODY;</span>
+            }
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            else if( ASSERTIONS_NOT_ALLOWED.equals( m_status ))</span>
+            { 
+<span class="nc bnc" id="L180" title="All 2 branches missed.">                if ( !cookieAssertions )</span>
+                {
+<span class="nc" id="L182">                    return EVAL_BODY_INCLUDE;</span>
+                }
+<span class="nc" id="L184">                return SKIP_BODY;</span>
+            }
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            else if( CONTAINER_AUTH.equals( m_status )) </span>
+            { 
+<span class="nc bnc" id="L188" title="All 2 branches missed.">                if ( containerAuth )</span>
+                {
+<span class="nc" id="L190">                    return EVAL_BODY_INCLUDE;</span>
+                }
+<span class="nc" id="L192">                return SKIP_BODY;</span>
+            }
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            else if( CUSTOM_AUTH.equals( m_status )) </span>
+            { 
+<span class="nc bnc" id="L196" title="All 2 branches missed.">                if ( !containerAuth )</span>
+                {
+<span class="nc" id="L198">                    return EVAL_BODY_INCLUDE;</span>
+                }
+<span class="nc" id="L200">                return SKIP_BODY;</span>
+            }
+<span class="nc bnc" id="L202" title="All 2 branches missed.">            else if( KNOWN.equals( m_status )) </span>
+            { 
+<span class="nc bnc" id="L204" title="All 2 branches missed.">                if ( !session.isAnonymous() )</span>
+                {
+<span class="nc" id="L206">                    return EVAL_BODY_INCLUDE;</span>
+                }
+<span class="nc" id="L208">                return SKIP_BODY;</span>
+            }
+<span class="nc bnc" id="L210" title="All 2 branches missed.">            else if( NOT_AUTHENTICATED.equals( m_status ))</span>
+            { 
+<span class="nc bnc" id="L212" title="All 2 branches missed.">                if (!status.equals(WikiSession.AUTHENTICATED)) </span>
+                {
+<span class="nc" id="L214">                    return EVAL_BODY_INCLUDE;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L219">        return SKIP_BODY;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

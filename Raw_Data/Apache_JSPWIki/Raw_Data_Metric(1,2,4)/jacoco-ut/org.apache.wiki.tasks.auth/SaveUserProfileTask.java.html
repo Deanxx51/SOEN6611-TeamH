@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SaveUserProfileTask.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tasks.auth</a> &gt; <span class="el_source">SaveUserProfileTask.java</span></div><h1>SaveUserProfileTask.java</h1><pre class="source lang-java linenums">package org.apache.wiki.tasks.auth;
+
+import java.util.Locale;
+
+import javax.mail.MessagingException;
+import javax.mail.internet.AddressException;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.tasks.TasksManager;
+import org.apache.wiki.util.MailUtil;
+import org.apache.wiki.workflow.Outcome;
+import org.apache.wiki.workflow.Task;
+import org.apache.wiki.workflow.WorkflowManager;
+
+
+/**
+ * Handles the actual profile save action. 
+ */
+public class SaveUserProfileTask extends Task {
+
+    private static final long serialVersionUID = 6994297086560480285L;
+<span class="fc" id="L27">    private static final Logger LOG = Logger.getLogger( SaveUserProfileTask.class );</span>
+    private final WikiEngine m_engine;
+    private final Locale m_loc;
+
+    /**
+     * Constructs a new Task for saving a user profile.
+     * @param engine the wiki engine
+     */
+    public SaveUserProfileTask( WikiEngine engine, Locale loc ) {
+<span class="fc" id="L36">        super( TasksManager.USER_PROFILE_SAVE_TASK_MESSAGE_KEY );</span>
+<span class="fc" id="L37">        m_engine = engine;</span>
+<span class="fc" id="L38">        m_loc = loc;</span>
+<span class="fc" id="L39">    }</span>
+
+    /**
+     * Saves the user profile to the user database.
+     * @return {@link org.apache.wiki.workflow.Outcome#STEP_COMPLETE} if the
+     * task completed successfully
+     * @throws WikiException if the save did not complete for some reason
+     */
+    @Override
+    public Outcome execute() throws WikiException {
+        // Retrieve user profile
+<span class="fc" id="L50">        final UserProfile profile = ( UserProfile )getWorkflow().getAttribute( WorkflowManager.WF_UP_CREATE_SAVE_ATTR_SAVED_PROFILE );</span>
+
+        // Save the profile (userdatabase will take care of timestamps for us)
+<span class="fc" id="L53">        m_engine.getUserManager().getUserDatabase().save( profile );</span>
+
+        // Send e-mail if user supplied an e-mail address
+<span class="pc bpc" id="L56" title="1 of 2 branches missed.">        if ( profile.getEmail() != null ) {</span>
+            try {
+<span class="fc" id="L58">                final InternationalizationManager i18n = m_engine.getInternationalizationManager();</span>
+<span class="fc" id="L59">                final String app = m_engine.getApplicationName();</span>
+<span class="fc" id="L60">                final String to = profile.getEmail();</span>
+<span class="fc" id="L61">                final String subject = i18n.get( InternationalizationManager.DEF_TEMPLATE, m_loc,</span>
+                                                 &quot;notification.createUserProfile.accept.subject&quot;, app );
+
+<span class="fc" id="L64">                final String content = i18n.get( InternationalizationManager.DEF_TEMPLATE, m_loc,</span>
+                                                 &quot;notification.createUserProfile.accept.content&quot;, app,
+<span class="fc" id="L66">                                                 profile.getLoginName(),</span>
+<span class="fc" id="L67">                                                 profile.getFullname(),</span>
+<span class="fc" id="L68">                                                 profile.getEmail(),</span>
+<span class="fc" id="L69">                                                 m_engine.getURL( WikiContext.LOGIN, null, null, true ) );</span>
+<span class="nc" id="L70">                MailUtil.sendMessage( m_engine.getWikiProperties(), to, subject, content);</span>
+<span class="nc" id="L71">            } catch ( final AddressException e) {</span>
+<span class="nc" id="L72">                LOG.debug( e.getMessage(), e );</span>
+<span class="fc" id="L73">            } catch ( final MessagingException me ) {</span>
+<span class="fc" id="L74">                LOG.error( &quot;Could not send registration confirmation e-mail. Is the e-mail server running?&quot;, me );</span>
+<span class="nc" id="L75">            }</span>
+        }
+
+<span class="fc" id="L78">        return Outcome.STEP_COMPLETE;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

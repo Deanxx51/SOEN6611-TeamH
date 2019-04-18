@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DifferenceManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.diff</a> &gt; <span class="el_source">DifferenceManager.java</span></div><h1>DifferenceManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+*/
+
+package org.apache.wiki.diff;
+
+import java.io.IOException;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.util.ClassUtil;
+
+
+/**
+ * Load, initialize and delegate to the DiffProvider that will actually do the work.
+ */
+public class DifferenceManager {
+<span class="fc" id="L36">    private static final Logger log = Logger.getLogger(DifferenceManager.class);</span>
+
+    /**
+     * Property value for storing a diff provider.  Value is {@value}.
+     */
+    public static final String PROP_DIFF_PROVIDER = &quot;jspwiki.diffProvider&quot;;
+
+    private DiffProvider m_provider;
+
+    /**
+     * Creates a new DifferenceManager for the given engine.
+     *
+     * @param engine The WikiEngine.
+     * @param props  A set of properties.
+     */
+<span class="fc" id="L51">    public DifferenceManager(WikiEngine engine, Properties props) {</span>
+<span class="fc" id="L52">        loadProvider(props);</span>
+
+<span class="fc" id="L54">        initializeProvider(engine, props);</span>
+
+<span class="fc" id="L56">        log.info(&quot;Using difference provider: &quot; + m_provider.getProviderInfo());</span>
+<span class="fc" id="L57">    }</span>
+
+    private void loadProvider(Properties props) {
+<span class="fc" id="L60">        String providerClassName = props.getProperty(PROP_DIFF_PROVIDER,</span>
+<span class="fc" id="L61">                TraditionalDiffProvider.class.getName());</span>
+
+        try {
+<span class="fc" id="L64">            Class&lt;?&gt; providerClass = ClassUtil.findClass(&quot;org.apache.wiki.diff&quot;, providerClassName);</span>
+<span class="fc" id="L65">            m_provider = (DiffProvider) providerClass.newInstance();</span>
+<span class="nc" id="L66">        } catch (ClassNotFoundException e) {</span>
+<span class="nc" id="L67">            log.warn(&quot;Failed loading DiffProvider, will use NullDiffProvider.&quot;, e);</span>
+<span class="nc" id="L68">        } catch (InstantiationException e) {</span>
+<span class="nc" id="L69">            log.warn(&quot;Failed loading DiffProvider, will use NullDiffProvider.&quot;, e);</span>
+<span class="nc" id="L70">        } catch (IllegalAccessException e) {</span>
+<span class="nc" id="L71">            log.warn(&quot;Failed loading DiffProvider, will use NullDiffProvider.&quot;, e);</span>
+<span class="pc" id="L72">        }</span>
+
+<span class="pc bpc" id="L74" title="1 of 2 branches missed.">        if (null == m_provider) {</span>
+<span class="nc" id="L75">            m_provider = new DiffProvider.NullDiffProvider();</span>
+        }
+<span class="fc" id="L77">    }</span>
+
+
+    private void initializeProvider(WikiEngine engine, Properties props) {
+        try {
+<span class="fc" id="L82">            m_provider.initialize(engine, props);</span>
+<span class="nc" id="L83">        } catch (NoRequiredPropertyException e1) {</span>
+<span class="nc" id="L84">            log.warn(&quot;Failed initializing DiffProvider, will use NullDiffProvider.&quot;, e1);</span>
+<span class="nc" id="L85">            m_provider = new DiffProvider.NullDiffProvider(); //doesn't need init'd</span>
+<span class="nc" id="L86">        } catch (IOException e1) {</span>
+<span class="nc" id="L87">            log.warn(&quot;Failed initializing DiffProvider, will use NullDiffProvider.&quot;, e1);</span>
+<span class="nc" id="L88">            m_provider = new DiffProvider.NullDiffProvider(); //doesn't need init'd</span>
+<span class="pc" id="L89">        }</span>
+<span class="fc" id="L90">    }</span>
+
+    /**
+     * Returns valid XHTML string to be used in any way you please.
+     *
+     * @param context        The Wiki Context
+     * @param firstWikiText  The old text
+     * @param secondWikiText the new text
+     * @return XHTML, or empty string, if no difference detected.
+     */
+    public String makeDiff(WikiContext context, String firstWikiText, String secondWikiText) {
+<span class="fc" id="L101">        String diff = null;</span>
+        try {
+<span class="fc" id="L103">            diff = m_provider.makeDiffHtml(context, firstWikiText, secondWikiText);</span>
+
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">            if (diff == null) {</span>
+<span class="nc" id="L106">                diff = &quot;&quot;;</span>
+            }
+<span class="nc" id="L108">        } catch (Exception e) {</span>
+<span class="nc" id="L109">            diff = &quot;Failed to create a diff, check the logs.&quot;;</span>
+<span class="nc" id="L110">            log.warn(diff, e);</span>
+<span class="fc" id="L111">        }</span>
+<span class="fc" id="L112">        return diff;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

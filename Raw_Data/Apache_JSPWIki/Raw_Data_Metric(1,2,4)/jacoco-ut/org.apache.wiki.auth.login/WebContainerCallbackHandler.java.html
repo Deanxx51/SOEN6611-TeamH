@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WebContainerCallbackHandler.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">WebContainerCallbackHandler.java</span></div><h1>WebContainerCallbackHandler.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.login;
+
+import java.io.IOException;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.wiki.WikiEngine;
+
+/**
+ * Handles logins made from within JSPWiki.
+ * @see org.apache.wiki.WikiSession#getWikiSession(WikiEngine,HttpServletRequest)
+ * @since 2.3
+ */
+public final class WebContainerCallbackHandler implements CallbackHandler
+{
+    private final HttpServletRequest m_request;
+
+    private final WikiEngine         m_engine;
+
+    /**
+     *  Create a new handler.
+     *  
+     *  @param engine The WikiEngine
+     *  @param request The request to look into
+     */
+    public WebContainerCallbackHandler( WikiEngine engine, HttpServletRequest request )
+<span class="fc" id="L48">    {</span>
+<span class="fc" id="L49">        m_engine  = engine;</span>
+<span class="fc" id="L50">        m_request = request;</span>
+<span class="fc" id="L51">    }</span>
+
+    /**
+     * @see javax.security.auth.callback.CallbackHandler#handle(javax.security.auth.callback.Callback[])
+     * 
+     * {@inheritDoc}
+     */
+    public void handle( Callback[] callbacks ) throws IOException, UnsupportedCallbackException
+    {
+<span class="fc bfc" id="L60" title="All 2 branches covered.">        for( int i = 0; i &lt; callbacks.length; i++ )</span>
+        {
+<span class="fc" id="L62">            Callback callback = callbacks[i];</span>
+<span class="fc bfc" id="L63" title="All 2 branches covered.">            if ( callback instanceof HttpRequestCallback )</span>
+            {
+<span class="fc" id="L65">                ( (HttpRequestCallback) callback ).setRequest( m_request );</span>
+            }
+<span class="pc bpc" id="L67" title="1 of 2 branches missed.">            else if( callback instanceof WikiEngineCallback )</span>
+            {
+<span class="fc" id="L69">                ( (WikiEngineCallback) callback ).setEngine( m_engine );</span>
+            }
+            else
+            {
+<span class="nc" id="L73">                throw new UnsupportedCallbackException( callback );</span>
+            }
+        }
+<span class="fc" id="L76">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

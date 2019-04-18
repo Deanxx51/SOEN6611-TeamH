@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SearchManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.search</a> &gt; <span class="el_source">SearchManager.java</span></div><h1>SearchManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.search;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.time.StopWatch;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.ajax.AjaxUtil;
+import org.apache.wiki.ajax.WikiAjaxDispatcherServlet;
+import org.apache.wiki.ajax.WikiAjaxServlet;
+import org.apache.wiki.api.exceptions.FilterException;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventUtils;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.modules.InternalModule;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Manages searching the Wiki.
+ *
+ *  @since 2.2.21.
+ */
+public class SearchManager extends BasicPageFilter implements InternalModule, WikiEventListener {
+
+<span class="fc" id="L64">    private static final Logger log = Logger.getLogger(SearchManager.class);</span>
+
+    private static final String DEFAULT_SEARCHPROVIDER  = &quot;org.apache.wiki.search.LuceneSearchProvider&quot;;
+
+    /** Old option, now deprecated. */
+    private static final String PROP_USE_LUCENE        = &quot;jspwiki.useLucene&quot;;
+
+    /**
+     *  Property name for setting the search provider. Value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_SEARCHPROVIDER     = &quot;jspwiki.searchProvider&quot;;
+
+    private SearchProvider    m_searchProvider;
+
+    /**
+     *  The name of the JSON object that manages search.
+     */
+    public static final String JSON_SEARCH = &quot;search&quot;;
+
+    /**
+     *  Creates a new SearchManager.
+     *
+     *  @param engine The WikiEngine that owns this SearchManager.
+     *  @param properties The list of Properties.
+     *  @throws FilterException If it cannot be instantiated.
+     */
+    public SearchManager( WikiEngine engine, Properties properties )
+        throws FilterException
+<span class="fc" id="L92">    {</span>
+<span class="fc" id="L93">        initialize( engine, properties );</span>
+
+<span class="fc" id="L95">        WikiEventUtils.addWikiEventListener(m_engine.getPageManager(),</span>
+                                            WikiPageEvent.PAGE_DELETE_REQUEST, this);
+
+        //TODO: Replace with custom annotations. See JSPWIKI-566
+<span class="fc" id="L99">        WikiAjaxDispatcherServlet.registerServlet( JSON_SEARCH, new JSONSearch() );</span>
+<span class="fc" id="L100">    }</span>
+
+    /**
+     *  Provides a JSON RPC API to the JSPWiki Search Engine.
+     */
+<span class="fc" id="L105">    public class JSONSearch implements WikiAjaxServlet</span>
+    {
+		public static final String AJAX_ACTION_SUGGESTIONS = &quot;suggestions&quot;;
+    	public static final String AJAX_ACTION_PAGES = &quot;pages&quot;;
+    	public static final int DEFAULT_MAX_RESULTS = 20;
+<span class="fc" id="L110">    	public int maxResults = DEFAULT_MAX_RESULTS;</span>
+
+		@Override
+		public String getServletMapping() {
+<span class="nc" id="L114">			return JSON_SEARCH;</span>
+		}
+
+    	@Override
+    	public void service(HttpServletRequest req, HttpServletResponse resp, String actionName, List&lt;String&gt; params)
+    			throws ServletException, IOException {
+<span class="nc" id="L120">    		String result = &quot;&quot;;</span>
+<span class="nc bnc" id="L121" title="All 2 branches missed.">    		if (StringUtils.isNotBlank(actionName)) {</span>
+<span class="nc bnc" id="L122" title="All 2 branches missed.">    			if (params.size()&lt;1) {</span>
+<span class="nc" id="L123">    				return;</span>
+    			}
+<span class="nc" id="L125">    			String itemId = params.get(0);</span>
+<span class="nc" id="L126">    			log.debug(&quot;itemId=&quot;+itemId);</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">    			if (params.size()&gt;1) {</span>
+<span class="nc" id="L128">    				String maxResultsParam  = params.get(1);</span>
+<span class="nc" id="L129">    				log.debug(&quot;maxResultsParam=&quot;+maxResultsParam);</span>
+<span class="nc bnc" id="L130" title="All 4 branches missed.">    				if (StringUtils.isNotBlank(maxResultsParam) &amp;&amp; StringUtils.isNumeric(maxResultsParam)) {</span>
+<span class="nc" id="L131">    					maxResults = Integer.parseInt(maxResultsParam);</span>
+    				}
+    			}
+
+<span class="nc bnc" id="L135" title="All 2 branches missed.">    			if (actionName.equals(AJAX_ACTION_SUGGESTIONS)) {</span>
+<span class="nc" id="L136">    				List&lt;String&gt; callResults = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L137">    				log.debug(&quot;Calling getSuggestions() START&quot;);</span>
+<span class="nc" id="L138">    				callResults = getSuggestions(itemId, maxResults);</span>
+<span class="nc" id="L139">    				log.debug(&quot;Calling getSuggestions() DONE. &quot;+callResults.size());</span>
+<span class="nc" id="L140">    				result = AjaxUtil.toJson(callResults);</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">    			} else if (actionName.equals(AJAX_ACTION_PAGES)) {</span>
+<span class="nc" id="L142">    				List&lt;Map&lt;String,Object&gt;&gt; callResults = new ArrayList&lt;&gt;();</span>
+<span class="nc" id="L143">    				log.debug(&quot;Calling findPages() START&quot;);</span>
+<span class="nc" id="L144">    				WikiContext wikiContext = m_engine.createContext(req, WikiContext.VIEW);</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">    				if (wikiContext == null) {</span>
+<span class="nc" id="L146">    					throw new ServletException(&quot;Could not create a WikiContext from the request &quot;+req);</span>
+    				}
+<span class="nc" id="L148">    				callResults = findPages(itemId, maxResults, wikiContext);</span>
+<span class="nc" id="L149">    				log.debug(&quot;Calling findPages() DONE. &quot;+callResults.size());</span>
+<span class="nc" id="L150">    				result = AjaxUtil.toJson(callResults);</span>
+    			}
+    		}
+<span class="nc" id="L153">    		log.debug(&quot;result=&quot;+result);</span>
+<span class="nc" id="L154">    		resp.getWriter().write(result);</span>
+<span class="nc" id="L155">    	}</span>
+
+        /**
+         *  Provides a list of suggestions to use for a page name.
+         *  Currently the algorithm just looks into the value parameter,
+         *  and returns all page names from that.
+         *
+         *  @param wikiName the page name
+         *  @param maxLength maximum number of suggestions
+         *  @return the suggestions
+         */
+        public List&lt;String&gt; getSuggestions( String wikiName, int maxLength )
+        {
+<span class="nc" id="L168">            StopWatch sw = new StopWatch();</span>
+<span class="nc" id="L169">            sw.start();</span>
+<span class="nc" id="L170">            List&lt;String&gt; list = new ArrayList&lt;&gt;(maxLength);</span>
+
+<span class="nc bnc" id="L172" title="All 2 branches missed.">            if( wikiName.length() &gt; 0 )</span>
+            {
+
+                // split pagename and attachment filename
+<span class="nc" id="L176">                String filename = &quot;&quot;;</span>
+<span class="nc" id="L177">                int pos = wikiName.indexOf(&quot;/&quot;);</span>
+<span class="nc bnc" id="L178" title="All 2 branches missed.">                if( pos &gt;= 0 )</span>
+                {
+<span class="nc" id="L180">                    filename = wikiName.substring( pos ).toLowerCase();</span>
+<span class="nc" id="L181">                    wikiName = wikiName.substring( 0, pos );</span>
+                }
+
+<span class="nc" id="L184">                String cleanWikiName = MarkupParser.cleanLink(wikiName).toLowerCase() + filename;</span>
+
+<span class="nc" id="L186">                String oldStyleName = MarkupParser.wikifyLink(wikiName).toLowerCase() + filename;</span>
+
+<span class="nc" id="L188">                Set&lt; String &gt; allPages = m_engine.getReferenceManager().findCreated();</span>
+
+<span class="nc" id="L190">                int counter = 0;</span>
+<span class="nc bnc" id="L191" title="All 4 branches missed.">                for( Iterator&lt; String &gt; i = allPages.iterator(); i.hasNext() &amp;&amp; counter &lt; maxLength; )</span>
+                {
+<span class="nc" id="L193">                    String p = i.next();</span>
+<span class="nc" id="L194">                    String pp = p.toLowerCase();</span>
+<span class="nc bnc" id="L195" title="All 4 branches missed.">                    if( pp.startsWith( cleanWikiName) || pp.startsWith( oldStyleName ) )</span>
+                    {
+<span class="nc" id="L197">                        list.add( p );</span>
+<span class="nc" id="L198">                        counter++;</span>
+                    }
+<span class="nc" id="L200">                }</span>
+            }
+
+<span class="nc" id="L203">            sw.stop();</span>
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if( log.isDebugEnabled() ) log.debug(&quot;Suggestion request for &quot;+wikiName+&quot; done in &quot;+sw);</span>
+<span class="nc" id="L205">            return list;</span>
+        }
+
+        /**
+         *  Performs a full search of pages.
+         *
+         *  @param searchString The query string
+         *  @param maxLength How many hits to return
+         *  @return the pages found
+         */
+        public List&lt;Map&lt;String,Object&gt;&gt; findPages( String searchString, int maxLength, WikiContext wikiContext )
+        {
+<span class="nc" id="L217">            StopWatch sw = new StopWatch();</span>
+<span class="nc" id="L218">            sw.start();</span>
+
+<span class="nc" id="L220">            List&lt;Map&lt;String,Object&gt;&gt; list = new ArrayList&lt;&gt;(maxLength);</span>
+
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            if( searchString.length() &gt; 0 ) {</span>
+                try {
+                    Collection&lt; SearchResult &gt; c;
+
+<span class="nc bnc" id="L226" title="All 2 branches missed.">                    if( m_searchProvider instanceof LuceneSearchProvider ) {</span>
+<span class="nc" id="L227">                        c = ((LuceneSearchProvider)m_searchProvider).findPages( searchString, 0, wikiContext );</span>
+                    } else {
+<span class="nc" id="L229">                        c = m_searchProvider.findPages( searchString, wikiContext );</span>
+                    }
+
+<span class="nc" id="L232">                    int count = 0;</span>
+<span class="nc bnc" id="L233" title="All 4 branches missed.">                    for( Iterator&lt; SearchResult &gt; i = c.iterator(); i.hasNext() &amp;&amp; count &lt; maxLength; count++ )</span>
+                    {
+<span class="nc" id="L235">                        SearchResult sr = i.next();</span>
+<span class="nc" id="L236">                        HashMap&lt;String,Object&gt; hm = new HashMap&lt;&gt;();</span>
+<span class="nc" id="L237">                        hm.put( &quot;page&quot;, sr.getPage().getName() );</span>
+<span class="nc" id="L238">                        hm.put( &quot;score&quot;, sr.getScore() );</span>
+<span class="nc" id="L239">                        list.add( hm );</span>
+                    }
+<span class="nc" id="L241">                } catch(Exception e) {</span>
+<span class="nc" id="L242">                    log.info(&quot;AJAX search failed; &quot;,e);</span>
+<span class="nc" id="L243">                }</span>
+            }
+
+<span class="nc" id="L246">            sw.stop();</span>
+<span class="nc bnc" id="L247" title="All 2 branches missed.">            if( log.isDebugEnabled() ) log.debug(&quot;AJAX search complete in &quot;+sw);</span>
+<span class="nc" id="L248">            return list;</span>
+        }
+    }
+
+
+    /**
+     *  This particular method starts off indexing and all sorts of various activities,
+     *  so you need to run this last, after things are done.
+     *
+     * @param engine the wiki engine
+     * @param properties the properties used to initialize the wiki engine
+     * @throws FilterException if the search provider failed to initialize
+     */
+    @Override
+    public void initialize(WikiEngine engine, Properties properties)
+        throws FilterException
+    {
+<span class="fc" id="L265">        m_engine = engine;</span>
+
+<span class="fc" id="L267">        loadSearchProvider(properties);</span>
+
+        try
+        {
+<span class="fc" id="L271">            m_searchProvider.initialize(engine, properties);</span>
+        }
+<span class="nc" id="L273">        catch (NoRequiredPropertyException e)</span>
+        {
+<span class="nc" id="L275">            log.error( e.getMessage(), e );</span>
+        }
+<span class="nc" id="L277">        catch (IOException e)</span>
+        {
+<span class="nc" id="L279">            log.error( e.getMessage(), e );</span>
+<span class="pc" id="L280">        }</span>
+<span class="fc" id="L281">    }</span>
+
+    private void loadSearchProvider(Properties properties) {
+        //
+        // See if we're using Lucene, and if so, ensure that its
+        // index directory is up to date.
+        //
+<span class="fc" id="L288">        String useLucene = properties.getProperty(PROP_USE_LUCENE);</span>
+
+        // FIXME: Obsolete, remove, or change logic to first load searchProvder?
+        // If the old jspwiki.useLucene property is set we use that instead of the searchProvider class.
+<span class="pc bpc" id="L292" title="1 of 2 branches missed.">        if( useLucene != null )</span>
+        {
+<span class="nc" id="L294">            log.info( PROP_USE_LUCENE+&quot; is deprecated; please use &quot;+PROP_SEARCHPROVIDER+&quot;=&lt;your search provider&gt; instead.&quot; );</span>
+<span class="nc bnc" id="L295" title="All 2 branches missed.">            if( TextUtil.isPositive( useLucene ) )</span>
+            {
+<span class="nc" id="L297">                m_searchProvider = new LuceneSearchProvider();</span>
+            }
+            else
+            {
+<span class="nc" id="L301">                m_searchProvider = new BasicSearchProvider();</span>
+            }
+<span class="nc" id="L303">            log.debug(&quot;useLucene was set, loading search provider &quot; + m_searchProvider);</span>
+<span class="nc" id="L304">            return;</span>
+        }
+
+<span class="fc" id="L307">        String providerClassName = properties.getProperty( PROP_SEARCHPROVIDER, DEFAULT_SEARCHPROVIDER );</span>
+
+        try {
+<span class="fc" id="L310">            Class&lt;?&gt; providerClass = ClassUtil.findClass( &quot;org.apache.wiki.search&quot;, providerClassName );</span>
+<span class="fc" id="L311">            m_searchProvider = (SearchProvider)providerClass.newInstance();</span>
+<span class="nc" id="L312">        } catch( ClassNotFoundException | InstantiationException | IllegalAccessException e ) {</span>
+<span class="nc" id="L313">            log.warn(&quot;Failed loading SearchProvider, will use BasicSearchProvider.&quot;, e);</span>
+<span class="fc" id="L314">        }</span>
+
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">        if( null == m_searchProvider )</span>
+        {
+            // FIXME: Make a static with the default search provider
+<span class="nc" id="L319">            m_searchProvider = new BasicSearchProvider();</span>
+        }
+<span class="fc" id="L321">        log.debug(&quot;Loaded search provider &quot; + m_searchProvider);</span>
+<span class="fc" id="L322">    }</span>
+
+    /**
+     *  Returns the SearchProvider used.
+     *
+     *  @return The current SearchProvider.
+     */
+    public SearchProvider getSearchEngine()
+    {
+<span class="fc" id="L331">        return m_searchProvider;</span>
+    }
+
+    /**
+     *  Sends a search to the current search provider. The query is is whatever native format
+     *  the query engine wants to use.
+     *
+     * @param query The query.  Null is safe, and is interpreted as an empty query.
+     * @param wikiContext the context within which to run the search
+     * @return A collection of WikiPages that matched.
+     * @throws ProviderException If the provider fails and a search cannot be completed.
+     * @throws IOException If something else goes wrong.
+     */
+    public Collection&lt; SearchResult &gt; findPages( String query, WikiContext wikiContext )
+        throws ProviderException, IOException
+    {
+<span class="pc bpc" id="L347" title="1 of 2 branches missed.">        if( query == null ) query = &quot;&quot;;</span>
+<span class="fc" id="L348">        return m_searchProvider.findPages( query, wikiContext );</span>
+    }
+
+    /**
+     *  Removes the page from the search cache (if any).
+     *  @param page  The page to remove
+     */
+    public void pageRemoved(WikiPage page)
+    {
+<span class="fc" id="L357">        m_searchProvider.pageRemoved(page);</span>
+<span class="fc" id="L358">    }</span>
+
+    /**
+     *  Reindexes the page.
+     *
+     *  @param wikiContext {@inheritDoc}
+     *  @param content {@inheritDoc}
+     */
+    @Override
+    public void postSave( WikiContext wikiContext, String content )
+    {
+        //
+        //  Makes sure that we're indexing the latest version of this
+        //  page.
+        //
+<span class="fc" id="L373">        WikiPage p = m_engine.getPage( wikiContext.getPage().getName() );</span>
+<span class="fc" id="L374">        reindexPage( p );</span>
+<span class="fc" id="L375">    }</span>
+
+    /**
+     *   Forces the reindex of the given page.
+     *
+     *   @param page The page.
+     */
+    public void reindexPage(WikiPage page)
+    {
+<span class="fc" id="L384">        m_searchProvider.reindexPage(page);</span>
+<span class="fc" id="L385">    }</span>
+
+    /**
+     *  If the page has been deleted, removes it from the index.
+     *
+     *  @param event {@inheritDoc}
+     */
+    @Override
+    public void actionPerformed(WikiEvent event)
+    {
+<span class="pc bpc" id="L395" title="1 of 4 branches missed.">        if( (event instanceof WikiPageEvent) &amp;&amp; (event.getType() == WikiPageEvent.PAGE_DELETE_REQUEST) )</span>
+        {
+<span class="fc" id="L397">            String pageName = ((WikiPageEvent) event).getPageName();</span>
+
+<span class="fc" id="L399">            WikiPage p = m_engine.getPage( pageName );</span>
+<span class="pc bpc" id="L400" title="1 of 2 branches missed.">            if( p != null )</span>
+            {
+<span class="fc" id="L402">                pageRemoved( p );</span>
+            }
+        }
+<span class="fc" id="L405">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

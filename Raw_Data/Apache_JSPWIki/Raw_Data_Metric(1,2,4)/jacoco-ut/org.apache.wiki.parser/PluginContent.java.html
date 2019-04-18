@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PluginContent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.parser</a> &gt; <span class="el_source">PluginContent.java</span></div><h1>PluginContent.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+*/
+package org.apache.wiki.parser;
+
+import java.io.IOException;
+import java.text.MessageFormat;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.ResourceBundle;
+
+import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.MatchResult;
+import org.apache.oro.text.regex.PatternMatcher;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.engine.PluginManager;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.ParserStagePlugin;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.render.RenderingManager;
+import org.jdom2.Text;
+
+
+/**
+ * Stores the contents of a plugin in a WikiDocument DOM tree.
+ * &lt;p/&gt;
+ * If the RenderingManager.WYSIWYG_EDITOR_MODE is set to Boolean.TRUE in the context,
+ * then the plugin
+ * is rendered as WikiMarkup.  This allows an HTML editor to work without
+ * rendering the plugin each time as well.
+ * &lt;p/&gt;
+ * If RenderingManager.VAR_EXECUTE_PLUGINS is set to Boolean.FALSE, then
+ * the plugin is not executed.
+ *
+ * @since 2.4
+ */
+public class PluginContent extends Text {
+
+    private static final String BLANK = &quot;&quot;;
+    private static final String CMDLINE = &quot;_cmdline&quot;;
+    private static final String ELEMENT_BR = &quot;&lt;br/&gt;&quot;;
+    private static final String EMITTABLE_PLUGINS = &quot;Image|FormOpen|FormClose|FormInput|FormTextarea|FormSelect&quot;;
+    private static final String LINEBREAK = &quot;\n&quot;;
+    private static final String PLUGIN_START = &quot;[{&quot;;
+    private static final String PLUGIN_END = &quot;}]&quot;;
+    private static final String SPACE = &quot; &quot;;
+
+    private static final long serialVersionUID = 1L;
+
+<span class="fc" id="L70">    private static Logger log = Logger.getLogger(PluginContent.class);</span>
+
+    private String m_pluginName;
+    private Map&lt;String, String&gt; m_params;
+
+    /**
+     * Creates a new DOM element with the given plugin name and a map of parameters.
+     *
+     * @param pluginName The FQN of a plugin.
+     * @param parameters A Map of parameters.
+     */
+<span class="fc" id="L81">    public PluginContent(String pluginName, Map&lt;String, String&gt; parameters) {</span>
+<span class="fc" id="L82">        m_pluginName = pluginName;</span>
+<span class="fc" id="L83">        m_params = parameters;</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Returns the name of the plugin invoked by the DOM element.
+     *
+     * @return Name of the plugin
+     * @since 2.5.7
+     */
+    public String getPluginName() {
+<span class="fc" id="L93">        return m_pluginName;</span>
+    }
+
+    /**
+     * Returns a parameter value from the parameter map.
+     *
+     * @param name the name of the parameter.
+     * @return The value from the map, or null, if no such parameter exists.
+     */
+    public String getParameter(String name) {
+<span class="fc" id="L103">        return m_params.get(name);</span>
+    }
+
+    /**
+     * Returns the parameter map given in the constructor.
+     *
+     * @return The parameter map.
+     */
+    public Map&lt;String, String&gt; getParameters() {
+<span class="fc" id="L112">        return m_params;</span>
+    }
+
+    /**
+     * Returns the rendered plugin.  Only calls getText().
+     *
+     * @return HTML
+     */
+    public String getValue() {
+<span class="fc" id="L121">        return getText();</span>
+    }
+
+    /**
+     * The main invocation for the plugin.  When the getText() is called, it
+     * invokes the plugin and returns its contents.  If there is no Document
+     * yet, only returns the plugin name itself.
+     *
+     * @return The plugin rendered according to the options set in the WikiContext.
+     */
+    public String getText() {
+<span class="fc" id="L132">        WikiDocument doc = ( WikiDocument )getDocument();</span>
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if (doc == null) {</span>
+            //
+            // This element has not yet been attached anywhere, so we simply assume there is
+            // no rendering and return the plugin name.  This is required e.g. when the 
+            // paragraphify() checks whether the element is empty or not.  We can't of course
+            // know whether the rendering would result in an empty string or not, but let us
+            // assume it does not.
+            //
+
+<span class="fc" id="L143">            return getPluginName();</span>
+        }
+
+<span class="fc" id="L146">        WikiContext context = doc.getContext();</span>
+        
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if( context == null ) {</span>
+<span class="nc" id="L149">            log.info( &quot;WikiContext garbage-collected, cannot proceed&quot; );</span>
+<span class="nc" id="L150">            return getPluginName();</span>
+        }
+
+<span class="fc" id="L153">        return invoke( context );</span>
+    }
+
+    /**
+     * Performs plugin invocation and return its contents.
+     * 
+     * @param context WikiContext in which the plugin is executed. Must NOT be null.
+     * @return plugin contents.
+     */
+	public String invoke( WikiContext context ) {
+		String result;
+<span class="fc" id="L164">		Boolean wysiwygVariable = (Boolean) context.getVariable(RenderingManager.WYSIWYG_EDITOR_MODE);</span>
+<span class="fc" id="L165">        boolean wysiwygEditorMode = false;</span>
+<span class="pc bpc" id="L166" title="1 of 2 branches missed.">        if (wysiwygVariable != null) {</span>
+<span class="nc" id="L167">            wysiwygEditorMode = wysiwygVariable.booleanValue();</span>
+        }
+
+        try {
+            //
+            //  Determine whether we should emit the actual code for this plugin or
+            //  whether we should execute it.  For some plugins we always execute it,
+            //  since they can be edited visually.
+            //
+            // FIXME: The plugin name matching should not be done here, but in a per-editor resource
+<span class="pc bpc" id="L177" title="3 of 4 branches missed.">            if (wysiwygEditorMode &amp;&amp; !m_pluginName.matches(EMITTABLE_PLUGINS)) {</span>
+<span class="nc" id="L178">                result = PLUGIN_START + m_pluginName + SPACE;</span>
+
+                // convert newlines to &lt;br&gt; in case the plugin has a body.
+<span class="nc" id="L181">                String cmdLine = (m_params.get(CMDLINE)).replaceAll(LINEBREAK, ELEMENT_BR);</span>
+
+<span class="nc" id="L183">                result = result + cmdLine + PLUGIN_END;</span>
+<span class="nc" id="L184">            } else {</span>
+<span class="fc" id="L185">                Boolean b = (Boolean) context.getVariable(RenderingManager.VAR_EXECUTE_PLUGINS);</span>
+<span class="pc bpc" id="L186" title="1 of 4 branches missed.">                if (b != null &amp;&amp; !b.booleanValue()) {</span>
+<span class="fc" id="L187">                    return BLANK;</span>
+                }
+
+<span class="fc" id="L190">                WikiEngine engine = context.getEngine();</span>
+
+<span class="fc" id="L192">                Map&lt;String, String&gt; parsedParams = new HashMap&lt;String, String&gt;();</span>
+
+                //
+                //  Parse any variable instances from the string
+                //
+<span class="fc bfc" id="L197" title="All 2 branches covered.">                for (Map.Entry&lt;String, String&gt; e : m_params.entrySet()) {</span>
+<span class="fc" id="L198">                    String val = e.getValue();</span>
+<span class="fc" id="L199">                    val = engine.getVariableManager().expandVariables(context, val);</span>
+<span class="fc" id="L200">                    parsedParams.put(e.getKey(), val);</span>
+<span class="fc" id="L201">                }</span>
+<span class="fc" id="L202">                PluginManager pm = engine.getPluginManager();</span>
+<span class="fc" id="L203">                result = pm.execute(context, m_pluginName, parsedParams);</span>
+            }
+<span class="fc" id="L205">        } catch (Exception e) {</span>
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">            if (wysiwygEditorMode) {</span>
+<span class="nc" id="L207">                result = &quot;&quot;;</span>
+            } else {
+                // log.info(&quot;Failed to execute plugin&quot;,e);
+<span class="fc" id="L210">                ResourceBundle rb = Preferences.getBundle(context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE);</span>
+<span class="fc" id="L211">                result = MarkupParser.makeError( MessageFormat.format( rb.getString( &quot;plugin.error.insertionfailed&quot; ), </span>
+<span class="fc" id="L212">                		                                               context.getRealPage().getWiki(), </span>
+<span class="fc" id="L213">                		                                               context.getRealPage().getName(), </span>
+<span class="fc" id="L214">                		                                               e.getMessage() ) ).getText();</span>
+            }
+<span class="fc" id="L216">        }</span>
+
+
+<span class="fc" id="L219">        return result;</span>
+	}
+
+    /**
+     * Executes the executeParse() method.
+     *
+     * @param context The WikiContext
+     * @throws PluginException If something goes wrong.
+     */
+    public void executeParse(WikiContext context) throws PluginException {
+<span class="fc" id="L229">        PluginManager pm = context.getEngine().getPluginManager();</span>
+<span class="pc bpc" id="L230" title="1 of 2 branches missed.">        if (pm.pluginsEnabled()) {</span>
+<span class="fc" id="L231">            ResourceBundle rb = Preferences.getBundle(context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE);</span>
+<span class="fc" id="L232">            Map&lt;String, String&gt; params = getParameters();</span>
+<span class="fc" id="L233">            WikiPlugin plugin = pm.newWikiPlugin(getPluginName(), rb);</span>
+            try {
+<span class="pc bpc" id="L235" title="1 of 4 branches missed.">                if (plugin != null &amp;&amp; plugin instanceof ParserStagePlugin) {</span>
+<span class="fc" id="L236">                    ((ParserStagePlugin) plugin).executeParser(this, context, params);</span>
+                }
+<span class="nc" id="L238">            } catch (ClassCastException e) {</span>
+<span class="nc" id="L239">                throw new PluginException(MessageFormat.format(rb.getString(&quot;plugin.error.notawikiplugin&quot;), getPluginName()), e);</span>
+<span class="fc" id="L240">            }</span>
+        }
+<span class="fc" id="L242">    }</span>
+
+    /**
+     * Parses a plugin invocation and returns a DOM element.
+     *
+     * @param context     The WikiContext
+     * @param commandline The line to parse
+     * @param pos         The position in the stream parsing.
+     * @return A DOM element
+     * @throws PluginException If plugin invocation is faulty
+     * @since 2.10.0
+     */
+    public static PluginContent parsePluginLine(WikiContext context, String commandline, int pos) throws PluginException {
+<span class="fc" id="L255">        PatternMatcher matcher = new Perl5Matcher();</span>
+
+        try {
+<span class="fc" id="L258">            PluginManager pm = context.getEngine().getPluginManager();</span>
+<span class="pc bpc" id="L259" title="1 of 2 branches missed.">            if (matcher.contains(commandline, pm.getPluginPattern())) {</span>
+
+<span class="fc" id="L261">                MatchResult res = matcher.getMatch();</span>
+
+<span class="fc" id="L263">                String plugin = res.group(2);</span>
+<span class="fc" id="L264">                String args = commandline.substring(res.endOffset(0),</span>
+<span class="fc" id="L265">                        commandline.length() -</span>
+<span class="pc bpc" id="L266" title="1 of 2 branches missed.">                                (commandline.charAt(commandline.length() - 1) == '}' ? 1 : 0));</span>
+<span class="fc" id="L267">                Map&lt;String, String&gt; arglist = pm.parseArgs(args);</span>
+
+                // set wikitext bounds of plugin as '_bounds' parameter, e.g., [345,396]
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">                if (pos != -1) {</span>
+<span class="fc" id="L271">                    int end = pos + commandline.length() + 2;</span>
+<span class="fc" id="L272">                    String bounds = pos + &quot;|&quot; + end;</span>
+<span class="fc" id="L273">                    arglist.put(PluginManager.PARAM_BOUNDS, bounds);</span>
+                }
+
+<span class="fc" id="L276">                PluginContent result = new PluginContent(plugin, arglist);</span>
+
+<span class="fc" id="L278">                return result;</span>
+            }
+<span class="nc" id="L280">        } catch (ClassCastException e) {</span>
+<span class="nc" id="L281">            log.error(&quot;Invalid type offered in parsing plugin arguments.&quot;, e);</span>
+<span class="nc" id="L282">            throw new InternalWikiException(&quot;Oops, someone offered !String!&quot;, e);</span>
+<span class="nc" id="L283">        } catch (NoSuchElementException e) {</span>
+<span class="nc" id="L284">            String msg = &quot;Missing parameter in plugin definition: &quot; + commandline;</span>
+<span class="nc" id="L285">            log.warn(msg, e);</span>
+<span class="nc" id="L286">            throw new PluginException(msg);</span>
+<span class="nc" id="L287">        } catch (IOException e) {</span>
+<span class="nc" id="L288">            String msg = &quot;Zyrf.  Problems with parsing arguments: &quot; + commandline;</span>
+<span class="nc" id="L289">            log.warn(msg, e);</span>
+<span class="nc" id="L290">            throw new PluginException(msg);</span>
+<span class="nc" id="L291">        }</span>
+
+<span class="nc" id="L293">        return null;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

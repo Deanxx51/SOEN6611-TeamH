@@ -1,0 +1,321 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IfPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">IfPlugin.java</span></div><h1>IfPlugin.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.plugin;
+
+import java.security.Principal;
+import java.util.Map;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.oro.text.regex.*;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  The IfPlugin allows parts of a WikiPage to be executed conditionally, and is intended as a flexible way
+ *  of customizing a page depending on certain conditions. Do not use it as a security mechanism to conditionally
+ *  hide content from users (use page ACLs for that).
+ *  
+ *  You can also use shorthand &quot;If&quot; to run it.
+ *  
+ *  Parameters:
+ *  &lt;ul&gt;
+ *    &lt;li&gt;&lt;b&gt;group&lt;/b&gt; - A &quot;|&quot; -separated list of group names.
+ *    &lt;li&gt;&lt;b&gt;user&lt;/b&gt;  - A &quot;|&quot; -separated list of user names.
+ *    &lt;li&gt;&lt;b&gt;ip&lt;/b&gt;    - A &quot;|&quot; -separated list of ip addresses.
+ *    &lt;li&gt;&lt;b&gt;var&lt;/b&gt;   - A wiki variable
+ *    &lt;li&gt;&lt;b&gt;page&lt;/b&gt;  - A page name
+ *    &lt;li&gt;&lt;b&gt;contains&lt;/b&gt; - A Perl5 regexp pattern
+ *    &lt;li&gt;&lt;b&gt;is&lt;/b&gt;    - A Perl5 regexp pattern
+ *    &lt;li&gt;&lt;b&gt;exists&lt;/b&gt; - &quot;true&quot; or &quot;false&quot;.
+ *  &lt;/ul&gt;
+ *
+ *  &lt;p&gt;If any of them match, the body of the plugin is executed.  You can
+ *  negate the content by prefixing it with a &quot;!&quot;.  For example, to greet
+ *  all admins, put the following in your LeftMenu:&lt;/p&gt;
+ *  &lt;pre&gt;
+ *  [{If group='Admin'
+ *
+ *  Hello, Admin, and your mighty powers!}]
+ *  &lt;/pre&gt;
+ *
+ *  &lt;p&gt;In order to send a message to everybody except Jack use&lt;/p&gt;
+ *  &lt;pre&gt;
+ *  [{If user='!Jack'
+ *
+ *  %%warning
+ *  Jack's surprise birthday party at eleven!
+ *  %%}]
+ *  &lt;/pre&gt;
+ *
+ *  &lt;p&gt;Note that you can't use &quot;!Jack|!Jill&quot;, because for Jack, !Jill matches;
+ *  and for Jill, !Jack matches.  These are not regular expressions (though
+ *  they might become so in the future).&lt;p&gt;
+ *
+ *  &lt;p&gt;To check for page content, use&lt;/p&gt;
+ *  &lt;pre&gt;
+ *  [{If page='TestPage' contains='xyzzy'
+ *
+ *  Page contains the text &quot;xyzzy&quot;}]
+ *  &lt;/pre&gt;
+ *
+ *  &lt;p&gt;The difference between &quot;contains&quot; and &quot;is&quot; is that &quot;is&quot; is always an exact match,
+ *  whereas &quot;contains&quot; just checks if a pattern is available.&lt;/p&gt;
+ *
+ *  &lt;p&gt;To check for page existence, use&lt;/p&gt;
+ *  &lt;pre&gt;
+ *  [{If page='TestPage' exists='true'
+ *
+ *  Page &quot;TestPage&quot; exists.}]
+ *  &lt;/pre&gt;
+ *  &lt;p&gt;With the same mechanism, it's also possible to test for the existence
+ *  of a variable - just use &quot;var&quot; instead of &quot;page&quot;.&lt;/p&gt;
+ *  
+ *  &lt;p&gt;Another caveat is that the plugin body content is not counted
+ *  towards ReferenceManager links.  So any links do not appear on any reference
+ *  lists.  Depending on your position, this may be a good or a bad
+ *  thing.&lt;/p&gt;
+ *
+ *  &lt;h3&gt;Calling Externally&lt;/h3&gt;
+ *
+ *  &lt;p&gt;The functional, decision-making part of this plugin may be called from
+ *  other code (e.g., other plugins) since it is available as a static method
+ *  {@link #ifInclude(WikiContext,Map)}. Note that the plugin body may contain
+ *  references to other plugins.&lt;/p&gt;
+ *
+ *  @since 2.6
+ */
+<span class="fc" id="L108">public class IfPlugin implements WikiPlugin</span>
+{
+    /** The parameter name for setting the group to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_GROUP    = &quot;group&quot;;
+
+    /** The parameter name for setting the user id to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_USER     = &quot;user&quot;;
+    
+    /** The parameter name for setting the ip address to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_IP       = &quot;ip&quot;;
+    
+    /** The parameter name for setting the page name to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_PAGE     = &quot;page&quot;;
+    
+    /** The parameter name for setting the contents of the page to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_CONTAINS = &quot;contains&quot;;
+    
+    /** The parameter name for setting the variable name to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_VAR      = &quot;var&quot;;
+    
+    /** The parameter name for setting the exact content to check.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_IS       = &quot;is&quot;;
+    
+    /** The parameter name for checking whether a page/var exists.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_EXISTS   = &quot;exists&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute(WikiContext context, Map&lt;String, String&gt; params) throws PluginException
+    {
+<span class="fc bfc" id="L139" title="All 2 branches covered.">        return ifInclude( context,params )</span>
+<span class="fc" id="L140">                ? context.getEngine().textToHTML( context, params.get( DefaultPluginManager.PARAM_BODY ) )</span>
+                : &quot;&quot; ;
+    }
+
+
+    /**
+     *  Returns a boolean result based on processing the WikiContext and
+     *  parameter Map as according to the rules stated in the IfPlugin
+     *  documentation. 
+     *  As a static method this may be called by other classes.
+     *
+     * @param context   The current WikiContext.
+     * @param params    The parameter Map which contains key-value pairs.
+     * @throws PluginException If something goes wrong
+     * @return True, if the condition holds.
+     */
+    public static boolean ifInclude( WikiContext context, Map&lt;String, String&gt; params ) throws PluginException
+    {
+<span class="fc" id="L158">        boolean include = false;</span>
+
+<span class="fc" id="L160">        String group    = params.get( PARAM_GROUP );</span>
+<span class="fc" id="L161">        String user     = params.get( PARAM_USER );</span>
+<span class="fc" id="L162">        String ip       = params.get( PARAM_IP );</span>
+<span class="fc" id="L163">        String page     = params.get( PARAM_PAGE );</span>
+<span class="fc" id="L164">        String contains = params.get( PARAM_CONTAINS );</span>
+<span class="fc" id="L165">        String var      = params.get( PARAM_VAR );</span>
+<span class="fc" id="L166">        String is       = params.get( PARAM_IS );</span>
+<span class="fc" id="L167">        String exists   = params.get( PARAM_EXISTS );</span>
+
+<span class="fc" id="L169">        include |= checkGroup(context, group);</span>
+<span class="fc" id="L170">        include |= checkUser(context, user);</span>
+<span class="fc" id="L171">        include |= checkIP(context, ip);</span>
+
+<span class="pc bpc" id="L173" title="1 of 2 branches missed.">        if( page != null )</span>
+        {
+<span class="nc" id="L175">            String content = context.getEngine().getPureText(page, WikiProvider.LATEST_VERSION).trim();</span>
+<span class="nc" id="L176">            include |= checkContains(content,contains);</span>
+<span class="nc" id="L177">            include |= checkIs(content,is);</span>
+<span class="nc" id="L178">            include |= checkExists(context,page,exists);</span>
+        }
+
+<span class="pc bpc" id="L181" title="1 of 2 branches missed.">        if( var != null )</span>
+        {
+<span class="nc" id="L183">            String content = context.getEngine().getVariable(context, var);</span>
+<span class="nc" id="L184">            include |= checkContains(content,contains);</span>
+<span class="nc" id="L185">            include |= checkIs(content,is);</span>
+<span class="nc" id="L186">            include |= checkVarExists(content,exists);</span>
+        }
+
+<span class="fc" id="L189">        return include;</span>
+    }
+
+    private static boolean checkExists( WikiContext context, String page, String exists )
+    {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if( exists == null ) return false;</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">        return !context.getEngine().pageExists(page) ^ TextUtil.isPositive(exists);</span>
+    }
+
+    private static boolean checkVarExists( String varContent, String exists )
+    {
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if( exists == null ) return false;</span>
+<span class="nc bnc" id="L201" title="All 2 branches missed.">        return (varContent == null ) ^ TextUtil.isPositive(exists);</span>
+    }
+
+    private static boolean checkGroup( WikiContext context, String group )
+    {
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if( group == null ) return false;</span>
+<span class="nc" id="L207">        String[] groupList = StringUtils.split(group,'|');</span>
+<span class="nc" id="L208">        boolean include = false;</span>
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        for( int i = 0; i &lt; groupList.length; i++ )</span>
+        {
+<span class="nc" id="L212">            String gname = groupList[i];</span>
+<span class="nc" id="L213">            boolean invert = false;</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            if( groupList[i].startsWith(&quot;!&quot;) )</span>
+            {
+<span class="nc bnc" id="L216" title="All 2 branches missed.">                if( groupList[i].length() &gt; 1 ) </span>
+                {
+<span class="nc" id="L218">                    gname = groupList[i].substring( 1 );</span>
+                }
+<span class="nc" id="L220">                invert = true;</span>
+            }
+
+<span class="nc" id="L223">            Principal g = context.getEngine().getAuthorizationManager().resolvePrincipal(gname);</span>
+
+<span class="nc" id="L225">            include |= context.getEngine().getAuthorizationManager().isUserInRole( context.getWikiSession(), g ) ^ invert;</span>
+        }
+<span class="nc" id="L227">        return include;</span>
+    }
+
+    private static boolean checkUser( WikiContext context, String user )
+    {
+<span class="pc bpc" id="L232" title="1 of 4 branches missed.">        if( user == null || context.getCurrentUser() == null ) return false;</span>
+
+<span class="fc" id="L234">        String[] list = StringUtils.split(user,'|');</span>
+<span class="fc" id="L235">        boolean include = false;</span>
+
+<span class="fc bfc" id="L237" title="All 2 branches covered.">        for( int i = 0; i &lt; list.length; i++ )</span>
+        {
+<span class="fc" id="L239">            String userToCheck = list[i];</span>
+<span class="fc" id="L240">            boolean invert = false;</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">            if( list[i].startsWith(&quot;!&quot;) )</span>
+            {
+<span class="fc" id="L243">                invert = true;</span>
+                // strip !
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">                if(  user.length() &gt; 1 ) </span>
+                {
+<span class="fc" id="L247">                    userToCheck = list[i].substring( 1 );</span>
+                }
+            }
+
+<span class="fc" id="L251">            include |= userToCheck.equals( context.getCurrentUser().getName() ) ^ invert;</span>
+        }
+<span class="fc" id="L253">        return include;</span>
+    }
+
+    // TODO: Add subnetwork matching, e.g. 10.0.0.0/8
+    private static boolean checkIP( WikiContext context, String ipaddr )
+    {
+<span class="pc bpc" id="L259" title="1 of 4 branches missed.">        if( ipaddr == null || context.getHttpRequest() == null ) return false;</span>
+
+        
+<span class="fc" id="L262">        String[] list = StringUtils.split(ipaddr,'|');</span>
+<span class="fc" id="L263">        boolean include = false;</span>
+
+<span class="fc bfc" id="L265" title="All 2 branches covered.">        for( int i = 0; i &lt; list.length; i++ )</span>
+        {
+<span class="fc" id="L267">            String ipaddrToCheck = list[i];</span>
+<span class="fc" id="L268">            boolean invert = false;</span>
+<span class="fc bfc" id="L269" title="All 2 branches covered.">            if( list[i].startsWith(&quot;!&quot;) )</span>
+            {
+<span class="fc" id="L271">                invert = true;</span>
+                // strip !
+<span class="pc bpc" id="L273" title="1 of 2 branches missed.">                if(  list[i].length() &gt; 1 ) </span>
+                {
+<span class="fc" id="L275">                    ipaddrToCheck = list[i].substring( 1 );</span>
+                }
+            }
+
+<span class="fc" id="L279">            include |= ipaddrToCheck.equals( HttpUtil.getRemoteAddress(context.getHttpRequest()) ) ^ invert;</span>
+        }
+<span class="fc" id="L281">        return include;</span>
+    }
+
+    private static boolean doMatch( String content, String pattern )
+        throws PluginException
+    {
+<span class="nc" id="L287">        PatternCompiler compiler = new Perl5Compiler();</span>
+<span class="nc" id="L288">        PatternMatcher  matcher  = new Perl5Matcher();</span>
+
+        try
+        {
+<span class="nc" id="L292">            Pattern matchp = compiler.compile( pattern, Perl5Compiler.SINGLELINE_MASK );</span>
+            // m_exceptPattern = compiler.compile( exceptPattern, Perl5Compiler.SINGLELINE_MASK );
+<span class="nc" id="L294">            return matcher.matches( content, matchp );</span>
+        }
+<span class="nc" id="L296">        catch( MalformedPatternException e )</span>
+        {
+<span class="nc" id="L298">            throw new PluginException(&quot;Faulty pattern &quot;+pattern);</span>
+        }
+
+    }
+
+    private static boolean checkContains( String pagecontent, String matchPattern )
+        throws PluginException
+    {
+<span class="nc bnc" id="L306" title="All 4 branches missed.">        if( pagecontent == null || matchPattern == null ) return false;</span>
+
+<span class="nc" id="L308">        return doMatch( pagecontent, &quot;.*&quot;+matchPattern+&quot;.*&quot; );</span>
+    }
+
+    private static boolean checkIs( String content, String matchPattern )
+        throws PluginException
+    {
+<span class="nc bnc" id="L314" title="All 4 branches missed.">        if( content == null || matchPattern == null ) return false;</span>
+
+<span class="nc" id="L316">        matchPattern = &quot;^&quot;+matchPattern+&quot;$&quot;;</span>
+
+<span class="nc" id="L318">        return doMatch(content, matchPattern);</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

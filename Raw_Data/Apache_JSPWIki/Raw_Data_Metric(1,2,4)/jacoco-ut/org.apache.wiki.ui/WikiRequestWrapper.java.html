@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiRequestWrapper.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">WikiRequestWrapper.java</span></div><h1>WikiRequestWrapper.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.ui;
+
+import java.security.Principal;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletRequestWrapper;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.SessionMonitor;
+import org.apache.wiki.auth.authorize.Role;
+
+/**
+ * Servlet request wrapper that encapsulates an incoming HTTP request and
+ * overrides its security methods so that the request returns JSPWiki-specific
+ * values.
+ * 
+ * @since 2.8
+ */
+public class WikiRequestWrapper extends HttpServletRequestWrapper
+{
+    private final WikiSession m_session;
+
+    /**
+     * Constructs a new wrapped request.
+     * 
+     * @param engine
+     *            the wiki engine
+     * @param request
+     *            the request to wrap
+     */
+    public WikiRequestWrapper(WikiEngine engine, HttpServletRequest request)
+    {
+<span class="fc" id="L52">        super(request);</span>
+
+        // Get and stash a reference to the current WikiSession
+<span class="fc" id="L55">        m_session = SessionMonitor.getInstance(engine).find(request.getSession());</span>
+<span class="fc" id="L56">    }</span>
+
+    /**
+     * Returns the remote user for the HTTP request, taking into account both
+     * container and JSPWiki custom authentication status. Specifically, if the
+     * wrapped request contains a remote user, this method returns that remote
+     * user. Otherwise, if the user's WikiSession is an authenticated session
+     * (that is, {@link WikiSession#isAuthenticated()} returns &lt;code&gt;true&lt;/code&gt;,
+     * this method returns the name of the principal returned by
+     * {@link WikiSession#getLoginPrincipal()}.
+     */
+    public String getRemoteUser()
+    {
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if (super.getRemoteUser() != null)</span>
+        {
+<span class="nc" id="L71">            return super.getRemoteUser();</span>
+        }
+
+<span class="nc bnc" id="L74" title="All 2 branches missed.">        if (m_session.isAuthenticated())</span>
+        {
+<span class="nc" id="L76">            return m_session.getLoginPrincipal().getName();</span>
+        }
+<span class="nc" id="L78">        return null;</span>
+    }
+
+    /**
+     * Returns the user principal for the HTTP request, taking into account both
+     * container and JSPWiki custom authentication status. Specifically, if the
+     * wrapped request contains a user principal, this method returns that
+     * principal. Otherwise, if the user's WikiSession is an authenticated
+     * session (that is, {@link WikiSession#isAuthenticated()} returns
+     * &lt;code&gt;true&lt;/code&gt;, this method returns the value of
+     * {@link WikiSession#getLoginPrincipal()}.
+     */
+    public Principal getUserPrincipal()
+    {
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if (super.getUserPrincipal() != null)</span>
+        {
+<span class="nc" id="L94">            return super.getUserPrincipal();</span>
+        }
+
+<span class="nc bnc" id="L97" title="All 2 branches missed.">        if (m_session.isAuthenticated())</span>
+        {
+<span class="nc" id="L99">            return m_session.getLoginPrincipal();</span>
+        }
+<span class="nc" id="L101">        return null;</span>
+    }
+
+    /**
+     * Determines whether the current user possesses a supplied role, taking
+     * into account both container and JSPWIki custom authentication status.
+     * Specifically, if the wrapped request shows that the user possesses the
+     * role, this method returns &lt;code&gt;true&lt;/code&gt;. If not, this method
+     * iterates through the built-in Role objects (&lt;em&gt;e.g.&lt;/em&gt;, ANONYMOUS,
+     * ASSERTED, AUTHENTICATED) returned by {@link WikiSession#getRoles()} and
+     * checks to see if any of these principals' names match the supplied role.
+     */
+    public boolean isUserInRole(String role)
+    {
+<span class="nc" id="L115">        boolean hasContainerRole = super.isUserInRole(role);</span>
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if (hasContainerRole)</span>
+        {
+<span class="nc" id="L118">            return true;</span>
+        }
+
+        // Iterate through all of the built-in roles and look for a match
+<span class="nc" id="L122">        Principal[] principals = m_session.getRoles();</span>
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        for (int i = 0; i &lt; principals.length; i++)</span>
+        {
+<span class="nc bnc" id="L125" title="All 2 branches missed.">            if (principals[i] instanceof Role)</span>
+            {
+<span class="nc" id="L127">                Role principal = (Role) principals[i];</span>
+<span class="nc bnc" id="L128" title="All 4 branches missed.">                if (Role.isBuiltInRole(principal) &amp;&amp; principal.getName().equals(role))</span>
+                {
+<span class="nc" id="L130">                    return true;</span>
+                }
+            }
+        }
+
+        // None of the built-in roles match, so no luck
+<span class="nc" id="L136">        return false;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

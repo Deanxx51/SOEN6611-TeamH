@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PageTimeComparator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.pages</a> &gt; <span class="el_source">PageTimeComparator.java</span></div><h1>PageTimeComparator.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.   
+ */
+package org.apache.wiki.pages;
+
+import java.io.Serializable;
+import java.util.Comparator;
+import java.util.Date;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiPage;
+
+/**
+ *  Compares the lastModified date of its arguments.  Both o1 and o2 MUST
+ *  be WikiPage objects, or else you will receive a ClassCastException.
+ *  &lt;p&gt;
+ *  If the lastModified date is the same, then the next key is the page name.
+ *  If the page name is also equal, then returns 0 for equality.
+ */
+// FIXME: Does not implement equals().
+<span class="fc" id="L36">public class PageTimeComparator implements Comparator&lt;WikiPage&gt;, Serializable {</span>
+	
+    private static final long serialVersionUID = 0L;
+
+<span class="fc" id="L40">    private static final Logger log = Logger.getLogger( PageTimeComparator.class ); </span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public int compare( WikiPage w1, WikiPage w2 ) {
+<span class="pc bpc" id="L46" title="2 of 4 branches missed.">        if( w1 == null || w2 == null ) {</span>
+<span class="nc" id="L47">            log.error( &quot;W1 or W2 is NULL in PageTimeComparator!&quot;);</span>
+<span class="nc" id="L48">            return 0; // FIXME: Is this correct?</span>
+        }
+
+<span class="fc" id="L51">        Date w1LastMod = w1.getLastModified();</span>
+<span class="fc" id="L52">        Date w2LastMod = w2.getLastModified();</span>
+
+<span class="pc bpc" id="L54" title="1 of 2 branches missed.">        if( w1LastMod == null ) {</span>
+<span class="nc" id="L55">            log.error( &quot;NULL MODIFY DATE WITH &quot; + w1.getName() );</span>
+<span class="nc" id="L56">            return 0;</span>
+<span class="pc bpc" id="L57" title="1 of 2 branches missed.">        } else if( w2LastMod == null ) {</span>
+<span class="nc" id="L58">            log.error( &quot;NULL MODIFY DATE WITH &quot; + w2.getName() );</span>
+<span class="nc" id="L59">            return 0;</span>
+        }
+
+        // This gets most recent on top
+<span class="fc" id="L63">        int timecomparison = w2LastMod.compareTo( w1LastMod );</span>
+
+<span class="fc bfc" id="L65" title="All 2 branches covered.">        if( timecomparison == 0 ) {</span>
+<span class="fc" id="L66">            return w1.compareTo( w2 );</span>
+        }
+
+<span class="fc" id="L69">        return timecomparison;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

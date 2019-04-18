@@ -1,0 +1,618 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiEventManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">WikiEventManager.java</span></div><h1>WikiEventManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.event;
+
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.ConcurrentModificationException;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.Vector;
+
+import org.apache.log4j.Logger;
+
+/**
+ *  A singleton class that manages the addition and removal of WikiEvent
+ *  listeners to a event source, as well as the firing of events to those
+ *  listeners. An &quot;event source&quot; is the object delegating its event
+ *  handling to an inner delegating class supplied by this manager. The
+ *  class being serviced is considered a &quot;client&quot; of the delegate. The
+ *  WikiEventManager operates across any number of simultaneously-existing
+ *  WikiEngines since it manages all delegation on a per-object basis.
+ *  Anything that might fire a WikiEvent (or any of its subclasses) can be
+ *  a client.
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3&gt;Using a Delegate for Event Listener Management&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Basically, rather than have all manner of client classes maintain their
+ *  own listener lists, add and remove listener methods, any class wanting
+ *  to attach listeners can simply request a delegate object to provide that
+ *  service. The delegate handles the listener list, the add and remove
+ *  listener methods. Firing events is then a matter of calling the
+ *  WikiEventManager's {@link #fireEvent(Object,WikiEvent)} method, where
+ *  the Object is the client. Prior to instantiating the event object, the
+ *  client can call {@link #isListening(Object)} to see there are any
+ *  listeners attached to its delegate.
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3&gt;Adding Listeners&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Adding a WikiEventListener to an object is very simple:
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *      WikiEventManager.addWikiEventListener(object,listener);
+ *  &lt;/pre&gt;
+ *
+ *  &lt;h3&gt;Removing Listeners&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Removing a WikiEventListener from an object is very simple:
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *      WikiEventManager.removeWikiEventListener(object,listener);
+ *  &lt;/pre&gt;
+ *  If you only have a reference to the listener, the following method
+ *  will remove it from any clients managed by the WikiEventManager:
+ *  &lt;pre&gt;
+ *      WikiEventManager.removeWikiEventListener(listener);
+ *  &lt;/pre&gt;
+ *
+ *  &lt;h3&gt;Backward Compatibility: Replacing Existing &lt;tt&gt;fireEvent()&lt;/tt&gt; Methods&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Using one manager for all events processing permits consolidation of all event
+ *  listeners and their associated methods in one place rather than having them
+ *  attached to specific subcomponents of an application, and avoids a great deal
+ *  of event-related cut-and-paste code. Convenience methods that call the
+ *  WikiEventManager for event delegation can be written to maintain existing APIs.
+ *  &lt;/p&gt;
+ *  &lt;p&gt;
+ *  For example, an existing &lt;tt&gt;fireEvent()&lt;/tt&gt; method might look something like
+ *  this:
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *    protected final void fireEvent( WikiEvent event )
+ *    {
+ *        for ( Iterator it = m_listeners.iterator(); it.hasNext(); )
+ *        {
+ *            WikiEventListener listener = (WikiEventListener)it.next();
+ *            listener.actionPerformed(event);
+ *        }
+ *    }
+ *  &lt;/pre&gt;
+ *  &lt;p&gt;
+ *  One disadvantage is that the above method is supplied with event objects,
+ *  which are created even when no listener exists for them. In a busy wiki
+ *  with many users unused/unnecessary event creation could be considerable.
+ *  Another advantage is that in addition to the iterator, there must be code
+ *  to support the addition and remove of listeners. The above could be
+ *  replaced with the below code (and with no necessary local support for
+ *  adding and removing listeners):
+ *  &lt;/p&gt;
+ *  &lt;pre&gt;
+ *    protected final void fireEvent( int type )
+ *    {
+ *        if ( WikiEventManager.isListening(this) )
+ *        {
+ *            WikiEventManager.fireEvent(this,new WikiEngineEvent(this,type));
+ *        }
+ *    }
+ *  &lt;/pre&gt;
+ *  &lt;p&gt;
+ *  This only needs to be customized to supply the specific parameters for
+ *  whatever WikiEvent you want to create.
+ *  &lt;/p&gt;
+ *
+ *  &lt;h3 id=&quot;preloading&quot;&gt;Preloading Listeners&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  This may be used to create listeners for objects that don't yet exist,
+ *  particularly designed for embedded applications that need to be able
+ *  to listen for the instantiation of an Object, by maintaining a cache
+ *  of client-less WikiEvent sources that set their client upon being
+ *  popped from the cache. Each time any of the methods expecting a client
+ *  parameter is called with a null parameter it will preload an internal
+ *  cache with a client-less delegate object that will be popped and
+ *  returned in preference to creating a new object. This can have unwanted
+ *  side effects if there are multiple clients populating the cache with
+ *  listeners. The only check is for a Class match, so be aware if others
+ *  might be populating the client-less cache with listeners.
+ *  &lt;/p&gt;
+ *  &lt;h3&gt;Listener lifecycle&lt;/h3&gt;
+ *  &lt;p&gt;
+ *  Note that in most cases it is not necessary to remove a listener.
+ *  As of 2.4.97, the listeners are stored as WeakReferences, and will be
+ *  automatically cleaned at the next garbage collection, if you no longer
+ *  hold a reference to them.  Of course, until the garbage is collected,
+ *  your object might still be getting events, so if you wish to avoid that,
+ *  please remove it explicitly as described above.
+ *  &lt;/p&gt;
+ * @since 2.4.20
+ */
+public final class WikiEventManager
+{
+<span class="fc" id="L154">    private static final Logger log = Logger.getLogger(WikiEventManager.class);</span>
+
+    /* If true, permits a WikiEventMonitor to be set. */
+<span class="fc" id="L157">    private static boolean c_permitMonitor = false;</span>
+
+    /* Optional listener to be used as all-event monitor. */
+<span class="fc" id="L160">    private static WikiEventListener c_monitor = null;</span>
+
+    /* The Map of client object to WikiEventDelegate. */
+<span class="fc" id="L163">    private final Map&lt;Object, WikiEventDelegate&gt; m_delegates = new HashMap&lt;&gt;();</span>
+
+    /* The Vector containing any preloaded WikiEventDelegates. */
+<span class="fc" id="L166">    private final Vector&lt;WikiEventDelegate&gt; m_preloadCache = new Vector&lt;&gt;();</span>
+
+    /* Singleton instance of the WikiEventManager. */
+<span class="fc" id="L169">    private static WikiEventManager c_instance = null;</span>
+
+    // ............
+
+    /**
+     *  Constructor for a WikiEventManager.
+     */
+    private WikiEventManager()
+<span class="fc" id="L177">    {</span>
+<span class="fc" id="L178">        c_instance = this;</span>
+<span class="fc" id="L179">        log.debug(&quot;instantiated WikiEventManager&quot;);</span>
+<span class="fc" id="L180">    }</span>
+
+    /**
+     *  As this is a singleton class, this returns the single
+     *  instance of this class provided with the property file
+     *  filename and bit-wise application settings.
+     *
+     *  @return A shared instance of the WikiEventManager
+     */
+    public static WikiEventManager getInstance()
+    {
+<span class="fc bfc" id="L191" title="All 2 branches covered.">        if( c_instance == null )</span>
+        {
+<span class="fc" id="L193">            synchronized( WikiEventManager.class )</span>
+            {
+<span class="fc" id="L195">                WikiEventManager mgr = new WikiEventManager();</span>
+                // start up any post-instantiation services here
+<span class="fc" id="L197">                return mgr;</span>
+            }
+        }
+<span class="fc" id="L200">        return c_instance;</span>
+    }
+
+
+    // public/API methods ......................................................
+
+
+    /**
+     *  Registers a WikiEventListener with a WikiEventDelegate for
+     *  the provided client object.
+     *
+     *  &lt;h3&gt;Monitor Listener&lt;/h3&gt;
+     *
+     *  If &lt;tt&gt;client&lt;/tt&gt; is a reference to the WikiEventManager class
+     *  itself and the compile-time flag {@link #c_permitMonitor} is true,
+     *  this attaches the listener as an all-event monitor, overwriting
+     *  any previous listener (hence returning true).
+     *  &lt;p&gt;
+     *  You can remove any existing monitor by either calling this method
+     *  with &lt;tt&gt;client&lt;/tt&gt; as a reference to this class and the
+     *  &lt;tt&gt;listener&lt;/tt&gt; parameter as null, or
+     *  {@link #removeWikiEventListener(Object,WikiEventListener)} with a
+     *  &lt;tt&gt;client&lt;/tt&gt; as a reference to this class. The &lt;tt&gt;listener&lt;/tt&gt;
+     *  parameter in this case is ignored.
+     *
+     * @param client   the client of the event source
+     * @param listener the event listener
+     * @return true if the listener was added (i.e., it was not already in the list and was added)
+     */
+    public static boolean addWikiEventListener(
+            Object client, WikiEventListener listener )
+    {
+<span class="pc bpc" id="L232" title="1 of 2 branches missed.">        if ( client == WikiEventManager.class )</span>
+        {
+<span class="nc bnc" id="L234" title="All 2 branches missed.">            if ( c_permitMonitor ) c_monitor = listener;</span>
+<span class="nc" id="L235">            return c_permitMonitor;</span>
+        }
+<span class="fc" id="L237">        WikiEventDelegate delegate = getInstance().getDelegateFor(client);</span>
+<span class="fc" id="L238">        return delegate.addWikiEventListener(listener);</span>
+    }
+
+
+    /**
+     *  Un-registers a WikiEventListener with the WikiEventDelegate for
+     *  the provided client object.
+     *
+     * @param client   the client of the event source
+     * @param listener the event listener
+     * @return true if the listener was found and removed.
+     */
+    public static boolean removeWikiEventListener(
+            Object client, WikiEventListener listener )
+    {
+<span class="nc bnc" id="L253" title="All 2 branches missed.">        if ( client == WikiEventManager.class )</span>
+        {
+<span class="nc" id="L255">            c_monitor = null;</span>
+<span class="nc" id="L256">            return true;</span>
+        }
+<span class="nc" id="L258">        WikiEventDelegate delegate = getInstance().getDelegateFor(client);</span>
+<span class="nc" id="L259">        return delegate.removeWikiEventListener(listener);</span>
+    }
+
+
+    /**
+     *  Return the Set containing the WikiEventListeners attached to the
+     *  delegate for the supplied client. If there are no attached listeners,
+     *  returns an empty Iterator rather than null.  Note that this will
+     *  create a delegate for the client if it did not exist prior to the call.
+     *
+     *  &lt;h3&gt;NOTE&lt;/h3&gt;
+     *  &lt;p&gt;
+     *  This method returns a Set rather than an Iterator because of the high
+     *  likelihood of the Set being modified while an Iterator might be active.
+     *  This returns an unmodifiable reference to the actual Set containing
+     *  the delegate's listeners. Any attempt to modify the Set will throw an
+     *  {@link java.lang.UnsupportedOperationException}. This method is not
+     *  synchronized and it should be understood that the composition of the
+     *  backing Set may change at any time.
+     *  &lt;/p&gt;
+     *
+     * @param client   the client of the event source
+     * @return an unmodifiable Set containing the WikiEventListeners attached to the client
+     * @throws java.lang.UnsupportedOperationException  if any attempt is made to modify the Set
+     */
+    public static Set&lt;WikiEventListener&gt; getWikiEventListeners( Object client )
+        throws UnsupportedOperationException
+    {
+<span class="nc" id="L287">        WikiEventDelegate delegate = getInstance().getDelegateFor(client);</span>
+<span class="nc" id="L288">        return delegate.getWikiEventListeners();</span>
+    }
+
+
+    /**
+     *  Un-registers a WikiEventListener from any WikiEventDelegate client managed by this
+     *  WikiEventManager. Since this is a one-to-one relation, the first match will be
+     *  returned upon removal; a true return value indicates the WikiEventListener was
+     *  found and removed.
+     *
+     * @param listener the event listener
+     * @return true if the listener was found and removed.
+     */
+    public static boolean removeWikiEventListener( WikiEventListener listener )
+    {
+        // get the Map.entry object for the entire Map, then check match on entry (listener)
+<span class="nc" id="L304">        WikiEventManager mgr = getInstance();</span>
+<span class="nc" id="L305">        Map&lt; Object, WikiEventDelegate &gt; sources = mgr.getDelegates();</span>
+<span class="nc" id="L306">        synchronized( sources )</span>
+        {
+            // get an iterator over the Map.Enty objects in the map
+<span class="nc" id="L309">            Iterator&lt; Map.Entry&lt; Object, WikiEventDelegate &gt; &gt; it = sources.entrySet().iterator();</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">            while( it.hasNext() )</span>
+            {
+<span class="nc" id="L312">                Map.Entry&lt; Object, WikiEventDelegate &gt; entry = it.next();</span>
+                // the entry value is the delegate
+<span class="nc" id="L314">                WikiEventDelegate delegate = (WikiEventDelegate)entry.getValue();</span>
+
+                // now see if we can remove the listener from the delegate
+                // (delegate may be null because this is a weak reference)
+<span class="nc bnc" id="L318" title="All 4 branches missed.">                if( delegate != null &amp;&amp; delegate.removeWikiEventListener(listener) )</span>
+                {
+<span class="nc" id="L320">                    return true; // was removed</span>
+                }
+<span class="nc" id="L322">            }</span>
+<span class="nc" id="L323">        }</span>
+<span class="nc" id="L324">        return false;</span>
+    }
+
+
+    /**
+     *  Returns true if there are one or more listeners registered with
+     *  the provided client Object (undelegated event source). This locates
+     *  any delegate and checks to see if it has any listeners attached.
+     *
+     *  @param client the client Object
+     *  @return True, if there is a listener for this client object.
+     */
+    public static boolean isListening( Object client )
+    {
+<span class="fc" id="L338">        WikiEventDelegate source = getInstance().getDelegateFor(client);</span>
+<span class="pc bpc" id="L339" title="1 of 2 branches missed.">        return source != null ? source.isListening() : false ;</span>
+    }
+
+
+    /**
+     *  Notify all listeners of the WikiEventDelegate having a registered
+     *  interest in change events of the supplied WikiEvent.
+     *
+     * @param client the client initiating the event.
+     * @param event  the WikiEvent to fire.
+     */
+    public static void fireEvent( Object client, WikiEvent event )
+    {
+<span class="fc" id="L352">        WikiEventDelegate source = getInstance().getDelegateFor(client);</span>
+<span class="pc bpc" id="L353" title="1 of 2 branches missed.">        if ( source != null ) source.fireEvent(event);</span>
+<span class="pc bpc" id="L354" title="1 of 2 branches missed.">        if ( c_monitor != null ) c_monitor.actionPerformed(event);</span>
+<span class="fc" id="L355">    }</span>
+
+
+    // private and utility methods .............................................
+
+
+    /**
+     *  Return the client-to-delegate Map.
+     */
+    private Map&lt; Object, WikiEventDelegate &gt; getDelegates()
+    {
+<span class="nc" id="L366">        return m_delegates;</span>
+    }
+
+
+    /**
+     *  Returns a WikiEventDelegate for the provided client Object.
+     *  If the parameter is a class reference, will generate and return a
+     *  client-less WikiEventDelegate. If the parameter is not a Class and
+     *  the delegate cache contains any objects matching the Class of any
+     *  delegates in the cache, the first Class-matching delegate will be
+     *  used in preference to creating a new delegate.
+     *  If a null parameter is supplied, this will create a client-less
+     *  delegate that will attach to the first incoming client (i.e.,
+     *  there will be no Class-matching requirement).
+     *
+     * @param client   the client Object, or alternately a Class reference
+     * @return the WikiEventDelegate.
+     */
+    private WikiEventDelegate getDelegateFor( Object client )
+    {
+<span class="fc" id="L386">        synchronized( m_delegates )</span>
+        {
+<span class="pc bpc" id="L388" title="2 of 4 branches missed.">            if( client == null || client instanceof Class ) // then preload the cache</span>
+            {
+<span class="nc" id="L390">                WikiEventDelegate delegate = new WikiEventDelegate(client);</span>
+<span class="nc" id="L391">                m_preloadCache.add(delegate);</span>
+<span class="nc" id="L392">                m_delegates.put( client, delegate );</span>
+<span class="nc" id="L393">                return delegate;</span>
+            }
+<span class="pc bpc" id="L395" title="1 of 2 branches missed.">            else if( !m_preloadCache.isEmpty() )</span>
+            {
+                // then see if any of the cached delegates match the class of the incoming client
+<span class="nc bnc" id="L398" title="All 2 branches missed.">                for( int i = m_preloadCache.size()-1 ; i &gt;= 0 ; i-- ) // start with most-recently added</span>
+                {
+<span class="nc" id="L400">                    WikiEventDelegate delegate = m_preloadCache.elementAt(i);</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">                    if( delegate.getClientClass() == null</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">                        || delegate.getClientClass().equals(client.getClass()) )</span>
+                    {
+                        // we have a hit, so use it, but only on a client we haven't seen before
+<span class="nc bnc" id="L405" title="All 2 branches missed.">                        if( !m_delegates.keySet().contains(client) )</span>
+                        {
+<span class="nc" id="L407">                            m_preloadCache.remove(delegate);</span>
+<span class="nc" id="L408">                            m_delegates.put( client, delegate );</span>
+<span class="nc" id="L409">                            return delegate;</span>
+                        }
+                    }
+                }
+            }
+            // otherwise treat normally...
+<span class="fc" id="L415">            WikiEventDelegate delegate = m_delegates.get( client );</span>
+<span class="fc bfc" id="L416" title="All 2 branches covered.">            if( delegate == null )</span>
+            {
+<span class="fc" id="L418">                delegate = new WikiEventDelegate( client );</span>
+<span class="fc" id="L419">                m_delegates.put( client, delegate );</span>
+            }
+<span class="fc" id="L421">            return delegate;</span>
+        }
+    }
+
+
+    // .........................................................................
+
+
+    /**
+     *  Inner delegating class that manages event listener addition and
+     *  removal. Classes that generate events can obtain an instance of
+     *  this class from the WikiEventManager and delegate responsibility
+     *  to it. Interaction with this delegating class is done via the
+     *  methods of the {@link WikiEventDelegate} API.
+     *
+     * @since 2.4.20
+     */
+    private static final class WikiEventDelegate
+    {
+        /* A list of event listeners for this instance. */
+
+<span class="fc" id="L442">        private ArrayList&lt;WeakReference&lt;WikiEventListener&gt;&gt; m_listenerList = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L444">        private Class&lt; ? &gt;  m_class  = null;</span>
+
+        /**
+         *  Constructor for an WikiEventDelegateImpl, provided
+         *  with the client Object it will service, or the Class
+         *  of client, the latter when used to preload a future
+         *  incoming delegate.
+         */
+        protected WikiEventDelegate( Object client )
+<span class="fc" id="L453">        {</span>
+<span class="pc bpc" id="L454" title="1 of 2 branches missed.">            if( client instanceof Class )</span>
+            {
+<span class="nc" id="L456">                m_class = (Class&lt; ? &gt;)client;</span>
+            }
+<span class="fc" id="L458">        }</span>
+
+        /**
+         *  Returns the class of the client-less delegate, null if
+         *  this delegate is attached to a client Object.
+         */
+        protected Class&lt; ? &gt; getClientClass()
+        {
+<span class="nc" id="L466">            return m_class;</span>
+        }
+
+
+        /**
+         *  Return an unmodifiable Set containing the WikiEventListeners of
+         *  this WikiEventDelegateImpl. If there are no attached listeners,
+         *  returns an empty Set rather than null.
+         *
+         * @return an unmodifiable Set containing this delegate's WikiEventListeners
+         * @throws java.lang.UnsupportedOperationException  if any attempt is made to modify the Set
+         */
+        public Set&lt;WikiEventListener&gt; getWikiEventListeners()
+        {
+<span class="nc" id="L480">            synchronized( m_listenerList )</span>
+            {
+<span class="nc" id="L482">                TreeSet&lt;WikiEventListener&gt; set = new TreeSet&lt;&gt;( new WikiEventListenerComparator() );</span>
+
+<span class="nc bnc" id="L484" title="All 2 branches missed.">                for( Iterator&lt; WeakReference&lt; WikiEventListener &gt; &gt;  i = m_listenerList.iterator(); i.hasNext(); )</span>
+                {
+<span class="nc" id="L486">                    WikiEventListener l = i.next().get();</span>
+
+<span class="nc bnc" id="L488" title="All 2 branches missed.">                    if( l != null )</span>
+                    {
+<span class="nc" id="L490">                        set.add( l );</span>
+                    }
+<span class="nc" id="L492">                }</span>
+
+<span class="nc" id="L494">                return Collections.unmodifiableSet(set);</span>
+            }
+        }
+
+
+        /**
+         *  Adds &lt;tt&gt;listener&lt;/tt&gt; as a listener for events fired by the WikiEventDelegate.
+         *
+         * @param listener   the WikiEventListener to be added
+         * @return true if the listener was added (i.e., it was not already in the list and was added)
+         */
+        public boolean addWikiEventListener( WikiEventListener listener )
+        {
+<span class="fc" id="L507">            synchronized( m_listenerList )</span>
+            {
+<span class="fc" id="L509">                return m_listenerList.add( new WeakReference&lt;&gt;(listener) );</span>
+            }
+        }
+
+
+        /**
+         *  Removes &lt;tt&gt;listener&lt;/tt&gt; from the WikiEventDelegate.
+         *
+         * @param listener   the WikiEventListener to be removed
+         * @return true if the listener was removed (i.e., it was actually in the list and was removed)
+         */
+        public boolean removeWikiEventListener( WikiEventListener listener )
+        {
+<span class="nc" id="L522">            synchronized( m_listenerList )</span>
+            {
+<span class="nc bnc" id="L524" title="All 2 branches missed.">                for( Iterator&lt; WeakReference&lt; WikiEventListener &gt; &gt; i = m_listenerList.iterator(); i.hasNext(); )</span>
+                {
+<span class="nc" id="L526">                    WikiEventListener l = i.next().get();</span>
+
+<span class="nc bnc" id="L528" title="All 2 branches missed.">                    if( l == listener )</span>
+                    {
+<span class="nc" id="L530">                        i.remove();</span>
+<span class="nc" id="L531">                        return true;</span>
+                    }
+<span class="nc" id="L533">                }</span>
+<span class="nc" id="L534">            }</span>
+
+<span class="nc" id="L536">            return false;</span>
+        }
+
+
+        /**
+         *  Returns true if there are one or more listeners registered
+         *  with this instance.
+         */
+        public boolean isListening()
+        {
+<span class="fc" id="L546">            synchronized( m_listenerList )</span>
+            {
+<span class="fc bfc" id="L548" title="All 2 branches covered.">                return !m_listenerList.isEmpty();</span>
+            }
+        }
+
+
+        /**
+         *  Notify all listeners having a registered interest
+         *  in change events of the supplied WikiEvent.
+         */
+        public void fireEvent( WikiEvent event )
+        {
+<span class="fc" id="L559">            boolean needsCleanup = false;</span>
+
+            try
+            {
+<span class="fc" id="L563">                synchronized( m_listenerList )</span>
+                {
+<span class="fc bfc" id="L565" title="All 2 branches covered.">                    for( int i = 0; i &lt; m_listenerList.size(); i++ )</span>
+                    {
+<span class="fc" id="L567">                        WikiEventListener listener = m_listenerList.get( i ).get();</span>
+
+<span class="pc bpc" id="L569" title="1 of 2 branches missed.">                        if( listener != null )</span>
+                        {
+<span class="fc" id="L571">                            listener.actionPerformed( event );</span>
+                        }
+                        else
+                        {
+<span class="nc" id="L575">                            needsCleanup  = true;</span>
+                        }
+                    }
+
+                    //
+                    //  Remove all such listeners which have expired
+                    //
+<span class="pc bpc" id="L582" title="1 of 2 branches missed.">                    if( needsCleanup )</span>
+                    {
+<span class="nc bnc" id="L584" title="All 2 branches missed.">                        for( int i = 0; i &lt; m_listenerList.size(); i++ )</span>
+                        {
+<span class="nc" id="L586">                            WeakReference&lt; WikiEventListener &gt; w = m_listenerList.get( i );</span>
+
+<span class="nc bnc" id="L588" title="All 2 branches missed.">                            if( w.get() == null ) m_listenerList.remove(i--);</span>
+                        }
+                    }
+
+<span class="fc" id="L592">                }</span>
+            }
+<span class="nc" id="L594">            catch( ConcurrentModificationException e )</span>
+            {
+                //
+                //  We don't die, we just don't do notifications in that case.
+                //
+<span class="nc" id="L599">                log.info(&quot;Concurrent modification of event list; please report this.&quot;,e);</span>
+<span class="fc" id="L600">            }</span>
+
+<span class="fc" id="L602">        }</span>
+
+    } // end inner class WikiEventDelegate
+
+    private static class WikiEventListenerComparator implements Comparator&lt;WikiEventListener&gt;
+    {
+        // TODO: This method is a critical performance bottleneck
+        @Override
+        public int compare(WikiEventListener w0, WikiEventListener w1)
+        {
+<span class="nc bnc" id="L612" title="All 4 branches missed.">            if( w1 == w0 || w0.equals(w1) ) return 0;</span>
+
+<span class="nc" id="L614">            return w1.hashCode() - w0.hashCode();</span>
+        }
+    }
+} // end org.apache.wiki.event.WikiEventManager
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

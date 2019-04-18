@@ -1,0 +1,903 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SecurityVerifier.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth</a> &gt; <span class="el_source">SecurityVerifier.java</span></div><h1>SecurityVerifier.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth;
+
+import java.io.File;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.security.AccessControlException;
+import java.security.AccessController;
+import java.security.KeyStore;
+import java.security.Permission;
+import java.security.Principal;
+import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.security.auth.spi.LoginModule;
+
+import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.authorize.Group;
+import org.apache.wiki.auth.authorize.GroupDatabase;
+import org.apache.wiki.auth.authorize.GroupManager;
+import org.apache.wiki.auth.authorize.Role;
+import org.apache.wiki.auth.authorize.WebContainerAuthorizer;
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.permissions.GroupPermission;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.wiki.auth.permissions.WikiPermission;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+import org.freshcookies.security.policy.PolicyReader;
+import org.jdom2.JDOMException;
+
+/**
+ * Helper class for verifying JSPWiki's security configuration. Invoked by
+ * &lt;code&gt;admin/SecurityConfig.jsp&lt;/code&gt;.
+ * @since 2.4
+ */
+public final class SecurityVerifier {
+
+    private WikiEngine            m_engine;
+
+<span class="nc" id="L68">    private boolean               m_isSecurityPolicyConfigured = false;</span>
+
+<span class="nc" id="L70">    private Principal[]           m_policyPrincipals           = new Principal[0];</span>
+
+    private WikiSession           m_session;
+
+    /** Message prefix for errors. */
+    public static final String    ERROR                        = &quot;Error.&quot;;
+
+    /** Message prefix for warnings. */
+    public static final String    WARNING                      = &quot;Warning.&quot;;
+
+    /** Message prefix for information messages. */
+    public static final String    INFO                         = &quot;Info.&quot;;
+
+    /** Message topic for policy errors. */
+    public static final String    ERROR_POLICY                 = &quot;Error.Policy&quot;;
+
+    /** Message topic for policy warnings. */
+    public static final String    WARNING_POLICY               = &quot;Warning.Policy&quot;;
+
+    /** Message topic for policy information messages. */
+    public static final String    INFO_POLICY                  = &quot;Info.Policy&quot;;
+
+    /** Message topic for JAAS errors. */
+    public static final String    ERROR_JAAS                   = &quot;Error.Jaas&quot;;
+
+    /** Message topic for JAAS warnings. */
+    public static final String    WARNING_JAAS                 = &quot;Warning.Jaas&quot;;
+
+    /** Message topic for role-checking errors. */
+    public static final String    ERROR_ROLES                  = &quot;Error.Roles&quot;;
+
+    /** Message topic for role-checking information messages. */
+    public static final String    INFO_ROLES                   = &quot;Info.Roles&quot;;
+
+    /** Message topic for user database errors. */
+    public static final String    ERROR_DB                     = &quot;Error.UserDatabase&quot;;
+
+    /** Message topic for user database warnings. */
+    public static final String    WARNING_DB                   = &quot;Warning.UserDatabase&quot;;
+
+    /** Message topic for user database information messages. */
+    public static final String    INFO_DB                      = &quot;Info.UserDatabase&quot;;
+
+    /** Message topic for group database errors. */
+    public static final String    ERROR_GROUPS                 = &quot;Error.GroupDatabase&quot;;
+
+    /** Message topic for group database warnings. */
+    public static final String    WARNING_GROUPS               = &quot;Warning.GroupDatabase&quot;;
+
+    /** Message topic for group database information messages. */
+    public static final String    INFO_GROUPS                  = &quot;Info.GroupDatabase&quot;;
+
+    /** Message topic for JAAS information messages. */
+    public static final String    INFO_JAAS                    = &quot;Info.Jaas&quot;;
+
+<span class="nc" id="L125">    private static final String[] CONTAINER_ACTIONS            = new String[]</span>
+                                                               { &quot;View pages&quot;, &quot;Comment on existing pages&quot;,
+            &quot;Edit pages&quot;, &quot;Upload attachments&quot;, &quot;Create a new group&quot;, &quot;Rename an existing page&quot;, &quot;Delete pages&quot; };
+
+<span class="nc" id="L129">    private static final String[] CONTAINER_JSPS               = new String[]</span>
+                                                               { &quot;/Wiki.jsp&quot;, &quot;/Comment.jsp&quot;, &quot;/Edit.jsp&quot;,
+            &quot;/Upload.jsp&quot;, &quot;/NewGroup.jsp&quot;, &quot;/Rename.jsp&quot;, &quot;/Delete.jsp&quot; };
+
+    private static final String   BG_GREEN                     = &quot;bgcolor=\&quot;#c0ffc0\&quot;&quot;;
+
+    private static final String   BG_RED                       = &quot;bgcolor=\&quot;#ffc0c0\&quot;&quot;;
+
+<span class="nc" id="L137">    private static final Logger LOG                          = Logger.getLogger( SecurityVerifier.class.getName() );</span>
+
+    /**
+     * Constructs a new SecurityVerifier for a supplied WikiEngine and WikiSession.
+     * @param engine the wiki engine
+     * @param session the wiki session (typically, that of an administrator)
+     */
+    public SecurityVerifier( WikiEngine engine, WikiSession session )
+    {
+<span class="nc" id="L146">        super();</span>
+<span class="nc" id="L147">        m_engine = engine;</span>
+<span class="nc" id="L148">        m_session = session;</span>
+<span class="nc" id="L149">        m_session.clearMessages();</span>
+<span class="nc" id="L150">        verifyJaas();</span>
+<span class="nc" id="L151">        verifyPolicy();</span>
+        try
+        {
+<span class="nc" id="L154">            verifyPolicyAndContainerRoles();</span>
+        }
+<span class="nc" id="L156">        catch ( WikiException e )</span>
+        {
+<span class="nc" id="L158">            m_session.addMessage( ERROR_ROLES, e.getMessage() );</span>
+<span class="nc" id="L159">        }</span>
+<span class="nc" id="L160">        verifyGroupDatabase();</span>
+<span class="nc" id="L161">        verifyUserDatabase();</span>
+<span class="nc" id="L162">    }</span>
+
+    /**
+     * Returns an array of unique Principals from the JSPWIki security policy
+     * file. This array will be zero-length if the policy file was not
+     * successfully located, or if the file did not specify any Principals in
+     * the policy.
+     * @return the array of principals
+     */
+    public Principal[] policyPrincipals()
+    {
+<span class="nc" id="L173">        return m_policyPrincipals;</span>
+    }
+
+    /**
+     * Formats and returns an HTML table containing sample permissions and what
+     * roles are allowed to have them. This method will throw an
+     * {@link IllegalStateException} if the authorizer is not of type
+     * {@link org.apache.wiki.auth.authorize.WebContainerAuthorizer}
+     * @return the formatted HTML table containing the result of the tests
+     */
+    public String policyRoleTable()
+    {
+<span class="nc" id="L185">        Principal[] roles = m_policyPrincipals;</span>
+<span class="nc" id="L186">        String wiki = m_engine.getApplicationName();</span>
+
+<span class="nc" id="L188">        String[] pages = new String[]</span>
+        { &quot;Main&quot;, &quot;Index&quot;, &quot;GroupTest&quot;, &quot;GroupAdmin&quot; };
+<span class="nc" id="L190">        String[] pageActions = new String[]</span>
+        { &quot;view&quot;, &quot;edit&quot;, &quot;modify&quot;, &quot;rename&quot;, &quot;delete&quot; };
+
+<span class="nc" id="L193">        String[] groups = new String[]</span>
+        { &quot;Admin&quot;, &quot;TestGroup&quot;, &quot;Foo&quot; };
+<span class="nc" id="L195">        String[] groupActions = new String[]</span>
+        { &quot;view&quot;, &quot;edit&quot;, null, null, &quot;delete&quot; };
+
+        // Calculate column widths
+        String colWidth;
+<span class="nc bnc" id="L200" title="All 4 branches missed.">        if ( pageActions.length &gt; 0 &amp;&amp; roles.length &gt; 0 )</span>
+        {
+<span class="nc" id="L202">            colWidth =  (67f / ( pageActions.length * roles.length )) + &quot;%&quot;;</span>
+        }
+        else
+        {
+<span class="nc" id="L206">            colWidth = &quot;67%&quot;;</span>
+        }
+
+<span class="nc" id="L209">        StringBuilder s = new StringBuilder();</span>
+
+        // Write the table header
+<span class="nc" id="L212">        s.append( &quot;&lt;table class=\&quot;wikitable\&quot; border=\&quot;1\&quot;&gt;\n&quot; );</span>
+<span class="nc" id="L213">        s.append( &quot;  &lt;colgroup span=\&quot;1\&quot; width=\&quot;33%\&quot;/&gt;\n&quot; );</span>
+<span class="nc" id="L214">        s.append( &quot;  &lt;colgroup span=\&quot;&quot; + pageActions.length * roles.length + &quot;\&quot; width=\&quot;&quot; + colWidth</span>
+                + &quot;\&quot; align=\&quot;center\&quot;/&gt;\n&quot; );
+<span class="nc" id="L216">        s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L217">        s.append( &quot;    &lt;th rowspan=\&quot;2\&quot; valign=\&quot;bottom\&quot;&gt;Permission&lt;/th&gt;\n&quot; );</span>
+<span class="nc bnc" id="L218" title="All 2 branches missed.">        for( int i = 0; i &lt; roles.length; i++ )</span>
+        {
+<span class="nc" id="L220">            s.append( &quot;    &lt;th colspan=\&quot;&quot; + pageActions.length + &quot;\&quot; title=\&quot;&quot; + roles[i].getClass().getName() + &quot;\&quot;&gt;&quot;</span>
+<span class="nc" id="L221">                    + roles[i].getName() + &quot;&lt;/th&gt;\n&quot; );</span>
+        }
+<span class="nc" id="L223">        s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+
+        // Print a column for each role
+<span class="nc" id="L226">        s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc bnc" id="L227" title="All 2 branches missed.">        for( int i = 0; i &lt; roles.length; i++ )</span>
+        {
+<span class="nc bnc" id="L229" title="All 2 branches missed.">            for( String pageAction : pageActions )</span>
+            {
+<span class="nc" id="L231">                String action = pageAction.substring( 0, 1 );</span>
+<span class="nc" id="L232">                s.append( &quot;    &lt;th title=\&quot;&quot; + pageAction + &quot;\&quot;&gt;&quot; + action + &quot;&lt;/th&gt;\n&quot; );</span>
+            }
+        }
+<span class="nc" id="L235">        s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+
+        // Write page permission tests first
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for( String page : pages )</span>
+        {
+<span class="nc" id="L240">            s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L241">            s.append( &quot;    &lt;td&gt;PagePermission \&quot;&quot; + wiki + &quot;:&quot; + page + &quot;\&quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">            for( Principal role : roles )</span>
+            {
+<span class="nc bnc" id="L244" title="All 2 branches missed.">                for( String pageAction : pageActions )</span>
+                {
+<span class="nc" id="L246">                    Permission permission = PermissionFactory.getPagePermission( wiki + &quot;:&quot; + page, pageAction );</span>
+<span class="nc" id="L247">                    s.append( printPermissionTest( permission, role, 1 ) );</span>
+                }
+            }
+<span class="nc" id="L250">            s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+        }
+
+        // Now do the group tests
+<span class="nc bnc" id="L254" title="All 2 branches missed.">        for( String group : groups )</span>
+        {
+<span class="nc" id="L256">            s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L257">            s.append( &quot;    &lt;td&gt;GroupPermission \&quot;&quot; + wiki + &quot;:&quot; + group + &quot;\&quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">            for( Principal role : roles )</span>
+            {
+<span class="nc bnc" id="L260" title="All 2 branches missed.">                for( String groupAction : groupActions )</span>
+                {
+<span class="nc" id="L262">                    Permission permission = null;</span>
+<span class="nc bnc" id="L263" title="All 2 branches missed.">                    if ( groupAction != null)</span>
+                    {
+<span class="nc" id="L265">                        permission = new GroupPermission( wiki + &quot;:&quot; + group, groupAction );</span>
+                    }
+<span class="nc" id="L267">                    s.append( printPermissionTest( permission, role, 1 ) );</span>
+                }
+            }
+<span class="nc" id="L270">            s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+        }
+
+
+        // Now check the wiki-wide permissions
+<span class="nc" id="L275">        String[] wikiPerms = new String[]</span>
+        { &quot;createGroups&quot;, &quot;createPages&quot;, &quot;login&quot;, &quot;editPreferences&quot;, &quot;editProfile&quot; };
+<span class="nc bnc" id="L277" title="All 2 branches missed.">        for( String wikiPerm : wikiPerms )</span>
+        {
+<span class="nc" id="L279">            s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L280">            s.append( &quot;    &lt;td&gt;WikiPermission \&quot;&quot; + wiki + &quot;\&quot;,\&quot;&quot; + wikiPerm + &quot;\&quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc bnc" id="L281" title="All 2 branches missed.">            for( Principal role : roles )</span>
+            {
+<span class="nc" id="L283">                Permission permission = new WikiPermission( wiki, wikiPerm );</span>
+<span class="nc" id="L284">                s.append( printPermissionTest( permission, role, pageActions.length ) );</span>
+            }
+<span class="nc" id="L286">            s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+        }
+
+        // Lastly, check for AllPermission
+<span class="nc" id="L290">        s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L291">        s.append( &quot;    &lt;td&gt;AllPermission \&quot;&quot; + wiki + &quot;\&quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        for( Principal role : roles )</span>
+        {
+<span class="nc" id="L294">            Permission permission = new AllPermission( wiki );</span>
+<span class="nc" id="L295">            s.append( printPermissionTest( permission, role, pageActions.length ) );</span>
+        }
+<span class="nc" id="L297">        s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+
+        // We're done!
+<span class="nc" id="L300">        s.append( &quot;&lt;/table&gt;&quot; );</span>
+<span class="nc" id="L301">        return s.toString();</span>
+    }
+
+    /**
+     * Prints a &amp;lt;td&amp;gt; HTML element with the results of a permission test.
+     * @param permission the permission to format
+     * @param principal
+     * @param cols
+     */
+    private String printPermissionTest( Permission permission, Principal principal, int cols )
+    {
+<span class="nc" id="L312">    	StringBuilder s = new StringBuilder();</span>
+<span class="nc bnc" id="L313" title="All 2 branches missed.">        if ( permission == null )</span>
+        {
+<span class="nc" id="L315">            s.append( &quot;    &lt;td colspan=\&quot;&quot; + cols + &quot;\&quot; align=\&quot;center\&quot; title=\&quot;N/A\&quot;&gt;&quot; );</span>
+<span class="nc" id="L316">            s.append( &quot;&amp;nbsp;&lt;/td&gt;\n&quot; );</span>
+        }
+        else
+        {
+<span class="nc" id="L320">            boolean allowed = verifyStaticPermission( principal, permission );</span>
+<span class="nc" id="L321">            s.append( &quot;    &lt;td colspan=\&quot;&quot; + cols + &quot;\&quot; align=\&quot;center\&quot; title=\&quot;&quot; );</span>
+<span class="nc bnc" id="L322" title="All 2 branches missed.">            s.append( allowed ? &quot;ALLOW: &quot; : &quot;DENY: &quot; );</span>
+<span class="nc" id="L323">            s.append( permission.getClass().getName() );</span>
+<span class="nc" id="L324">            s.append( &quot; &amp;quot;&quot; );</span>
+<span class="nc" id="L325">            s.append( permission.getName() );</span>
+<span class="nc" id="L326">            s.append( &quot;&amp;quot;&quot; );</span>
+<span class="nc bnc" id="L327" title="All 2 branches missed.">            if ( permission.getName() != null )</span>
+            {
+<span class="nc" id="L329">                s.append( &quot;,&amp;quot;&quot; );</span>
+<span class="nc" id="L330">                s.append( permission.getActions() );</span>
+<span class="nc" id="L331">                s.append( &quot;&amp;quot;&quot; );</span>
+            }
+<span class="nc" id="L333">            s.append( &quot; &quot; );</span>
+<span class="nc" id="L334">            s.append( principal.getClass().getName() );</span>
+<span class="nc" id="L335">            s.append( &quot; &amp;quot;&quot; );</span>
+<span class="nc" id="L336">            s.append( principal.getName() );</span>
+<span class="nc" id="L337">            s.append( &quot;&amp;quot;&quot; );</span>
+<span class="nc" id="L338">            s.append( &quot;\&quot;&quot; );</span>
+<span class="nc bnc" id="L339" title="All 2 branches missed.">            s.append( allowed ? BG_GREEN + &quot;&gt;&quot; : BG_RED + &quot;&gt;&quot; );</span>
+<span class="nc" id="L340">            s.append( &quot;&amp;nbsp;&lt;/td&gt;\n&quot; );</span>
+        }
+<span class="nc" id="L342">        return s.toString();</span>
+    }
+
+    /**
+     * Formats and returns an HTML table containing the roles the web container
+     * is aware of, and whether each role maps to particular JSPs. This method
+     * throws an {@link IllegalStateException} if the authorizer is not of type
+     * {@link org.apache.wiki.auth.authorize.WebContainerAuthorizer}
+     * @return the formatted HTML table containing the result of the tests
+     * @throws WikiException if tests fail for unexpected reasons
+     */
+    public String containerRoleTable() throws WikiException
+    {
+
+<span class="nc" id="L356">        AuthorizationManager authorizationManager = m_engine.getAuthorizationManager();</span>
+<span class="nc" id="L357">        Authorizer authorizer = authorizationManager.getAuthorizer();</span>
+
+        // If authorizer not WebContainerAuthorizer, print error message
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        if ( !( authorizer instanceof WebContainerAuthorizer ) )</span>
+        {
+<span class="nc" id="L362">            throw new IllegalStateException( &quot;Authorizer should be WebContainerAuthorizer&quot; );</span>
+        }
+
+        // Now, print a table with JSP pages listed on the left, and
+        // an evaluation of each pages' constraints for each role
+        // we discovered
+<span class="nc" id="L368">        StringBuilder s = new StringBuilder();</span>
+<span class="nc" id="L369">        Principal[] roles = authorizer.getRoles();</span>
+<span class="nc" id="L370">        s.append( &quot;&lt;table class=\&quot;wikitable\&quot; border=\&quot;1\&quot;&gt;\n&quot; );</span>
+<span class="nc" id="L371">        s.append( &quot;&lt;thead&gt;\n&quot; );</span>
+<span class="nc" id="L372">        s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L373">        s.append( &quot;    &lt;th rowspan=\&quot;2\&quot;&gt;Action&lt;/th&gt;\n&quot; );</span>
+<span class="nc" id="L374">        s.append( &quot;    &lt;th rowspan=\&quot;2\&quot;&gt;Page&lt;/th&gt;\n&quot; );</span>
+<span class="nc" id="L375">        s.append( &quot;    &lt;th colspan=\&quot;&quot; + roles.length + 1 + &quot;\&quot;&gt;Roles&lt;/th&gt;\n&quot; );</span>
+<span class="nc" id="L376">        s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+<span class="nc" id="L377">        s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L378">        s.append( &quot;    &lt;th&gt;Anonymous&lt;/th&gt;\n&quot; );</span>
+<span class="nc bnc" id="L379" title="All 2 branches missed.">        for( Principal role : roles )</span>
+        {
+<span class="nc" id="L381">            s.append( &quot;    &lt;th&gt;&quot; + role.getName() + &quot;&lt;/th&gt;\n&quot; );</span>
+        }
+<span class="nc" id="L383">        s.append( &quot;&lt;/tr&gt;\n&quot; );</span>
+<span class="nc" id="L384">        s.append( &quot;&lt;/thead&gt;\n&quot; );</span>
+<span class="nc" id="L385">        s.append( &quot;&lt;tbody&gt;\n&quot; );</span>
+
+        try
+        {
+<span class="nc" id="L389">            WebContainerAuthorizer wca = (WebContainerAuthorizer) authorizer;</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">            for( int i = 0; i &lt; CONTAINER_ACTIONS.length; i++ )</span>
+            {
+<span class="nc" id="L392">                String action = CONTAINER_ACTIONS[i];</span>
+<span class="nc" id="L393">                String jsp = CONTAINER_JSPS[i];</span>
+
+                // Print whether the page is constrained for each role
+<span class="nc bnc" id="L396" title="All 2 branches missed.">                boolean allowsAnonymous = !wca.isConstrained( jsp, Role.ALL );</span>
+<span class="nc" id="L397">                s.append( &quot;  &lt;tr&gt;\n&quot; );</span>
+<span class="nc" id="L398">                s.append( &quot;    &lt;td&gt;&quot; + action + &quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc" id="L399">                s.append( &quot;    &lt;td&gt;&quot; + jsp + &quot;&lt;/td&gt;\n&quot; );</span>
+<span class="nc" id="L400">                s.append( &quot;    &lt;td title=\&quot;&quot; );</span>
+<span class="nc bnc" id="L401" title="All 2 branches missed.">                s.append( allowsAnonymous ? &quot;ALLOW: &quot; : &quot;DENY: &quot; );</span>
+<span class="nc" id="L402">                s.append( jsp );</span>
+<span class="nc" id="L403">                s.append( &quot; Anonymous&quot; );</span>
+<span class="nc" id="L404">                s.append( &quot;\&quot;&quot; );</span>
+<span class="nc bnc" id="L405" title="All 2 branches missed.">                s.append( allowsAnonymous ? BG_GREEN + &quot;&gt;&quot; : BG_RED + &quot;&gt;&quot; );</span>
+<span class="nc" id="L406">                s.append( &quot;&amp;nbsp;&lt;/td&gt;\n&quot; );</span>
+<span class="nc bnc" id="L407" title="All 2 branches missed.">                for( Principal role : roles )</span>
+                {
+<span class="nc bnc" id="L409" title="All 4 branches missed.">                    boolean allowed = allowsAnonymous || wca.isConstrained( jsp, (Role)role );</span>
+<span class="nc" id="L410">                    s.append( &quot;    &lt;td title=\&quot;&quot; );</span>
+<span class="nc bnc" id="L411" title="All 2 branches missed.">                    s.append( allowed ? &quot;ALLOW: &quot; : &quot;DENY: &quot; );</span>
+<span class="nc" id="L412">                    s.append( jsp );</span>
+<span class="nc" id="L413">                    s.append( &quot; &quot; );</span>
+<span class="nc" id="L414">                    s.append( role.getClass().getName() );</span>
+<span class="nc" id="L415">                    s.append( &quot; &amp;quot;&quot; );</span>
+<span class="nc" id="L416">                    s.append( role.getName() );</span>
+<span class="nc" id="L417">                    s.append( &quot;&amp;quot;&quot; );</span>
+<span class="nc" id="L418">                    s.append( &quot;\&quot;&quot; );</span>
+<span class="nc bnc" id="L419" title="All 2 branches missed.">                    s.append( allowed ? BG_GREEN + &quot;&gt;&quot; : BG_RED + &quot;&gt;&quot; );</span>
+<span class="nc" id="L420">                    s.append( &quot;&amp;nbsp;&lt;/td&gt;\n&quot; );</span>
+                }
+<span class="nc" id="L422">                s.append( &quot;  &lt;/tr&gt;\n&quot; );</span>
+            }
+        }
+<span class="nc" id="L425">        catch( JDOMException e )</span>
+        {
+            // If we couldn't evaluate constraints it means
+            // there's some sort of IO mess or parsing issue
+<span class="nc" id="L429">            LOG.error( &quot;Malformed XML in web.xml&quot;, e );</span>
+<span class="nc" id="L430">            throw new InternalWikiException( e.getClass().getName() + &quot;: &quot; + e.getMessage() , e);</span>
+<span class="nc" id="L431">        }</span>
+
+<span class="nc" id="L433">        s.append( &quot;&lt;/tbody&gt;\n&quot; );</span>
+<span class="nc" id="L434">        s.append( &quot;&lt;/table&gt;\n&quot; );</span>
+<span class="nc" id="L435">        return s.toString();</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the Java security policy is configured
+     * correctly, and it verifies as valid.
+     * @return the result of the configuration check
+     */
+    public boolean isSecurityPolicyConfigured()
+    {
+<span class="nc" id="L445">        return m_isSecurityPolicyConfigured;</span>
+    }
+
+    /**
+     * If the active Authorizer is the WebContainerAuthorizer, returns the roles
+     * it knows about; otherwise, a zero-length array.
+     * @return the roles parsed from &lt;code&gt;web.xml&lt;/code&gt;, or a zero-length array
+     * @throws WikiException if the web authorizer cannot obtain the list of roles
+     */
+    public Principal[] webContainerRoles() throws WikiException
+    {
+<span class="nc" id="L456">        Authorizer authorizer = m_engine.getAuthorizationManager().getAuthorizer();</span>
+<span class="nc bnc" id="L457" title="All 2 branches missed.">        if ( authorizer instanceof WebContainerAuthorizer )</span>
+        {
+<span class="nc" id="L459">            return ( (WebContainerAuthorizer) authorizer ).getRoles();</span>
+        }
+<span class="nc" id="L461">        return new Principal[0];</span>
+    }
+
+    /**
+     * Verifies that the roles given in the security policy are reflected by the
+     * container &lt;code&gt;web.xml&lt;/code&gt; file.
+     * @throws WikiException if the web authorizer cannot verify the roles
+     */
+    protected void verifyPolicyAndContainerRoles() throws WikiException
+    {
+<span class="nc" id="L471">        Authorizer authorizer = m_engine.getAuthorizationManager().getAuthorizer();</span>
+<span class="nc" id="L472">        Principal[] containerRoles = authorizer.getRoles();</span>
+<span class="nc" id="L473">        boolean missing = false;</span>
+<span class="nc bnc" id="L474" title="All 2 branches missed.">        for( Principal principal : m_policyPrincipals )</span>
+        {
+<span class="nc bnc" id="L476" title="All 2 branches missed.">            if ( principal instanceof Role )</span>
+            {
+<span class="nc" id="L478">                Role role = (Role) principal;</span>
+<span class="nc" id="L479">                boolean isContainerRole = ArrayUtils.contains( containerRoles, role );</span>
+<span class="nc bnc" id="L480" title="All 4 branches missed.">                if ( !Role.isBuiltInRole( role ) &amp;&amp; !isContainerRole )</span>
+                {
+<span class="nc" id="L482">                    m_session.addMessage( ERROR_ROLES, &quot;Role '&quot; + role.getName() + &quot;' is defined in security policy but not in web.xml.&quot; );</span>
+<span class="nc" id="L483">                    missing = true;</span>
+                }
+            }
+        }
+<span class="nc bnc" id="L487" title="All 2 branches missed.">        if ( !missing )</span>
+        {
+<span class="nc" id="L489">            m_session.addMessage( INFO_ROLES, &quot;Every non-standard role defined in the security policy was also found in web.xml.&quot; );</span>
+        }
+<span class="nc" id="L491">    }</span>
+
+    /**
+     * Verifies that the group datbase was initialized properly, and that
+     * user add and delete operations work as they should.
+     */
+    protected void verifyGroupDatabase()
+    {
+<span class="nc" id="L499">        GroupManager mgr = m_engine.getGroupManager();</span>
+<span class="nc" id="L500">        GroupDatabase db = null;</span>
+        try
+        {
+<span class="nc" id="L503">            db = m_engine.getGroupManager().getGroupDatabase();</span>
+        }
+<span class="nc" id="L505">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L507">            m_session.addMessage( ERROR_GROUPS, &quot;Could not retrieve GroupManager: &quot; + e.getMessage() );</span>
+<span class="nc" id="L508">        }</span>
+
+        // Check for obvious error conditions
+<span class="nc bnc" id="L511" title="All 4 branches missed.">        if ( mgr == null || db == null )</span>
+        {
+<span class="nc bnc" id="L513" title="All 2 branches missed.">            if ( mgr == null )</span>
+            {
+<span class="nc" id="L515">                m_session.addMessage( ERROR_GROUPS, &quot;GroupManager is null; JSPWiki could not &quot; +</span>
+                        &quot;initialize it. Check the error logs.&quot; );
+            }
+<span class="nc bnc" id="L518" title="All 2 branches missed.">            if ( db == null )</span>
+            {
+<span class="nc" id="L520">                m_session.addMessage( ERROR_GROUPS, &quot;GroupDatabase is null; JSPWiki could not &quot; +</span>
+                        &quot;initialize it. Check the error logs.&quot; );
+            }
+<span class="nc" id="L523">            return;</span>
+        }
+
+        // Everything initialized OK...
+
+        // Tell user what class of database this is.
+<span class="nc" id="L529">        m_session.addMessage( INFO_GROUPS, &quot;GroupDatabase is of type '&quot; + db.getClass().getName() +</span>
+                &quot;'. It appears to be initialized properly.&quot; );
+
+        // Now, see how many groups we have.
+<span class="nc" id="L533">        int oldGroupCount = 0;</span>
+        try
+        {
+<span class="nc" id="L536">            Group[] groups = db.groups();</span>
+<span class="nc" id="L537">            oldGroupCount = groups.length;</span>
+<span class="nc" id="L538">            m_session.addMessage( INFO_GROUPS, &quot;The group database contains &quot; + oldGroupCount + &quot; groups.&quot; );</span>
+        }
+<span class="nc" id="L540">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L542">            m_session.addMessage( ERROR_GROUPS, &quot;Could not obtain a list of current groups: &quot; + e.getMessage() );</span>
+<span class="nc" id="L543">            return;</span>
+<span class="nc" id="L544">        }</span>
+
+        // Try adding a bogus group with random name
+<span class="nc" id="L547">        String name = &quot;TestGroup&quot; + System.currentTimeMillis();</span>
+<span class="nc" id="L548">        Group group = null;</span>
+        try
+        {
+            // Create dummy test group
+<span class="nc" id="L552">            group = mgr.parseGroup( name, &quot;&quot;, true );</span>
+<span class="nc" id="L553">            Principal user = new WikiPrincipal( &quot;TestUser&quot; );</span>
+<span class="nc" id="L554">            group.add( user );</span>
+<span class="nc" id="L555">            db.save( group, new WikiPrincipal(&quot;SecurityVerifier&quot;) );</span>
+
+            // Make sure the group saved successfully
+<span class="nc bnc" id="L558" title="All 2 branches missed.">            if ( db.groups().length == oldGroupCount )</span>
+            {
+<span class="nc" id="L560">                m_session.addMessage( ERROR_GROUPS, &quot;Could not add a test group to the database.&quot; );</span>
+<span class="nc" id="L561">                return;</span>
+            }
+<span class="nc" id="L563">            m_session.addMessage( INFO_GROUPS, &quot;The group database allows new groups to be created, as it should.&quot; );</span>
+        }
+<span class="nc" id="L565">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L567">            m_session.addMessage( ERROR_GROUPS, &quot;Could not add a group to the database: &quot; + e.getMessage() );</span>
+<span class="nc" id="L568">            return;</span>
+<span class="nc" id="L569">        }</span>
+
+        // Now delete the group; should be back to old count
+        try
+        {
+<span class="nc" id="L574">            db.delete( group );</span>
+<span class="nc bnc" id="L575" title="All 2 branches missed.">            if ( db.groups().length != oldGroupCount )</span>
+            {
+<span class="nc" id="L577">                m_session.addMessage( ERROR_GROUPS, &quot;Could not delete a test group from the database.&quot; );</span>
+<span class="nc" id="L578">                return;</span>
+            }
+<span class="nc" id="L580">            m_session.addMessage( INFO_GROUPS, &quot;The group database allows groups to be deleted, as it should.&quot; );</span>
+        }
+<span class="nc" id="L582">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L584">            m_session.addMessage( ERROR_GROUPS, &quot;Could not delete a test group from the database: &quot; + e.getMessage() );</span>
+<span class="nc" id="L585">            return;</span>
+<span class="nc" id="L586">        }</span>
+
+<span class="nc" id="L588">        m_session.addMessage( INFO_GROUPS, &quot;The group database configuration looks fine.&quot; );</span>
+<span class="nc" id="L589">    }</span>
+
+    /**
+     * Verfies the JAAS configuration. The configuration is valid if value of the
+     * &lt;code&gt;jspwiki.properties&lt;code&gt; property
+     * {@value org.apache.wiki.auth.AuthenticationManager#PROP_LOGIN_MODULE}
+     * resolves to a valid class on the classpath.
+     */
+    protected void verifyJaas()
+    {
+        // Verify that the specified JAAS moduie corresponds to a class we can load successfully.
+<span class="nc" id="L600">        String jaasClass = m_engine.getWikiProperties().getProperty( AuthenticationManager.PROP_LOGIN_MODULE );</span>
+<span class="nc bnc" id="L601" title="All 4 branches missed.">        if ( jaasClass == null || jaasClass.length() == 0 )</span>
+        {
+<span class="nc" id="L603">            m_session.addMessage( ERROR_JAAS, &quot;The value of the '&quot; + AuthenticationManager.PROP_LOGIN_MODULE +</span>
+                    &quot;' property was null or blank. This is a fatal error. This value should be set to a valid LoginModule implementation &quot; +
+                    &quot;on the classpath.&quot; );
+<span class="nc" id="L606">            return;</span>
+        }
+        
+        // See if we can find the LoginModule on the classpath
+<span class="nc" id="L610">        Class&lt; ? &gt; c = null;</span>
+        try
+        {
+<span class="nc" id="L613">            m_session.addMessage( INFO_JAAS, &quot;The property '&quot; + AuthenticationManager.PROP_LOGIN_MODULE +</span>
+                                  &quot;' specified the class '&quot; + jaasClass + &quot;.'&quot; );
+<span class="nc" id="L615">            c = Class.forName( jaasClass );</span>
+        }
+<span class="nc" id="L617">        catch( ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L619">            m_session.addMessage( ERROR_JAAS, &quot;We could not find the the class '&quot; + jaasClass + &quot;' on the &quot; +</span>
+            &quot;classpath. This is fatal error.&quot; );
+<span class="nc" id="L621">        }</span>
+        
+        // Is the specified class actually a LoginModule?
+<span class="nc bnc" id="L624" title="All 2 branches missed.">        if ( LoginModule.class.isAssignableFrom( c ) )</span>
+        {
+<span class="nc" id="L626">            m_session.addMessage( INFO_JAAS, &quot;We found the the class '&quot; + jaasClass + &quot;' on the &quot; +</span>
+                    &quot;classpath, and it is a LoginModule implementation. Good!&quot; );
+        }
+        else
+        {
+<span class="nc" id="L631">            m_session.addMessage( ERROR_JAAS, &quot;We found the the class '&quot; + jaasClass + &quot;' on the &quot; +</span>
+            &quot;classpath, but it does not seem to be LoginModule implementation! This is fatal error.&quot; );
+        }
+<span class="nc" id="L634">    }</span>
+
+    /**
+     * Looks up a file name based on a JRE system property and returns the associated
+     * File object if it exists. This method adds messages with the topic prefix 
+     * {@link #ERROR} and {@link #INFO} as appropriate, with the suffix matching the 
+     * supplied property.
+     * @param property the system property to look up
+     * @return the file object, or &lt;code&gt;null&lt;/code&gt; if not found
+     */
+    protected File getFileFromProperty( String property )
+    {
+<span class="nc" id="L646">        String propertyValue = null;</span>
+        try
+        {
+<span class="nc" id="L649">            propertyValue = System.getProperty( property );</span>
+<span class="nc bnc" id="L650" title="All 2 branches missed.">            if ( propertyValue == null )</span>
+            {
+<span class="nc" id="L652">                m_session.addMessage( &quot;Error.&quot; + property, &quot;The system property '&quot; + property + &quot;' is null.&quot; );</span>
+<span class="nc" id="L653">                return null;</span>
+            }
+
+            //
+            //  It's also possible to use &quot;==&quot; to mark a property.  We remove that
+            //  here so that we can actually find the property file, then.
+            //
+<span class="nc bnc" id="L660" title="All 2 branches missed.">            if( propertyValue.startsWith(&quot;=&quot;) )</span>
+            {
+<span class="nc" id="L662">                propertyValue = propertyValue.substring(1);</span>
+            }
+
+            try
+            {
+<span class="nc" id="L667">                m_session.addMessage( &quot;Info.&quot; + property, &quot;The system property '&quot; + property + &quot;' is set to: &quot;</span>
+                        + propertyValue + &quot;.&quot; );
+
+                // Prepend a file: prefix if not there already
+<span class="nc bnc" id="L671" title="All 2 branches missed.">                if ( !propertyValue.startsWith( &quot;file:&quot; ) )</span>
+                {
+<span class="nc" id="L673">                  propertyValue = &quot;file:&quot; + propertyValue;</span>
+                }
+<span class="nc" id="L675">                URL url = new URL( propertyValue );</span>
+<span class="nc" id="L676">                File file = new File( url.getPath() );</span>
+<span class="nc bnc" id="L677" title="All 2 branches missed.">                if ( file.exists() )</span>
+                {
+<span class="nc" id="L679">                    m_session.addMessage( &quot;Info.&quot; + property, &quot;File '&quot; + propertyValue + &quot;' exists in the filesystem.&quot; );</span>
+<span class="nc" id="L680">                    return file;</span>
+                }
+            }
+<span class="nc" id="L683">            catch( MalformedURLException e )</span>
+            {
+                // Swallow exception because we can't find it anyway
+<span class="nc" id="L686">            }</span>
+<span class="nc" id="L687">            m_session.addMessage( &quot;Error.&quot; + property, &quot;File '&quot; + propertyValue</span>
+                    + &quot;' doesn't seem to exist. This might be a problem.&quot; );
+<span class="nc" id="L689">            return null;</span>
+        }
+<span class="nc" id="L691">        catch( SecurityException e )</span>
+        {
+<span class="nc" id="L693">            m_session.addMessage( &quot;Error.&quot; + property, &quot;We could not read system property '&quot; + property</span>
+                    + &quot;'. This is probably because you are running with a security manager.&quot; );
+<span class="nc" id="L695">            return null;</span>
+        }
+    }
+
+    /**
+     * Verfies the Java security policy configuration. The configuration is
+     * valid if value of the local policy (at &lt;code&gt;WEB-INF/jspwiki.policy&lt;/code&gt;
+     * resolves to an existing file, and the policy file contained therein
+     * represents a valid policy.
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    protected void verifyPolicy()
+    {
+        // Look up the policy file and set the status text.
+<span class="nc" id="L709">        URL policyURL = AuthenticationManager.findConfigFile( m_engine, AuthorizationManager.DEFAULT_POLICY );</span>
+<span class="nc" id="L710">        String path = policyURL.getPath();</span>
+<span class="nc bnc" id="L711" title="All 2 branches missed.">        if ( path.startsWith(&quot;file:&quot;) )</span>
+        {
+<span class="nc" id="L713">            path = path.substring( 5 );</span>
+        }
+<span class="nc" id="L715">        File policyFile = new File( path );</span>
+
+        // Next, verify the policy
+        try
+        {
+            // Get the file
+<span class="nc" id="L721">            PolicyReader policy = new PolicyReader( policyFile );</span>
+<span class="nc" id="L722">            m_session.addMessage( INFO_POLICY, &quot;The security policy '&quot; + policy.getFile() + &quot;' exists.&quot; );</span>
+
+            // See if there is a keystore that's valid
+<span class="nc" id="L725">            KeyStore ks = policy.getKeyStore();</span>
+<span class="nc bnc" id="L726" title="All 2 branches missed.">            if ( ks == null )</span>
+            {
+<span class="nc" id="L728">                m_session.addMessage( WARNING_POLICY,</span>
+                    &quot;Policy file does not have a keystore... at least not one that we can locate. If your policy file &quot; +
+                    &quot;does not contain any 'signedBy' blocks, this is probably ok.&quot; );
+            }
+            else
+            {
+<span class="nc" id="L734">                m_session.addMessage( INFO_POLICY,</span>
+                    &quot;The security policy specifies a keystore, and we were able to locate it in the filesystem.&quot; );
+            }
+
+            // Verify the file
+<span class="nc" id="L739">            policy.read();</span>
+<span class="nc" id="L740">            List&lt;Exception&gt; errors = policy.getMessages();</span>
+<span class="nc bnc" id="L741" title="All 2 branches missed.">            if ( errors.size() &gt; 0 )</span>
+            {
+<span class="nc bnc" id="L743" title="All 2 branches missed.">                for( Exception e : errors )</span>
+                {
+<span class="nc" id="L745">                    m_session.addMessage( ERROR_POLICY, e.getMessage() );</span>
+<span class="nc" id="L746">                }</span>
+            }
+            else
+            {
+<span class="nc" id="L750">                m_session.addMessage( INFO_POLICY, &quot;The security policy looks fine.&quot; );</span>
+<span class="nc" id="L751">                m_isSecurityPolicyConfigured = true;</span>
+            }
+
+            // Stash the unique principals mentioned in the file,
+            // plus our standard roles.
+<span class="nc" id="L756">            Set&lt;Principal&gt; principals = new LinkedHashSet&lt;Principal&gt;();</span>
+<span class="nc" id="L757">            principals.add( Role.ALL );</span>
+<span class="nc" id="L758">            principals.add( Role.ANONYMOUS );</span>
+<span class="nc" id="L759">            principals.add( Role.ASSERTED );</span>
+<span class="nc" id="L760">            principals.add( Role.AUTHENTICATED );</span>
+<span class="nc" id="L761">            ProtectionDomain[] domains = policy.getProtectionDomains();</span>
+<span class="nc bnc" id="L762" title="All 2 branches missed.">            for ( ProtectionDomain domain : domains )</span>
+            {
+<span class="nc bnc" id="L764" title="All 2 branches missed.">                for( Principal principal : domain.getPrincipals() )</span>
+                {
+<span class="nc" id="L766">                    principals.add( principal );</span>
+                }
+            }
+<span class="nc" id="L769">            m_policyPrincipals = principals.toArray( new Principal[principals.size()] );</span>
+        }
+<span class="nc" id="L771">        catch( IOException e )</span>
+        {
+<span class="nc" id="L773">            m_session.addMessage( ERROR_POLICY, e.getMessage() );</span>
+<span class="nc" id="L774">        }</span>
+<span class="nc" id="L775">    }</span>
+
+    /**
+     * Verifies that a particular Principal possesses a Permission, as defined
+     * in the security policy file.
+     * @param principal the principal
+     * @param permission the permission
+     * @return the result, based on consultation with the active Java security
+     *         policy
+     */
+    protected boolean verifyStaticPermission( Principal principal, final Permission permission )
+    {
+<span class="nc" id="L787">        Subject subject = new Subject();</span>
+<span class="nc" id="L788">        subject.getPrincipals().add( principal );</span>
+<span class="nc" id="L789">        boolean allowedByGlobalPolicy = ((Boolean)</span>
+<span class="nc" id="L790">            Subject.doAsPrivileged( subject, new PrivilegedAction&lt;Object&gt;()</span>
+<span class="nc" id="L791">            {</span>
+                public Object run()
+                {
+                    try
+                    {
+<span class="nc" id="L796">                        AccessController.checkPermission( permission );</span>
+<span class="nc" id="L797">                        return Boolean.TRUE;</span>
+                    }
+<span class="nc" id="L799">                    catch ( AccessControlException e )</span>
+                    {
+<span class="nc" id="L801">                        return Boolean.FALSE;</span>
+                    }
+                }
+<span class="nc" id="L804">            }, null )).booleanValue();</span>
+
+<span class="nc bnc" id="L806" title="All 2 branches missed.">        if ( allowedByGlobalPolicy )</span>
+        {
+<span class="nc" id="L808">            return true;</span>
+        }
+
+        // Check local policy
+<span class="nc" id="L812">        Principal[] principals = new Principal[]{ principal };</span>
+<span class="nc" id="L813">        return m_engine.getAuthorizationManager().allowedByLocalPolicy( principals, permission );</span>
+    }
+
+    /**
+     * Verifies that the user datbase was initialized properly, and that
+     * user add and delete operations work as they should.
+     */
+    protected void verifyUserDatabase()
+    {
+<span class="nc" id="L822">        UserDatabase db = m_engine.getUserManager().getUserDatabase();</span>
+
+        // Check for obvious error conditions
+<span class="nc bnc" id="L825" title="All 2 branches missed.">        if ( db == null )</span>
+        {
+<span class="nc" id="L827">            m_session.addMessage( ERROR_DB, &quot;UserDatabase is null; JSPWiki could not &quot; +</span>
+                    &quot;initialize it. Check the error logs.&quot; );
+<span class="nc" id="L829">            return;</span>
+        }
+
+<span class="nc bnc" id="L832" title="All 2 branches missed.">        if ( db instanceof UserManager.DummyUserDatabase )</span>
+        {
+<span class="nc" id="L834">            m_session.addMessage( ERROR_DB, &quot;UserDatabase is DummyUserDatabase; JSPWiki &quot; +</span>
+                    &quot;may not have been able to initialize the database you supplied in &quot; +
+                    &quot;jspwiki.properties, or you left the 'jspwiki.userdatabase' property &quot; +
+                    &quot;blank. Check the error logs.&quot; );
+        }
+
+        // Tell user what class of database this is.
+<span class="nc" id="L841">        m_session.addMessage( INFO_DB, &quot;UserDatabase is of type '&quot; + db.getClass().getName() +</span>
+                &quot;'. It appears to be initialized properly.&quot; );
+
+        // Now, see how many users we have.
+<span class="nc" id="L845">        int oldUserCount = 0;</span>
+        try
+        {
+<span class="nc" id="L848">            Principal[] users = db.getWikiNames();</span>
+<span class="nc" id="L849">            oldUserCount = users.length;</span>
+<span class="nc" id="L850">            m_session.addMessage( INFO_DB, &quot;The user database contains &quot; + oldUserCount + &quot; users.&quot; );</span>
+        }
+<span class="nc" id="L852">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L854">            m_session.addMessage( ERROR_DB, &quot;Could not obtain a list of current users: &quot; + e.getMessage() );</span>
+<span class="nc" id="L855">            return;</span>
+<span class="nc" id="L856">        }</span>
+
+        // Try adding a bogus user with random name
+<span class="nc" id="L859">        String loginName = &quot;TestUser&quot; + System.currentTimeMillis();</span>
+        try
+        {
+<span class="nc" id="L862">            UserProfile profile = db.newProfile();</span>
+<span class="nc" id="L863">            profile.setEmail( &quot;jspwiki.tests@mailinator.com&quot; );</span>
+<span class="nc" id="L864">            profile.setLoginName( loginName );</span>
+<span class="nc" id="L865">            profile.setFullname( &quot;FullName&quot;+loginName );</span>
+<span class="nc" id="L866">            profile.setPassword( &quot;password&quot; );</span>
+<span class="nc" id="L867">            db.save(profile);</span>
+
+            // Make sure the profile saved successfully
+<span class="nc bnc" id="L870" title="All 2 branches missed.">            if ( db.getWikiNames().length == oldUserCount )</span>
+            {
+<span class="nc" id="L872">                m_session.addMessage( ERROR_DB, &quot;Could not add a test user to the database.&quot; );</span>
+<span class="nc" id="L873">                return;</span>
+            }
+<span class="nc" id="L875">            m_session.addMessage( INFO_DB, &quot;The user database allows new users to be created, as it should.&quot; );</span>
+        }
+<span class="nc" id="L877">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L879">            m_session.addMessage( ERROR_DB, &quot;Could not add a test user to the database: &quot; + e.getMessage() );</span>
+<span class="nc" id="L880">            return;</span>
+<span class="nc" id="L881">        }</span>
+
+        // Now delete the profile; should be back to old count
+        try
+        {
+<span class="nc" id="L886">            db.deleteByLoginName( loginName );</span>
+<span class="nc bnc" id="L887" title="All 2 branches missed.">            if ( db.getWikiNames().length != oldUserCount )</span>
+            {
+<span class="nc" id="L889">                m_session.addMessage( ERROR_DB, &quot;Could not delete a test user from the database.&quot; );</span>
+<span class="nc" id="L890">                return;</span>
+            }
+<span class="nc" id="L892">            m_session.addMessage( INFO_DB, &quot;The user database allows users to be deleted, as it should.&quot; );</span>
+        }
+<span class="nc" id="L894">        catch ( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L896">            m_session.addMessage( ERROR_DB, &quot;Could not delete a test user to the database: &quot; + e.getMessage() );</span>
+<span class="nc" id="L897">            return;</span>
+<span class="nc" id="L898">        }</span>
+
+<span class="nc" id="L900">        m_session.addMessage( INFO_DB, &quot;The user database configuration looks fine.&quot; );</span>
+<span class="nc" id="L901">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

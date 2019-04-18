@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InputValidator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">InputValidator.java</span></div><h1>InputValidator.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ui;
+
+import java.text.MessageFormat;
+import java.util.ResourceBundle;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.wiki.*;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+
+/**
+ * Provides basic validation services for HTTP parameters. Three standard
+ * validators are provided: email address, identifier and standard input. Standard input
+ * validator will reject any HTML-like input, and any of a number of special
+ * characters.  ID validator rejects HTML and quoted strings, and a couple of special characters.
+ * @since 2.3.54
+ */
+public final class InputValidator
+{
+    /** Standard input validator. */
+    public static final int        STANDARD       = 0;
+
+    /** Input validator for e-mail addresses. **/
+    public static final int        EMAIL          = 1;
+
+    /**
+     * @since 2.4.82
+     */
+    public static final int        ID             = 2;
+
+<span class="fc" id="L50">    protected static final Pattern EMAIL_PATTERN  = Pattern.compile( &quot;^[0-9a-zA-Z-_\\.\\+]+@([0-9a-zA-Z-_]+\\.)+[a-zA-Z]+$&quot; );</span>
+
+<span class="fc" id="L52">    protected static final Pattern UNSAFE_PATTERN = Pattern.compile( &quot;[\\x00\\r\\n\\x0f\&quot;':&lt;&gt;\\[\\];#&amp;@\\xff{}\\$%\\\\]&quot; );</span>
+
+    /** Used when checking against IDs such as a full name when saving groups.
+     *  @since 2.4.82 */
+<span class="fc" id="L56">    protected static final Pattern ID_PATTERN     = Pattern.compile( &quot;[\\x00\\r\\n\\x0f\&quot;'&lt;&gt;;&amp;\\xff{}]&quot; );</span>
+
+    private final String           m_form;
+
+    private final WikiSession      m_session;
+
+    private final WikiContext      m_context;
+
+    /**
+     * Constructs a new input validator for a specific form and wiki session.
+     * When validation errors are detected, they will be added to the wiki
+     * session's messages.
+     * @param form the ID or name of the form this validator should be
+     * associated with
+     * @param context the wiki context
+     */
+    public InputValidator( String form, WikiContext context )
+<span class="fc" id="L73">    {</span>
+<span class="fc" id="L74">        m_form = form;</span>
+<span class="fc" id="L75">        m_context = context;</span>
+<span class="fc" id="L76">        m_session = context.getWikiSession();</span>
+<span class="fc" id="L77">    }</span>
+
+    /**
+     * Validates a string against the {@link #STANDARD} validator and
+     * additionally checks that the value is not &lt;code&gt;null&lt;/code&gt; or blank.
+     * @param input the string to validate
+     * @param label the label for the string or field (&quot;E-mail address&quot;)
+     * @return returns &lt;code&gt;true&lt;/code&gt; if valid, &lt;code&gt;false&lt;/code&gt;
+     * otherwise
+     */
+    public boolean validateNotNull( String input, String label )
+    {
+<span class="fc" id="L89">        return validateNotNull( input, label, STANDARD );</span>
+    }
+
+    /**
+     * Validates a string against a particular pattern type and additionally
+     * checks that the value is not &lt;code&gt;null&lt;/code&gt; or blank. Delegates to
+     * {@link #validate(String, String, int)}.
+     * @param input the string to validate
+     * @param label the label for the string or field (&quot;E-mail address&quot;)
+     * @param type the pattern type to use (&lt;em&gt;e.g.&lt;/em&gt;, {@link #STANDARD}, {@link #EMAIL}.
+     * @return returns &lt;code&gt;true&lt;/code&gt; if valid, &lt;code&gt;false&lt;/code&gt;
+     * otherwise
+     */
+    public boolean validateNotNull( String input, String label, int type )
+    {
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if ( isBlank( input ) )</span>
+        {
+<span class="fc" id="L106">            ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+
+<span class="fc" id="L108">            m_session.addMessage( m_form, MessageFormat.format( rb.getString(&quot;validate.cantbenull&quot;),</span>
+                                                                label ) );
+<span class="fc" id="L110">            return false;</span>
+        }
+<span class="pc bpc" id="L112" title="1 of 4 branches missed.">        return validate( input, label, type ) &amp;&amp; !isBlank( input );</span>
+    }
+
+    /**
+     * Validates a string against a particular pattern type: e-mail address,
+     * standard HTML input, etc. Note that a blank or null string will
+     * always validate.
+     * @param input the string to validate
+     * @param label the label for the string or field (&quot;E-mail address&quot;)
+     * @param type the target pattern to validate against ({@link #STANDARD},
+     * {@link #EMAIL})
+     * @return returns &lt;code&gt;true&lt;/code&gt; if valid, &lt;code&gt;false&lt;/code&gt;
+     * otherwise
+     */
+    public boolean validate( String input, String label, int type )
+    {
+        // If blank, it's valid
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        if ( isBlank( input ) )</span>
+        {
+<span class="fc" id="L131">            return true;</span>
+        }
+
+<span class="fc" id="L134">        ResourceBundle rb = Preferences.getBundle( m_context, InternationalizationManager.CORE_BUNDLE );</span>
+
+        // Otherwise, see if it matches the pattern for the target type
+        Matcher matcher;
+        boolean valid;
+<span class="pc bpc" id="L139" title="2 of 4 branches missed.">        switch( type )</span>
+        {
+        case STANDARD:
+<span class="fc" id="L142">            matcher = UNSAFE_PATTERN.matcher( input );</span>
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            valid = !matcher.find();</span>
+<span class="fc bfc" id="L144" title="All 2 branches covered.">            if ( !valid )</span>
+            {
+                //MessageTag already invokes replaceEntities()
+                //Object[] args = { label, &quot;&amp;quot;&amp;#39;&amp;lt;&amp;gt;;&amp;amp;[]#\\@{}%$&quot; };
+<span class="fc" id="L148">                Object[] args = { label, &quot;\'\&quot;&lt;&gt;;&amp;[]#\\@{}%$&quot; };</span>
+<span class="fc" id="L149">                m_session.addMessage( m_form, MessageFormat.format( rb.getString(&quot;validate.unsafechars&quot;), args ) );</span>
+            }
+<span class="fc" id="L151">            return valid;</span>
+        case EMAIL:
+<span class="fc" id="L153">            matcher = EMAIL_PATTERN.matcher( input );</span>
+<span class="fc" id="L154">            valid = matcher.matches();</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">            if ( !valid )</span>
+            {
+<span class="fc" id="L157">                Object[] args = { label };</span>
+<span class="fc" id="L158">                m_session.addMessage( m_form, MessageFormat.format( rb.getString(&quot;validate.invalidemail&quot;), args ) );</span>
+            }
+<span class="fc" id="L160">            return valid;</span>
+        case ID:
+<span class="nc" id="L162">            matcher = ID_PATTERN.matcher( input );</span>
+<span class="nc bnc" id="L163" title="All 2 branches missed.">            valid = !matcher.find();</span>
+<span class="nc bnc" id="L164" title="All 2 branches missed.">            if ( !valid )</span>
+            {
+                //MessageTag already invokes replaceEntities()
+                //Object[] args = { label, &quot;&amp;quot;&amp;#39;&amp;lt;&amp;gt;;&amp;amp;{}&quot; };
+<span class="nc" id="L168">                Object[] args = { label, &quot;\'\&quot;&lt;&gt;;&amp;{}&quot; };</span>
+<span class="nc" id="L169">                m_session.addMessage( m_form, MessageFormat.format( rb.getString(&quot;validate.unsafechars&quot;), args ) );</span>
+            }
+<span class="nc" id="L171">            return valid;</span>
+         default:
+             break;
+        }
+<span class="nc" id="L175">        throw new IllegalArgumentException( &quot;Invalid input type.&quot; );</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if a supplied string is null or blank
+     * @param input the string to check
+     * @return &lt;code&gt;true&lt;/code&gt; if &lt;code&gt;null&lt;/code&gt; or blank (zero-length);
+     * &lt;code&gt;false&lt;/code&gt; otherwise
+     */
+    public static boolean isBlank( String input )
+    {
+<span class="fc bfc" id="L186" title="All 4 branches covered.">        return input == null || input.trim().length() &lt; 1;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

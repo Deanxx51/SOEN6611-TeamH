@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RSS20Feed.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.rss</a> &gt; <span class="el_source">RSS20Feed.java</span></div><h1>RSS20Feed.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.rss;
+
+import java.io.IOException;
+import java.io.StringWriter;
+import java.text.SimpleDateFormat;
+import java.util.*;
+
+import javax.servlet.ServletContext;
+
+import org.jdom2.Element;
+import org.jdom2.output.Format;
+import org.jdom2.output.XMLOutputter;
+import org.apache.wiki.Release;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+
+/**
+ *  Represents an RSS 2.0 feed (with enclosures).  This feed provides no
+ *  fizz-bang features.
+ *
+ *  @since 2.2.27
+ */
+public class RSS20Feed extends Feed
+{
+    /**
+     *  Creates an RSS 2.0 feed for the specified Context.
+     *
+     *  @param context The WikiContext.
+     */
+    public RSS20Feed( WikiContext context )
+    {
+<span class="fc" id="L53">        super( context );</span>
+<span class="fc" id="L54">    }</span>
+
+    private List&lt;Element&gt; getItems()
+    {
+<span class="fc" id="L58">        ArrayList&lt;Element&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L59">        SimpleDateFormat fmt = new SimpleDateFormat(&quot;EEE, dd MMM yyyy HH:mm:ss 'GMT'&quot;);</span>
+
+<span class="fc" id="L61">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="fc" id="L62">        ServletContext servletContext = null;</span>
+
+<span class="pc bpc" id="L64" title="1 of 2 branches missed.">        if( m_wikiContext.getHttpRequest() != null )</span>
+<span class="nc" id="L65">            servletContext = m_wikiContext.getHttpRequest().getSession().getServletContext();</span>
+
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        for( Iterator&lt; Entry &gt; i = m_entries.iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L69">            Entry e = i.next();</span>
+<span class="fc" id="L70">            WikiPage p = e.getPage();</span>
+
+<span class="fc" id="L72">            String url = e.getURL();</span>
+
+<span class="fc" id="L74">            Element item = new Element(&quot;item&quot;);</span>
+
+<span class="fc" id="L76">            item.addContent( new Element(&quot;link&quot;).setText(url) );</span>
+
+<span class="fc" id="L78">            item.addContent( new Element(&quot;title&quot;).setText( e.getTitle()) );</span>
+
+<span class="fc" id="L80">            item.addContent( new Element(&quot;description&quot;).setText( e.getContent()) );</span>
+
+            //
+            //  Attachments for enclosures
+            //
+
+<span class="pc bpc" id="L86" title="3 of 4 branches missed.">            if( engine.getAttachmentManager().hasAttachments(p) &amp;&amp; servletContext != null )</span>
+            {
+                try
+                {
+<span class="nc" id="L90">                    List&lt; Attachment &gt; c = engine.getAttachmentManager().listAttachments(p);</span>
+
+<span class="nc bnc" id="L92" title="All 2 branches missed.">                    for( Iterator&lt; Attachment &gt; a = c.iterator(); a.hasNext(); )</span>
+                    {
+<span class="nc" id="L94">                        Attachment att = a.next();</span>
+
+<span class="nc" id="L96">                        Element attEl = new Element(&quot;enclosure&quot;);</span>
+<span class="nc" id="L97">                        attEl.setAttribute( &quot;url&quot;, engine.getURL(WikiContext.ATTACH, att.getName(), null, true ) );</span>
+<span class="nc" id="L98">                        attEl.setAttribute( &quot;length&quot;, Long.toString(att.getSize()) );</span>
+<span class="nc" id="L99">                        attEl.setAttribute( &quot;type&quot;, getMimeType( servletContext, att.getFileName() ) );</span>
+
+<span class="nc" id="L101">                        item.addContent( attEl );</span>
+<span class="nc" id="L102">                    }</span>
+                }
+<span class="nc" id="L104">                catch( ProviderException ex )</span>
+                {
+                    // FIXME: log.info(&quot;Can't get attachment data&quot;,ex);
+<span class="nc" id="L107">                }</span>
+            }
+
+            //
+            //  Modification date.
+            //
+<span class="fc" id="L113">            Calendar cal = Calendar.getInstance();</span>
+<span class="fc" id="L114">            cal.setTime( p.getLastModified() );</span>
+<span class="fc" id="L115">            cal.add( Calendar.MILLISECOND,</span>
+<span class="fc" id="L116">                     - (cal.get( Calendar.ZONE_OFFSET ) +</span>
+<span class="pc bpc" id="L117" title="1 of 2 branches missed.">                        (cal.getTimeZone().inDaylightTime( p.getLastModified() ) ? cal.get( Calendar.DST_OFFSET ) : 0 )) );</span>
+
+<span class="fc" id="L119">            item.addContent( new Element(&quot;pubDate&quot;).setText(fmt.format(cal.getTime())) );</span>
+
+<span class="fc" id="L121">            list.add( item );</span>
+<span class="fc" id="L122">        }</span>
+
+<span class="fc" id="L124">        return list;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String getString()
+    {
+<span class="fc" id="L133">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="fc" id="L134">        Element root = new Element(&quot;rss&quot;);</span>
+<span class="fc" id="L135">        root.setAttribute(&quot;version&quot;,&quot;2.0&quot;);</span>
+
+<span class="fc" id="L137">        Element channel = new Element(&quot;channel&quot;);</span>
+<span class="fc" id="L138">        root.addContent( channel );</span>
+
+        //
+        //  Mandatory parts
+        //
+<span class="fc" id="L143">        channel.addContent( new Element(&quot;title&quot;).setText( getChannelTitle() ) );</span>
+<span class="fc" id="L144">        channel.addContent( new Element(&quot;link&quot;).setText(engine.getBaseURL()));</span>
+<span class="fc" id="L145">        channel.addContent( new Element(&quot;description&quot;).setText( getChannelDescription() ));</span>
+
+        //
+        //  Optional
+        //
+<span class="fc" id="L150">        channel.addContent( new Element(&quot;language&quot;).setText(getChannelLanguage()));</span>
+<span class="fc" id="L151">        channel.addContent( new Element(&quot;generator&quot;).setText(&quot;JSPWiki &quot;+Release.VERSTR));</span>
+
+<span class="fc" id="L153">        String mail = engine.getVariable(m_wikiContext,RSSGenerator.PROP_RSS_AUTHOREMAIL);</span>
+<span class="pc bpc" id="L154" title="1 of 2 branches missed.">        if( mail != null )</span>
+        {
+<span class="nc" id="L156">            String editor = engine.getVariable( m_wikiContext,RSSGenerator.PROP_RSS_AUTHOR );</span>
+
+<span class="nc bnc" id="L158" title="All 2 branches missed.">            if( editor != null )</span>
+<span class="nc" id="L159">                mail = mail + &quot; (&quot;+editor+&quot;)&quot;;</span>
+
+<span class="nc" id="L161">            channel.addContent( new Element(&quot;managingEditor&quot;).setText(mail) );</span>
+        }
+
+        //
+        //  Items
+        //
+
+<span class="fc" id="L168">        channel.addContent( getItems() );</span>
+
+        //
+        //  aaand output
+        //
+<span class="fc" id="L173">        XMLOutputter output = new XMLOutputter();</span>
+
+<span class="fc" id="L175">        output.setFormat( Format.getPrettyFormat() );</span>
+
+        try
+        {
+<span class="fc" id="L179">            StringWriter res = new StringWriter();</span>
+<span class="fc" id="L180">            output.output( root, res );</span>
+
+<span class="fc" id="L182">            return res.toString();</span>
+        }
+<span class="nc" id="L184">        catch( IOException e )</span>
+        {
+<span class="nc" id="L186">            return null;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PagePermission.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.permissions</a> &gt; <span class="el_source">PagePermission.java</span></div><h1>PagePermission.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.permissions;
+
+import java.io.Serializable;
+import java.security.Permission;
+import java.security.PermissionCollection;
+import java.util.Arrays;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.WikiPage;
+
+/**
+ * &lt;p&gt;
+ * Permission to perform an operation on a single page or collection of pages in
+ * a given wiki. Permission actions include: &lt;code&gt;view&lt;/code&gt;,&amp;nbsp;
+ * &lt;code&gt;edit&lt;/code&gt; (edit the text of a wiki page),&amp;nbsp;&lt;code&gt;comment&lt;/code&gt;,&amp;nbsp;
+ * &lt;code&gt;upload&lt;/code&gt;,&amp;nbsp;&lt;code&gt;modify&lt;/code&gt;&amp;nbsp;(edit text and upload
+ * attachments),&amp;nbsp;&lt;code&gt;delete&lt;/code&gt;&amp;nbsp;
+ * and&amp;nbsp;&lt;code&gt;rename&lt;/code&gt;.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * The target of a permission is a single page or collection in a given wiki.
+ * The syntax for the target is the wiki name, followed by a colon (:) and the
+ * name of the page. &quot;All wikis&quot; can be specified using a wildcard (*). Page
+ * collections may also be specified using a wildcard. For pages, the wildcard
+ * may be a prefix, suffix, or all by itself. Examples of targets include:
+ * &lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;*:*&lt;br/&gt;
+ * *:JanneJalkanen&lt;br/&gt;
+ * *:Jalkanen&lt;br/&gt;
+ * *:Janne*&lt;br/&gt;
+ * mywiki:JanneJalkanen&lt;br/&gt;
+ * mywiki:*Jalkanen&lt;br/&gt;
+ * mywiki:Janne*&lt;/code&gt;
+ * &lt;/blockquote&gt;
+ * &lt;p&gt;
+ * For a given target, certain permissions imply others:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;code&gt;delete&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;rename&lt;/code&gt;&amp;nbsp;imply&amp;nbsp;&lt;code&gt;edit&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;modify&lt;/code&gt;&amp;nbsp;implies&amp;nbsp;&lt;code&gt;edit&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;upload&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;edit&lt;/code&gt;&amp;nbsp;implies&amp;nbsp;&lt;code&gt;comment&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;view&lt;/code&gt;&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;comment&lt;/code&gt;&amp;nbsp;and&amp;nbsp;&lt;code&gt;upload&lt;/code&gt;&amp;nbsp;imply&amp;nbsp;&lt;code&gt;view&lt;/code&gt;&lt;/li&gt;
+ * Targets that do not include a wiki prefix &lt;i&gt;never &lt;/i&gt; imply others.
+ * &lt;/ul&gt;
+ * @since 2.3
+ */
+public final class PagePermission extends Permission implements Serializable
+{
+    private static final long          serialVersionUID = 2L;
+
+    /** Action name for the comment permission. */
+    public static final String         COMMENT_ACTION = &quot;comment&quot;;
+
+    /** Action name for the delete permission. */
+    public static final String         DELETE_ACTION  = &quot;delete&quot;;
+
+    /** Action name for the edit permission. */
+    public static final String         EDIT_ACTION    = &quot;edit&quot;;
+
+    /** Action name for the modify permission. */
+    public static final String         MODIFY_ACTION  = &quot;modify&quot;;
+
+    /** Action name for the rename permission. */
+    public static final String         RENAME_ACTION  = &quot;rename&quot;;
+
+    /** Action name for the upload permission. */
+    public static final String         UPLOAD_ACTION  = &quot;upload&quot;;
+
+    /** Action name for the view permission. */
+    public static final String         VIEW_ACTION    = &quot;view&quot;;
+
+    protected static final int         COMMENT_MASK   = 0x4;
+
+    protected static final int         DELETE_MASK    = 0x10;
+
+    protected static final int         EDIT_MASK      = 0x2;
+
+    protected static final int         MODIFY_MASK    = 0x40;
+
+    protected static final int         RENAME_MASK    = 0x20;
+
+    protected static final int         UPLOAD_MASK    = 0x8;
+
+    protected static final int         VIEW_MASK      = 0x1;
+
+    /** A static instance of the comment permission. */
+<span class="fc" id="L105">    public static final PagePermission COMMENT        = new PagePermission( COMMENT_ACTION );</span>
+
+    /** A static instance of the delete permission. */
+<span class="fc" id="L108">    public static final PagePermission DELETE         = new PagePermission( DELETE_ACTION );</span>
+
+    /** A static instance of the edit permission. */
+<span class="fc" id="L111">    public static final PagePermission EDIT           = new PagePermission( EDIT_ACTION );</span>
+
+    /** A static instance of the rename permission. */
+<span class="fc" id="L114">    public static final PagePermission RENAME         = new PagePermission( RENAME_ACTION );</span>
+
+    /** A static instance of the modify permission. */
+<span class="fc" id="L117">    public static final PagePermission MODIFY         = new PagePermission( MODIFY_ACTION );</span>
+
+    /** A static instance of the upload permission. */
+<span class="fc" id="L120">    public static final PagePermission UPLOAD         = new PagePermission( UPLOAD_ACTION );</span>
+
+    /** A static instance of the view permission. */
+<span class="fc" id="L123">    public static final PagePermission VIEW           = new PagePermission( VIEW_ACTION );</span>
+
+    private static final String        ACTION_SEPARATOR = &quot;,&quot;;
+
+    private static final String        WILDCARD       = &quot;*&quot;;
+
+    private static final String        WIKI_SEPARATOR = &quot;:&quot;;
+
+    private static final String        ATTACHMENT_SEPARATOR = &quot;/&quot;;
+
+    private final String               m_actionString;
+
+    private final int                  m_mask;
+
+    private final String               m_page;
+
+    private final String               m_wiki;
+
+    /** For serialization purposes. */
+    protected PagePermission()
+    {
+<span class="nc" id="L144">        this(&quot;&quot;);</span>
+<span class="nc" id="L145">    }</span>
+    
+    /**
+     * Private convenience constructor that creates a new PagePermission for all wikis and pages
+     * (*:*) and set of actions.
+     * @param actions
+     */
+    private PagePermission( String actions )
+    {
+<span class="fc" id="L154">        this( WILDCARD + WIKI_SEPARATOR + WILDCARD, actions );</span>
+<span class="fc" id="L155">    }</span>
+
+    /**
+     * Creates a new PagePermission for a specified page name and set of
+     * actions. Page should include a prepended wiki name followed by a colon (:).
+     * If the wiki name is not supplied or starts with a colon, the page
+     * refers to no wiki in particular, and will never imply any other
+     * PagePermission.
+     * @param page the wiki page
+     * @param actions the allowed actions for this page
+     */
+    public PagePermission( String page, String actions )
+    {
+<span class="fc" id="L168">        super( page );</span>
+
+        // Parse wiki and page (which may include wiki name and page)
+        // Strip out attachment separator; it is irrelevant.
+        
+        // FIXME3.0: Assumes attachment separator is &quot;/&quot;.
+<span class="fc" id="L174">        String[] pathParams = StringUtils.split( page, WIKI_SEPARATOR );</span>
+        String pageName;
+<span class="fc bfc" id="L176" title="All 2 branches covered.">        if ( pathParams.length &gt;= 2 )</span>
+        {
+<span class="pc bpc" id="L178" title="1 of 2 branches missed.">            m_wiki = pathParams[0].length() &gt; 0 ? pathParams[0] : null;</span>
+<span class="fc" id="L179">            pageName = pathParams[1];</span>
+        }
+        else
+        {
+<span class="fc" id="L183">            m_wiki = null;</span>
+<span class="fc" id="L184">            pageName = pathParams[0];</span>
+        }
+<span class="fc" id="L186">        int pos = pageName.indexOf( ATTACHMENT_SEPARATOR );</span>
+<span class="fc bfc" id="L187" title="All 2 branches covered.">        m_page = ( pos == -1 ) ? pageName : pageName.substring( 0, pos );</span>
+
+        // Parse actions
+<span class="fc" id="L190">        String[] pageActions = StringUtils.split( actions.toLowerCase(), ACTION_SEPARATOR );</span>
+<span class="fc" id="L191">        Arrays.sort( pageActions, String.CASE_INSENSITIVE_ORDER );</span>
+<span class="fc" id="L192">        m_mask = createMask( actions );</span>
+<span class="fc" id="L193">        StringBuilder buffer = new StringBuilder();</span>
+<span class="fc bfc" id="L194" title="All 2 branches covered.">        for( int i = 0; i &lt; pageActions.length; i++ )</span>
+        {
+<span class="fc" id="L196">            buffer.append( pageActions[i] );</span>
+<span class="fc bfc" id="L197" title="All 2 branches covered.">            if ( i &lt; ( pageActions.length - 1 ) )</span>
+            {
+<span class="fc" id="L199">                buffer.append( ACTION_SEPARATOR );</span>
+            }
+        }
+<span class="fc" id="L202">        m_actionString = buffer.toString();</span>
+<span class="fc" id="L203">    }</span>
+
+    /**
+     * Creates a new PagePermission for a specified page and set of actions.
+     * @param page The wikipage.
+     * @param actions A set of actions; a comma-separated list of actions.
+     */
+    public PagePermission( WikiPage page, String actions )
+    {
+<span class="fc" id="L212">        this( page.getWiki() + WIKI_SEPARATOR + page.getName(), actions );</span>
+<span class="fc" id="L213">    }</span>
+
+    /**
+     * Two PagePermission objects are considered equal if their actions (after
+     * normalization), wiki and target are equal.
+     * @param obj {@inheritDoc}
+     * @return {@inheritDoc}
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L223" title="1 of 2 branches missed.">        if ( !( obj instanceof PagePermission ) )</span>
+        {
+<span class="nc" id="L225">            return false;</span>
+        }
+<span class="fc" id="L227">        PagePermission p = (PagePermission) obj;</span>
+<span class="pc bpc" id="L228" title="1 of 6 branches missed.">        return  p.m_mask == m_mask &amp;&amp; p.m_page.equals( m_page )</span>
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">                &amp;&amp; p.m_wiki != null &amp;&amp; p.m_wiki.equals( m_wiki );</span>
+    }
+
+    /**
+     * Returns the actions for this permission: &quot;view&quot;, &quot;edit&quot;, &quot;comment&quot;,
+     * &quot;modify&quot;, &quot;upload&quot; or &quot;delete&quot;. The actions will always be sorted in alphabetic
+     * order, and will always appear in lower case.
+     *
+     * @return {@inheritDoc}
+     */
+    public String getActions()
+    {
+<span class="fc" id="L241">        return m_actionString;</span>
+    }
+
+    /**
+     * Returns the name of the wiki page represented by this permission.
+     * @return the page name
+     */
+    public String getPage()
+    {
+<span class="fc" id="L250">        return m_page;</span>
+    }
+
+    /**
+     * Returns the name of the wiki containing the page represented by
+     * this permission; may return the wildcard string.
+     * @return the wiki
+     */
+    public String getWiki()
+    {
+<span class="fc" id="L260">        return m_wiki;</span>
+    }
+
+    /**
+     * Returns the hash code for this PagePermission.
+     * @return {@inheritDoc}
+     */
+    public int hashCode()
+    {
+        //  If the wiki has not been set, uses a dummy value for the hashcode
+        //  calculation.  This may occur if the page given does not refer
+        //  to any particular wiki
+<span class="pc bpc" id="L272" title="1 of 2 branches missed.">        String wiki = m_wiki != null ? m_wiki : &quot;dummy_value&quot;;</span>
+<span class="fc" id="L273">        return m_mask + ( ( 13 * m_actionString.hashCode() ) * 23 * wiki.hashCode() );</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * PagePermission can only imply other PagePermissions; no other permission
+     * types are implied. One PagePermission implies another if its actions if
+     * three conditions are met:
+     * &lt;/p&gt;
+     * &lt;ol&gt;
+     * &lt;li&gt;The other PagePermission's wiki is equal to, or a subset of, that of
+     * this permission. This permission's wiki is considered a superset of the
+     * other if it contains a matching prefix plus a wildcard, or a wildcard
+     * followed by a matching suffix.&lt;/li&gt;
+     * &lt;li&gt;The other PagePermission's target is equal to, or a subset of, the
+     * target specified by this permission. This permission's target is
+     * considered a superset of the other if it contains a matching prefix plus
+     * a wildcard, or a wildcard followed by a matching suffix.&lt;/li&gt;
+     * &lt;li&gt;All of other PagePermission's actions are equal to, or a subset of,
+     * those of this permission&lt;/li&gt;
+     * &lt;/ol&gt;
+     * @see java.security.Permission#implies(java.security.Permission)
+     * 
+     * @param permission {@inheritDoc}
+     * @return {@inheritDoc}
+     */
+    public boolean implies( Permission permission )
+    {
+        // Permission must be a PagePermission
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        if ( !( permission instanceof PagePermission ) )</span>
+        {
+<span class="fc" id="L304">            return false;</span>
+        }
+
+        // Build up an &quot;implied mask&quot;
+<span class="fc" id="L308">        PagePermission p = (PagePermission) permission;</span>
+<span class="fc" id="L309">        int impliedMask = impliedMask( m_mask );</span>
+
+        // If actions aren't a proper subset, return false
+<span class="fc bfc" id="L312" title="All 2 branches covered.">        if ( ( impliedMask &amp; p.m_mask ) != p.m_mask )</span>
+        {
+<span class="fc" id="L314">            return false;</span>
+        }
+
+        // See if the tested permission's wiki is implied
+<span class="fc" id="L318">        boolean impliedWiki = isSubset( m_wiki, p.m_wiki );</span>
+
+        // If this page is &quot;*&quot;, the tested permission's
+        // page is implied
+<span class="fc" id="L322">        boolean impliedPage = isSubset( m_page, p.m_page );</span>
+
+<span class="pc bpc" id="L324" title="2 of 4 branches missed.">        return  impliedWiki &amp;&amp; impliedPage;</span>
+    }
+
+    /**
+     * Returns a new {@link AllPermissionCollection}.
+     * @see java.security.Permission#newPermissionCollection()
+     * @return {@inheritDoc}
+     */
+    @Override
+    public PermissionCollection newPermissionCollection()
+    {
+<span class="fc" id="L335">        return new AllPermissionCollection();</span>
+    }
+
+    /**
+     * Prints a human-readable representation of this permission.
+     * @see java.lang.Object#toString()
+     * 
+     * @return Something human-readable
+     */
+    public String toString()
+    {
+<span class="pc bpc" id="L346" title="1 of 2 branches missed.">        String wiki = ( m_wiki == null ) ? &quot;&quot; : m_wiki;</span>
+<span class="fc" id="L347">        return &quot;(\&quot;&quot; + this.getClass().getName() + &quot;\&quot;,\&quot;&quot; + wiki + WIKI_SEPARATOR + m_page + &quot;\&quot;,\&quot;&quot; + getActions() + &quot;\&quot;)&quot;;</span>
+    }
+
+    /**
+     * Creates an &quot;implied mask&quot; based on the actions originally assigned: for
+     * example, delete implies modify, comment, upload and view.
+     * @param mask binary mask for actions
+     * @return binary mask for implied actions
+     */
+    protected static int impliedMask( int mask )
+    {
+<span class="fc bfc" id="L358" title="All 2 branches covered.">        if ( ( mask &amp; DELETE_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L360">            mask |= MODIFY_MASK;</span>
+        }
+<span class="fc bfc" id="L362" title="All 2 branches covered.">        if ( ( mask &amp; RENAME_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L364">            mask |= EDIT_MASK;</span>
+        }
+<span class="fc bfc" id="L366" title="All 2 branches covered.">        if ( ( mask &amp; MODIFY_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L368">            mask |= EDIT_MASK | UPLOAD_MASK;</span>
+        }
+<span class="fc bfc" id="L370" title="All 2 branches covered.">        if ( ( mask &amp; EDIT_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L372">            mask |= COMMENT_MASK;</span>
+        }
+<span class="fc bfc" id="L374" title="All 2 branches covered.">        if ( ( mask &amp; COMMENT_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L376">            mask |= VIEW_MASK;</span>
+        }
+<span class="fc bfc" id="L378" title="All 2 branches covered.">        if ( ( mask &amp; UPLOAD_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L380">            mask |= VIEW_MASK;</span>
+        }
+<span class="fc" id="L382">        return mask;</span>
+    }
+
+    /**
+     * Determines whether one target string is a logical subset of the other.
+     * @param superSet the prospective superset
+     * @param subSet the prospective subset
+     * @return the results of the test, where &lt;code&gt;true&lt;/code&gt; indicates that
+     *         &lt;code&gt;subSet&lt;/code&gt; is a subset of &lt;code&gt;superSet&lt;/code&gt;
+     */
+    protected static boolean isSubset( String superSet, String subSet )
+    {
+        // If either is null, return false
+<span class="pc bpc" id="L395" title="2 of 4 branches missed.">        if ( superSet == null || subSet == null )</span>
+        {
+<span class="nc" id="L397">            return false;</span>
+        }
+
+        // If targets are identical, it's a subset
+<span class="fc bfc" id="L401" title="All 2 branches covered.">        if ( superSet.equals( subSet ) )</span>
+        {
+<span class="fc" id="L403">            return true;</span>
+        }
+
+        // If super is &quot;*&quot;, it's a subset
+<span class="fc bfc" id="L407" title="All 2 branches covered.">        if ( superSet.equals( WILDCARD ) )</span>
+        {
+<span class="fc" id="L409">            return true;</span>
+        }
+
+        // If super starts with &quot;*&quot;, sub must end with everything after the *
+<span class="pc bpc" id="L413" title="1 of 2 branches missed.">        if ( superSet.startsWith( WILDCARD ) )</span>
+        {
+<span class="nc" id="L415">            String suffix = superSet.substring( 1 );</span>
+<span class="nc" id="L416">            return subSet.endsWith( suffix );</span>
+        }
+
+        // If super ends with &quot;*&quot;, sub must start with everything before *
+<span class="fc bfc" id="L420" title="All 2 branches covered.">        if ( superSet.endsWith( WILDCARD ) )</span>
+        {
+<span class="fc" id="L422">            String prefix = superSet.substring( 0, superSet.length() - 1 );</span>
+<span class="fc" id="L423">            return subSet.startsWith( prefix );</span>
+        }
+
+<span class="fc" id="L426">        return false;</span>
+    }
+
+    /**
+     * Private method that creates a binary mask based on the actions specified.
+     * This is used by {@link #implies(Permission)}.
+     * @param actions the actions for this permission, separated by commas
+     * @return the binary actions mask
+     */
+    protected static int createMask( String actions )
+    {
+<span class="pc bpc" id="L437" title="2 of 4 branches missed.">        if ( actions == null || actions.length() == 0 )</span>
+        {
+<span class="nc" id="L439">            throw new IllegalArgumentException( &quot;Actions cannot be blank or null&quot; );</span>
+        }
+<span class="fc" id="L441">        int mask = 0;</span>
+<span class="fc" id="L442">        String[] actionList = StringUtils.split( actions, ACTION_SEPARATOR );</span>
+<span class="fc bfc" id="L443" title="All 2 branches covered.">        for( String action : actionList )</span>
+        {
+<span class="fc bfc" id="L445" title="All 2 branches covered.">            if ( action.equalsIgnoreCase( VIEW_ACTION ) )</span>
+            {
+<span class="fc" id="L447">                mask |= VIEW_MASK;</span>
+            }
+<span class="fc bfc" id="L449" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( EDIT_ACTION ) )</span>
+            {
+<span class="fc" id="L451">                mask |= EDIT_MASK;</span>
+            }
+<span class="fc bfc" id="L453" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( COMMENT_ACTION ) )</span>
+            {
+<span class="fc" id="L455">                mask |= COMMENT_MASK;</span>
+            }
+<span class="fc bfc" id="L457" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( MODIFY_ACTION ) )</span>
+            {
+<span class="fc" id="L459">                mask |= MODIFY_MASK;</span>
+            }
+<span class="fc bfc" id="L461" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( UPLOAD_ACTION ) )</span>
+            {
+<span class="fc" id="L463">                mask |= UPLOAD_MASK;</span>
+            }
+<span class="fc bfc" id="L465" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( DELETE_ACTION ) )</span>
+            {
+<span class="fc" id="L467">                mask |= DELETE_MASK;</span>
+            }
+<span class="pc bpc" id="L469" title="1 of 2 branches missed.">            else if ( action.equalsIgnoreCase( RENAME_ACTION ) )</span>
+            {
+<span class="fc" id="L471">                mask |= RENAME_MASK;</span>
+            }
+            else
+            {
+<span class="nc" id="L475">                throw new IllegalArgumentException( &quot;Unrecognized action: &quot; + action );</span>
+            }
+        }
+<span class="fc" id="L478">        return mask;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

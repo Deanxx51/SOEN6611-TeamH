@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LinkParsingOperations.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.parser</a> &gt; <span class="el_source">LinkParsingOperations.java</span></div><h1>LinkParsingOperations.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.parser;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+import org.apache.oro.text.regex.Pattern;
+import org.apache.oro.text.regex.Perl5Matcher;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.ProviderException;
+
+
+/**
+ * Link parsing operations.
+ *
+ * @since 2.10.3
+ */
+public class LinkParsingOperations {
+
+<span class="fc" id="L39">    private static Logger log = Logger.getLogger( LinkParsingOperations.class );</span>
+    private final WikiContext wikiContext;
+
+    /**
+     *  This list contains all IANA registered URI protocol
+     *  types as of September 2004 + a few well-known extra types.
+     *
+     *  JSPWiki recognises all of them as external links.
+     *
+     *  This array is sorted during class load, so you can just dump
+     *  here whatever you want in whatever order you want.
+     */
+<span class="fc" id="L51">    static final String[] EXTERNAL_LINKS = {</span>
+        &quot;http:&quot;, &quot;ftp:&quot;, &quot;https:&quot;, &quot;mailto:&quot;,
+        &quot;news:&quot;, &quot;file:&quot;, &quot;rtsp:&quot;, &quot;mms:&quot;, &quot;ldap:&quot;,
+        &quot;gopher:&quot;, &quot;nntp:&quot;, &quot;telnet:&quot;, &quot;wais:&quot;,
+        &quot;prospero:&quot;, &quot;z39.50s&quot;, &quot;z39.50r&quot;, &quot;vemmi:&quot;,
+        &quot;imap:&quot;, &quot;nfs:&quot;, &quot;acap:&quot;, &quot;tip:&quot;, &quot;pop:&quot;,
+        &quot;dav:&quot;, &quot;opaquelocktoken:&quot;, &quot;sip:&quot;, &quot;sips:&quot;,
+        &quot;tel:&quot;, &quot;fax:&quot;, &quot;modem:&quot;, &quot;soap.beep:&quot;, &quot;soap.beeps&quot;,
+        &quot;xmlrpc.beep&quot;, &quot;xmlrpc.beeps&quot;, &quot;urn:&quot;, &quot;go:&quot;,
+        &quot;h323:&quot;, &quot;ipp:&quot;, &quot;tftp:&quot;, &quot;mupdate:&quot;, &quot;pres:&quot;,
+        &quot;im:&quot;, &quot;mtqp&quot;, &quot;smb:&quot;
+    };
+
+    static {
+<span class="fc" id="L65">        Arrays.sort( EXTERNAL_LINKS );</span>
+<span class="fc" id="L66">    }</span>
+
+<span class="fc" id="L68">    public LinkParsingOperations( final WikiContext wikiContext ) {</span>
+<span class="fc" id="L69">    	this.wikiContext = wikiContext;</span>
+<span class="fc" id="L70">    }</span>
+
+    /**
+     *  Returns true, if the link in question is an access rule.
+     *
+     * @param link The link text
+     * @return {@code true}, if this represents an access rule.
+     */
+    public boolean isAccessRule( final String link ) {
+<span class="pc bpc" id="L79" title="1 of 4 branches missed.">        return link.startsWith(&quot;{ALLOW&quot;) || link.startsWith(&quot;{DENY&quot;);</span>
+    }
+
+    /**
+     *  Returns true if the link is really command to insert a plugin.
+     *  &lt;P&gt;
+     *  Currently we just check if the link starts with &quot;{INSERT&quot;,
+     *  or just plain &quot;{&quot; but not &quot;{$&quot;.
+     *
+     *  @param link Link text, i.e. the contents of text between [].
+     *  @return True, if this link seems to be a command to insert a plugin here.
+     */
+    public boolean isPluginLink( final String link ) {
+<span class="fc bfc" id="L92" title="All 2 branches covered.">        return link.startsWith( &quot;{INSERT&quot; ) ||</span>
+<span class="fc bfc" id="L93" title="All 4 branches covered.">               ( link.startsWith( &quot;{&quot; ) &amp;&amp; !link.startsWith( &quot;{$&quot; ) );</span>
+    }
+
+    /**
+     * Returns true if the link is a metadata link.
+     *
+     * @param link The link text
+     * @return {@code true}, if this represents a metadata link.
+     */
+    public boolean isMetadata( final String link ) {
+<span class="fc" id="L103">        return link.startsWith( &quot;{SET&quot; );</span>
+    }
+
+    /**
+     * Returns true if the link is really command to insert a variable.
+     * &lt;P&gt;
+     * Currently we just check if the link starts with &quot;{$&quot;.
+     *
+     * @param link The link text
+     * @return {@code true}, if this represents a variable link.
+     */
+    public boolean isVariableLink( String link ) {
+<span class="fc" id="L115">        return link.startsWith( &quot;{$&quot; );</span>
+    }
+
+    /**
+     * Returns true, if this Link represents an InterWiki link (of the form wiki:page).
+     *
+     * @return {@code true}, if this Link represents an InterWiki link, {@code false} otherwise.
+     */
+    public boolean isInterWikiLink( final String page ) {
+<span class="fc bfc" id="L124" title="All 2 branches covered.">        return interWikiLinkAt( page ) != -1;</span>
+    }
+
+    /**
+     * Returns true, if this Link represents an InterWiki link (of the form wiki:page).
+     *
+     * @return {@code true}, if this Link represents an InterWiki link, {@code false} otherwise.
+     */
+    public int interWikiLinkAt( final String page ) {
+<span class="fc" id="L133">        return page.indexOf( ':' );</span>
+    }
+
+    /**
+     * Figures out if a link is an off-site link.  This recognizes
+     * the most common protocols by checking how it starts.
+     *
+     * @param page The link to check.
+     * @return true, if this is a link outside of this wiki.
+     */
+    public boolean isExternalLink( final String page ) {
+<span class="fc" id="L144">        int idx = Arrays.binarySearch( EXTERNAL_LINKS, page, new StartingComparator() );</span>
+
+        //
+        // We need to check here once again; otherwise we might get a match for something like &quot;h&quot;.
+        //
+<span class="pc bpc" id="L149" title="1 of 4 branches missed.">        if( idx &gt;= 0 &amp;&amp; page.startsWith( EXTERNAL_LINKS[ idx ] ) ) {</span>
+<span class="fc" id="L150">            return true;</span>
+        }
+
+<span class="fc" id="L153">        return false;</span>
+    }
+
+    /**
+     *  Matches the given link to the list of image name patterns to
+     *  determine whether it should be treated as an inline image or not.
+     */
+    public boolean isImageLink( String link ) {
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if( wikiContext.getEngine().getRenderingManager().getParser( wikiContext, link ).isImageInlining() ) {</span>
+<span class="fc" id="L162">            link = link.toLowerCase();</span>
+<span class="fc" id="L163">            List&lt; Pattern &gt; inlineImagePatterns = wikiContext.getEngine().getRenderingManager()</span>
+<span class="fc" id="L164">            		                                         .getParser( wikiContext, link ).getInlineImagePatterns();</span>
+
+<span class="fc bfc" id="L166" title="All 2 branches covered.">            for( Pattern p : inlineImagePatterns ) {</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">                if( new Perl5Matcher().matches( link, p ) ) {</span>
+<span class="fc" id="L168">                    return true;</span>
+                }
+<span class="fc" id="L170">            }</span>
+        }
+
+<span class="fc" id="L173">        return false;</span>
+    }
+
+    /**
+     * Returns {@code true}, if the link name exists; otherwise it returns {@code false}.
+     *
+     * @param page link name
+     * @return {@code true}, if the link name exists; otherwise it returns {@code false}.
+     */
+    public boolean linkExists( final String page ) {
+<span class="pc bpc" id="L183" title="2 of 4 branches missed.">        if( page == null || page.length() == 0 ) {</span>
+<span class="nc" id="L184">            return false;</span>
+        }
+        try {
+<span class="fc bfc" id="L187" title="All 2 branches covered.">            return wikiContext.getEngine().getFinalPageName( page ) != null;</span>
+<span class="nc" id="L188">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L189">            log.warn( &quot;TranslatorReader got a faulty page name [&quot; + page + &quot;]!&quot;, e );</span>
+<span class="nc" id="L190">            return false;</span>
+        }
+    }
+
+    /**
+     * Returns link name, if it exists; otherwise it returns {@code null}.
+     *
+     * @param page link name
+     * @return link name, if it exists; otherwise it returns {@code null}.
+     */
+    public String linkIfExists( final String page ) {
+<span class="pc bpc" id="L201" title="2 of 4 branches missed.">        if( page == null || page.length() == 0 ) {</span>
+<span class="nc" id="L202">            return null;</span>
+        }
+        try {
+<span class="fc" id="L205">            return wikiContext.getEngine().getFinalPageName( page );</span>
+<span class="nc" id="L206">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L207">            log.warn( &quot;TranslatorReader got a faulty page name [&quot; + page + &quot;]!&quot;, e );</span>
+<span class="nc" id="L208">            return null;</span>
+        }
+    }
+
+    /**
+     * Compares two Strings, and if one starts with the other, then returns null. Otherwise just like the normal Comparator for strings.
+     *
+     * @since
+     */
+    private static class StartingComparator implements Comparator&lt; String &gt; {
+
+        /**
+         * {@inheritDoc}
+         *
+         * @see Comparator#compare(String, String)
+         */
+        @Override
+        public int compare( final String s1, final String s2 ) {
+<span class="fc bfc" id="L226" title="All 2 branches covered.">            if( s1.length() &gt; s2.length() ) {</span>
+<span class="pc bpc" id="L227" title="1 of 4 branches missed.">                if( s1.startsWith( s2 ) &amp;&amp; s2.length() &gt; 1 ) {</span>
+<span class="nc" id="L228">                    return 0;</span>
+                }
+<span class="pc bpc" id="L230" title="1 of 4 branches missed.">            } else if( s2.startsWith( s1 ) &amp;&amp; s1.length() &gt; 1 ) {</span>
+<span class="fc" id="L231">                return 0;</span>
+            }
+
+<span class="fc" id="L234">            return s1.compareTo( s2 );</span>
+        }
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

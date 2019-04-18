@@ -1,0 +1,767 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JDBCUserDatabase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.user</a> &gt; <span class="el_source">JDBCUserDatabase.java</span></div><h1>JDBCUserDatabase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.user;
+
+import java.io.IOException;
+import java.io.Serializable;
+import java.security.Principal;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.util.Serializer;
+
+/**
+ * &lt;p&gt;
+ * Implementation of UserDatabase that persists {@link DefaultUserProfile}
+ * objects to a JDBC DataSource, as might typically be provided by a web
+ * container. This implementation looks up the JDBC DataSource using JNDI. The
+ * JNDI name of the datasource, backing table and mapped columns used by this 
+ * class can be overridden by adding settings in &lt;code&gt;jspwiki.properties&lt;/code&gt;.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Configurable properties are these:
+ * &lt;/p&gt;
+ * &lt;table&gt;
+ * &lt;tr&gt; &lt;thead&gt;
+ * &lt;th&gt;Property&lt;/th&gt;
+ * &lt;th&gt;Default&lt;/th&gt;
+ * &lt;th&gt;Definition&lt;/th&gt;
+ * &lt;thead&gt; &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.datasource&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;jdbc/UserDatabase&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The JNDI name of the DataSource&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.table&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;users&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The table that stores the user profiles&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.attributes&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;attributes&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The CLOB column containing the profile's custom attributes, stored as key/value strings, each separated by newline.&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.created&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;created&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the profile's creation timestamp&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.email&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;email&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the user's e-mail address&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.fullName&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;full_name&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the user's full name&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.loginName&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;login_name&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the user's login id&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.password&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;password&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the user's password&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.modified&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;modified&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the profile's last-modified timestamp&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.uid&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;uid&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the profile's unique identifier, as a long integer&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.wikiName&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;wiki_name&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the user's wiki name&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.lockExpiry&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;lock_expiry&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the date/time when the profile, if locked, should be unlocked.&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.roleTable&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;roles&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The table that stores user roles. When a new user is created, a new
+ * record is inserted containing user's initial role. The table will have an ID
+ * column whose name and values correspond to the contents of the user table's
+ * login name column. It will also contain a role column (see next row).&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.userdatabase.role&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;role&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column in the role table that stores user roles. When a new user is
+ * created, this column will be populated with the value
+ * &lt;code&gt;Authenticated&lt;/code&gt;. Once created, JDBCUserDatabase does not use
+ * this column again; it is provided strictly for the convenience of
+ * container-managed authentication services.&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;/table&gt;
+ * &lt;p&gt;
+ * This class hashes passwords using SHA-1. All of the underying SQL commands
+ * used by this class are implemented using prepared statements, so it is immune
+ * to SQL injection attacks.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * This class is typically used in conjunction with a web container's JNDI
+ * resource factory. For example, Tomcat provides a basic
+ * JNDI factory for registering DataSources. To give JSPWiki access to the JNDI
+ * resource named by &lt;code&gt;&lt;/code&gt;, you would declare the datasource resource
+ * similar to this:
+ * &lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;&amp;lt;Context ...&amp;gt;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;...&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;lt;Resource name=&quot;jdbc/UserDatabase&quot; auth=&quot;Container&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;type=&quot;javax.sql.DataSource&quot; username=&quot;dbusername&quot; password=&quot;dbpassword&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;driverClassName=&quot;org.hsql.jdbcDriver&quot; url=&quot;jdbc:HypersonicSQL:database&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;maxActive=&quot;8&quot; maxIdle=&quot;4&quot;/&amp;gt;&lt;br/&gt;
+ *  &amp;nbsp;...&lt;br/&gt;
+ * &amp;lt;/Context&amp;gt;&lt;/code&gt;&lt;/blockquote&gt;
+ * &lt;p&gt;
+ * To configure JSPWiki to use JDBC support, first create a database 
+ * with a structure similar to that provided by the HSQL and PostgreSQL 
+ * scripts in src/main/config/db.  If you have different table or column 
+ * names you can either alias them with a database view and have JSPWiki
+ * use the views, or alter the WEB-INF/jspwiki.properties file: the 
+ * jspwiki.userdatabase.* and jspwiki.groupdatabase.* properties change the
+ * names of the tables and columns that JSPWiki uses.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * A JNDI datasource (named jdbc/UserDatabase by default but can be configured 
+ * in the jspwiki.properties file) will need to be created in your servlet container.
+ * JDBC driver JARs should be added, e.g. in Tomcat's &lt;code&gt;lib&lt;/code&gt;
+ * directory. For more Tomcat JNDI configuration examples, see &lt;a
+ * href=&quot;http://tomcat.apache.org/tomcat-7.0-doc/jndi-resources-howto.html&quot;&gt;
+ * http://tomcat.apache.org/tomcat-7.0-doc/jndi-resources-howto.html&lt;/a&gt;.
+ * Once done, restart JSPWiki in the servlet container for it to read the 
+ * new properties and switch to JDBC authentication.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * JDBCUserDatabase commits changes as transactions if the back-end database
+ * supports them. If the database supports transactions, user profile changes
+ * are saved to permanent storage only when the {@link #commit()} method is
+ * called. If the database does &lt;em&gt;not&lt;/em&gt; support transactions, then
+ * changes are made immediately (during the {@link #save(UserProfile)} method),
+ * and the {@linkplain #commit()} method no-ops. Thus, callers should always
+ * call the {@linkplain #commit()} method after saving a profile to guarantee
+ * that changes are applied.
+ * &lt;/p&gt;
+ * 
+ * @since 2.3
+ */
+<span class="fc" id="L196">public class JDBCUserDatabase extends AbstractUserDatabase {</span>
+
+    private static final String NOTHING = &quot;&quot;;
+
+    public static final String DEFAULT_DB_ATTRIBUTES = &quot;attributes&quot;;
+
+    public static final String DEFAULT_DB_CREATED = &quot;created&quot;;
+
+    public static final String DEFAULT_DB_EMAIL = &quot;email&quot;;
+
+    public static final String DEFAULT_DB_FULL_NAME = &quot;full_name&quot;;
+
+    public static final String DEFAULT_DB_JNDI_NAME = &quot;jdbc/UserDatabase&quot;;
+
+    public static final String DEFAULT_DB_LOCK_EXPIRY = &quot;lock_expiry&quot;;
+
+    public static final String DEFAULT_DB_MODIFIED = &quot;modified&quot;;
+
+    public static final String DEFAULT_DB_ROLE = &quot;role&quot;;
+
+    public static final String DEFAULT_DB_ROLE_TABLE = &quot;roles&quot;;
+
+    public static final String DEFAULT_DB_TABLE = &quot;users&quot;;
+
+    public static final String DEFAULT_DB_LOGIN_NAME = &quot;login_name&quot;;
+
+    public static final String DEFAULT_DB_PASSWORD = &quot;password&quot;;
+
+    public static final String DEFAULT_DB_UID = &quot;uid&quot;;
+
+    public static final String DEFAULT_DB_WIKI_NAME = &quot;wiki_name&quot;;
+
+    public static final String PROP_DB_ATTRIBUTES = &quot;jspwiki.userdatabase.attributes&quot;;
+
+    public static final String PROP_DB_CREATED = &quot;jspwiki.userdatabase.created&quot;;
+
+    public static final String PROP_DB_EMAIL = &quot;jspwiki.userdatabase.email&quot;;
+
+    public static final String PROP_DB_FULL_NAME = &quot;jspwiki.userdatabase.fullName&quot;;
+
+    public static final String PROP_DB_DATASOURCE = &quot;jspwiki.userdatabase.datasource&quot;;
+
+    public static final String PROP_DB_LOCK_EXPIRY = &quot;jspwiki.userdatabase.lockExpiry&quot;;
+
+    public static final String PROP_DB_LOGIN_NAME = &quot;jspwiki.userdatabase.loginName&quot;;
+
+    public static final String PROP_DB_MODIFIED = &quot;jspwiki.userdatabase.modified&quot;;
+
+    public static final String PROP_DB_PASSWORD = &quot;jspwiki.userdatabase.password&quot;;
+
+    public static final String PROP_DB_UID = &quot;jspwiki.userdatabase.uid&quot;;
+
+    public static final String PROP_DB_ROLE = &quot;jspwiki.userdatabase.role&quot;;
+
+    public static final String PROP_DB_ROLE_TABLE = &quot;jspwiki.userdatabase.roleTable&quot;;
+
+    public static final String PROP_DB_TABLE = &quot;jspwiki.userdatabase.table&quot;;
+
+    public static final String PROP_DB_WIKI_NAME = &quot;jspwiki.userdatabase.wikiName&quot;;
+
+<span class="fc" id="L256">    private DataSource m_ds = null;</span>
+
+<span class="fc" id="L258">    private String m_deleteUserByLoginName = null;</span>
+
+<span class="fc" id="L260">    private String m_deleteRoleByLoginName = null;</span>
+
+<span class="fc" id="L262">    private String m_findByEmail = null;</span>
+
+<span class="fc" id="L264">    private String m_findByFullName = null;</span>
+
+<span class="fc" id="L266">    private String m_findByLoginName = null;</span>
+
+<span class="fc" id="L268">    private String m_findByUid = null;</span>
+
+<span class="fc" id="L270">    private String m_findByWikiName = null;</span>
+
+<span class="fc" id="L272">    private String m_renameProfile = null;</span>
+
+<span class="fc" id="L274">    private String m_renameRoles = null;</span>
+
+<span class="fc" id="L276">    private String m_updateProfile = null;</span>
+
+<span class="fc" id="L278">    private String m_findAll = null;</span>
+
+<span class="fc" id="L280">    private String m_findRoles = null;</span>
+
+<span class="fc" id="L282">    private String m_insertProfile = null;</span>
+
+<span class="fc" id="L284">    private String m_insertRole = null;</span>
+
+<span class="fc" id="L286">    private String m_attributes = null;</span>
+
+<span class="fc" id="L288">    private String m_email = null;</span>
+
+<span class="fc" id="L290">    private String m_fullName = null;</span>
+
+<span class="fc" id="L292">    private String m_lockExpiry = null;</span>
+
+<span class="fc" id="L294">    private String m_loginName = null;</span>
+
+<span class="fc" id="L296">    private String m_password = null;</span>
+
+<span class="fc" id="L298">    private String m_uid = null;</span>
+    
+<span class="fc" id="L300">    private String m_wikiName = null;</span>
+
+<span class="fc" id="L302">    private String m_created = null;</span>
+
+<span class="fc" id="L304">    private String m_modified = null;</span>
+
+<span class="fc" id="L306">    private boolean m_supportsCommits = false;</span>
+
+    /**
+     * Looks up and deletes the first {@link UserProfile} in the user database
+     * that matches a profile having a given login name. If the user database
+     * does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}. This method is intended to be atomic;
+     * results cannot be partially committed. If the commit fails, it should
+     * roll back its state appropriately. Implementing classes that persist to
+     * the file system may wish to make this method &lt;code&gt;synchronized&lt;/code&gt;.
+     * 
+     * @param loginName the login name of the user profile that shall be deleted
+     */
+    @Override
+    public void deleteByLoginName( String loginName ) throws NoSuchPrincipalException, WikiSecurityException {
+        // Get the existing user; if not found, throws NoSuchPrincipalException
+<span class="fc" id="L322">        findByLoginName( loginName );</span>
+
+<span class="fc" id="L324">        try( Connection conn = m_ds.getConnection() ; </span>
+<span class="fc" id="L325">             PreparedStatement ps1 = conn.prepareStatement( m_deleteUserByLoginName ); </span>
+<span class="fc" id="L326">             PreparedStatement ps2 = conn.prepareStatement( m_deleteRoleByLoginName ) )</span>
+        {
+            // Open the database connection
+<span class="pc bpc" id="L329" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L330">                conn.setAutoCommit( false );</span>
+            }
+
+            // Delete user record
+<span class="fc" id="L334">            ps1.setString( 1, loginName );</span>
+<span class="fc" id="L335">            ps1.execute();</span>
+
+            // Delete role record
+<span class="fc" id="L338">            ps2.setString( 1, loginName );</span>
+<span class="fc" id="L339">            ps2.execute();</span>
+
+            // Commit and close connection
+<span class="pc bpc" id="L342" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L343">                conn.commit();</span>
+            }
+<span class="nc" id="L345">        } catch( SQLException e ) {</span>
+<span class="nc" id="L346">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L347">        }</span>
+<span class="fc" id="L348">    }</span>
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#findByEmail(java.lang.String)
+     */
+    @Override
+    public UserProfile findByEmail( String index ) throws NoSuchPrincipalException {
+<span class="fc" id="L355">        return findByPreparedStatement( m_findByEmail, index );</span>
+    }
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#findByFullName(java.lang.String)
+     */
+    @Override
+    public UserProfile findByFullName( String index ) throws NoSuchPrincipalException {
+<span class="fc" id="L363">        return findByPreparedStatement( m_findByFullName, index );</span>
+    }
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#findByLoginName(java.lang.String)
+     */
+    @Override
+    public UserProfile findByLoginName( String index ) throws NoSuchPrincipalException {
+<span class="fc" id="L371">        return findByPreparedStatement( m_findByLoginName, index );</span>
+    }
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#findByWikiName(String)
+     */
+    @Override
+    public UserProfile findByUid( String uid ) throws NoSuchPrincipalException {
+<span class="fc" id="L379">        return findByPreparedStatement( m_findByUid, uid );</span>
+    }
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#findByWikiName(String)
+     */
+    @Override
+    public UserProfile findByWikiName( String index ) throws NoSuchPrincipalException {
+<span class="fc" id="L387">        return findByPreparedStatement( m_findByWikiName, index );</span>
+    }
+
+    /**
+     * Returns all WikiNames that are stored in the UserDatabase as an array of
+     * WikiPrincipal objects. If the database does not contain any profiles,
+     * this method will return a zero-length array.
+     * 
+     * @return the WikiNames
+     */
+    @Override
+    public Principal[] getWikiNames() throws WikiSecurityException {
+<span class="fc" id="L399">        Set&lt;Principal&gt; principals = new HashSet&lt;&gt;();</span>
+<span class="fc" id="L400">        try( Connection conn = m_ds.getConnection();</span>
+<span class="fc" id="L401">             PreparedStatement ps = conn.prepareStatement( m_findAll );</span>
+<span class="fc" id="L402">             ResultSet rs = ps.executeQuery() )</span>
+        {
+<span class="fc bfc" id="L404" title="All 2 branches covered.">            while ( rs.next() ) {</span>
+<span class="fc" id="L405">                String wikiName = rs.getString( m_wikiName );</span>
+<span class="fc bfc" id="L406" title="All 2 branches covered.">                if( wikiName == null ) {</span>
+<span class="fc" id="L407">                    log.warn( &quot;Detected null wiki name in XMLUserDataBase. Check your user database.&quot; );</span>
+                } else {
+<span class="fc" id="L409">                    Principal principal = new WikiPrincipal( wikiName, WikiPrincipal.WIKI_NAME );</span>
+<span class="fc" id="L410">                    principals.add( principal );</span>
+                }
+<span class="fc" id="L412">            }</span>
+<span class="nc" id="L413">        } catch( SQLException e ) {</span>
+<span class="nc" id="L414">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L415">        }</span>
+
+<span class="fc" id="L417">        return principals.toArray( new Principal[principals.size()] );</span>
+    }
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#initialize(org.apache.wiki.WikiEngine,
+     *      java.util.Properties)
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties props ) throws NoRequiredPropertyException, WikiSecurityException {
+<span class="fc" id="L426">        String jndiName = props.getProperty( PROP_DB_DATASOURCE, DEFAULT_DB_JNDI_NAME );</span>
+        try {
+<span class="fc" id="L428">            Context initCtx = new InitialContext();</span>
+<span class="fc" id="L429">            Context ctx = (Context) initCtx.lookup( &quot;java:comp/env&quot; );</span>
+<span class="fc" id="L430">            m_ds = (DataSource) ctx.lookup( jndiName );</span>
+
+            // Prepare the SQL selectors
+<span class="fc" id="L433">            String userTable = props.getProperty( PROP_DB_TABLE, DEFAULT_DB_TABLE );</span>
+<span class="fc" id="L434">            m_email = props.getProperty( PROP_DB_EMAIL, DEFAULT_DB_EMAIL );</span>
+<span class="fc" id="L435">            m_fullName = props.getProperty( PROP_DB_FULL_NAME, DEFAULT_DB_FULL_NAME );</span>
+<span class="fc" id="L436">            m_lockExpiry = props.getProperty( PROP_DB_LOCK_EXPIRY, DEFAULT_DB_LOCK_EXPIRY );</span>
+<span class="fc" id="L437">            m_loginName = props.getProperty( PROP_DB_LOGIN_NAME, DEFAULT_DB_LOGIN_NAME );</span>
+<span class="fc" id="L438">            m_password = props.getProperty( PROP_DB_PASSWORD, DEFAULT_DB_PASSWORD );</span>
+<span class="fc" id="L439">            m_uid = props.getProperty( PROP_DB_UID, DEFAULT_DB_UID );</span>
+<span class="fc" id="L440">            m_wikiName = props.getProperty( PROP_DB_WIKI_NAME, DEFAULT_DB_WIKI_NAME );</span>
+<span class="fc" id="L441">            m_created = props.getProperty( PROP_DB_CREATED, DEFAULT_DB_CREATED );</span>
+<span class="fc" id="L442">            m_modified = props.getProperty( PROP_DB_MODIFIED, DEFAULT_DB_MODIFIED );</span>
+<span class="fc" id="L443">            m_attributes = props.getProperty( PROP_DB_ATTRIBUTES, DEFAULT_DB_ATTRIBUTES );</span>
+
+<span class="fc" id="L445">            m_findAll = &quot;SELECT * FROM &quot; + userTable;</span>
+<span class="fc" id="L446">            m_findByEmail = &quot;SELECT * FROM &quot; + userTable + &quot; WHERE &quot; + m_email + &quot;=?&quot;;</span>
+<span class="fc" id="L447">            m_findByFullName = &quot;SELECT * FROM &quot; + userTable + &quot; WHERE &quot; + m_fullName + &quot;=?&quot;;</span>
+<span class="fc" id="L448">            m_findByLoginName = &quot;SELECT * FROM &quot; + userTable + &quot; WHERE &quot; + m_loginName + &quot;=?&quot;;</span>
+<span class="fc" id="L449">            m_findByUid = &quot;SELECT * FROM &quot; + userTable + &quot; WHERE &quot; + m_uid + &quot;=?&quot;;</span>
+<span class="fc" id="L450">            m_findByWikiName = &quot;SELECT * FROM &quot; + userTable + &quot; WHERE &quot; + m_wikiName + &quot;=?&quot;;</span>
+
+            // The user insert SQL prepared statement
+<span class="fc" id="L453">            m_insertProfile = &quot;INSERT INTO &quot; + userTable + &quot; (&quot;</span>
+                              + m_uid + &quot;,&quot;
+                              + m_email + &quot;,&quot;
+                              + m_fullName + &quot;,&quot;
+                              + m_password + &quot;,&quot;
+                              + m_wikiName + &quot;,&quot;
+                              + m_modified + &quot;,&quot;
+                              + m_loginName + &quot;,&quot;
+                              + m_attributes + &quot;,&quot;
+                              + m_created
+                              + &quot;) VALUES (?,?,?,?,?,?,?,?,?)&quot;;
+            
+            // The user update SQL prepared statement
+<span class="fc" id="L466">            m_updateProfile = &quot;UPDATE &quot; + userTable + &quot; SET &quot;</span>
+                              + m_uid + &quot;=?,&quot;
+                              + m_email + &quot;=?,&quot;
+                              + m_fullName + &quot;=?,&quot;
+                              + m_password + &quot;=?,&quot;
+                              + m_wikiName + &quot;=?,&quot;
+                              + m_modified + &quot;=?,&quot;
+                              + m_loginName + &quot;=?,&quot;
+                              + m_attributes + &quot;=?,&quot;
+                              + m_lockExpiry + &quot;=? &quot;
+                              + &quot;WHERE &quot; + m_loginName + &quot;=?&quot;;
+
+            // Prepare the role insert SQL
+<span class="fc" id="L479">            String roleTable = props.getProperty( PROP_DB_ROLE_TABLE, DEFAULT_DB_ROLE_TABLE );</span>
+<span class="fc" id="L480">            String role = props.getProperty( PROP_DB_ROLE, DEFAULT_DB_ROLE );</span>
+<span class="fc" id="L481">            m_insertRole = &quot;INSERT INTO &quot; + roleTable + &quot; (&quot; + m_loginName + &quot;,&quot; + role + &quot;) VALUES (?,?)&quot;;</span>
+<span class="fc" id="L482">            m_findRoles = &quot;SELECT * FROM &quot; + roleTable + &quot; WHERE &quot; + m_loginName + &quot;=?&quot;;</span>
+
+            // Prepare the user delete SQL
+<span class="fc" id="L485">            m_deleteUserByLoginName = &quot;DELETE FROM &quot; + userTable + &quot; WHERE &quot; + m_loginName + &quot;=?&quot;;</span>
+
+            // Prepare the role delete SQL
+<span class="fc" id="L488">            m_deleteRoleByLoginName = &quot;DELETE FROM &quot; + roleTable + &quot; WHERE &quot; + m_loginName + &quot;=?&quot;;</span>
+
+            // Prepare the rename user/roles SQL
+<span class="fc" id="L491">            m_renameProfile = &quot;UPDATE &quot; + userTable + &quot; SET &quot; + m_loginName + &quot;=?,&quot; + m_modified + &quot;=? WHERE &quot; + m_loginName</span>
+                              + &quot;=?&quot;;
+<span class="fc" id="L493">            m_renameRoles = &quot;UPDATE &quot; + roleTable + &quot; SET &quot; + m_loginName + &quot;=? WHERE &quot; + m_loginName + &quot;=?&quot;;</span>
+<span class="nc" id="L494">        } catch( NamingException e ) {</span>
+<span class="nc" id="L495">            log.error( &quot;JDBCUserDatabase initialization error: &quot; + e.getMessage() );</span>
+<span class="nc" id="L496">            throw new NoRequiredPropertyException( PROP_DB_DATASOURCE, &quot;JDBCUserDatabase initialization error: &quot; + e.getMessage() );</span>
+<span class="fc" id="L497">        }</span>
+
+        // Test connection by doing a quickie select
+<span class="fc" id="L500">        try( Connection conn = m_ds.getConnection(); PreparedStatement ps = conn.prepareStatement( m_findAll ) ) {</span>
+<span class="pc bpc" id="L501" title="2 of 4 branches missed.">        } catch( SQLException e ) {</span>
+<span class="nc" id="L502">            log.error( &quot;DB connectivity error: &quot; + e.getMessage() );</span>
+<span class="nc" id="L503">            throw new WikiSecurityException(&quot;DB connectivity error: &quot; + e.getMessage(), e );</span>
+<span class="fc" id="L504">        }</span>
+<span class="fc" id="L505">        log.info( &quot;JDBCUserDatabase initialized from JNDI DataSource: &quot; + jndiName );</span>
+
+        // Determine if the datasource supports commits
+<span class="fc" id="L508">        try( Connection conn = m_ds.getConnection() ) {</span>
+<span class="fc" id="L509">            DatabaseMetaData dmd = conn.getMetaData();</span>
+<span class="pc bpc" id="L510" title="1 of 2 branches missed.">            if( dmd.supportsTransactions() ) {</span>
+<span class="fc" id="L511">                m_supportsCommits = true;</span>
+<span class="fc" id="L512">                conn.setAutoCommit( false );</span>
+<span class="fc" id="L513">                log.info( &quot;JDBCUserDatabase supports transactions. Good; we will use them.&quot; );</span>
+            }
+<span class="nc" id="L515">        } catch( SQLException e ) {</span>
+<span class="nc" id="L516">            log.warn( &quot;JDBCUserDatabase warning: user database doesn't seem to support transactions. Reason: &quot; + e.getMessage() );</span>
+<span class="fc" id="L517">        }</span>
+<span class="fc" id="L518">    }</span>
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#rename(String, String)
+     */
+    @Override
+    public void rename( String loginName, String newName ) throws NoSuchPrincipalException, DuplicateUserException, WikiSecurityException {
+        // Get the existing user; if not found, throws NoSuchPrincipalException
+<span class="fc" id="L526">        UserProfile profile = findByLoginName( loginName );</span>
+
+        // Get user with the proposed name; if found, it's a collision
+        try {
+<span class="fc" id="L530">            UserProfile otherProfile = findByLoginName( newName );</span>
+<span class="pc bpc" id="L531" title="1 of 2 branches missed.">            if( otherProfile != null ) {</span>
+<span class="fc" id="L532">                throw new DuplicateUserException( &quot;security.error.cannot.rename&quot;, newName );</span>
+            }
+<span class="fc" id="L534">        } catch( NoSuchPrincipalException e ) {</span>
+            // Good! That means it's safe to save using the new name
+<span class="nc" id="L536">        }</span>
+
+<span class="fc" id="L538">        try( Connection conn = m_ds.getConnection(); </span>
+<span class="fc" id="L539">             PreparedStatement ps1 = conn.prepareStatement( m_renameProfile );</span>
+<span class="fc" id="L540">             PreparedStatement ps2 = conn.prepareStatement( m_renameRoles ) )</span>
+        {
+<span class="pc bpc" id="L542" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L543">                conn.setAutoCommit( false );</span>
+            }
+
+<span class="fc" id="L546">            Timestamp ts = new Timestamp( System.currentTimeMillis() );</span>
+<span class="fc" id="L547">            Date modDate = new Date( ts.getTime() );</span>
+
+            // Change the login ID for the user record
+<span class="fc" id="L550">            ps1.setString( 1, newName );</span>
+<span class="fc" id="L551">            ps1.setTimestamp( 2, ts );</span>
+<span class="fc" id="L552">            ps1.setString( 3, loginName );</span>
+<span class="fc" id="L553">            ps1.execute();</span>
+
+            // Change the login ID for the role records
+<span class="fc" id="L556">            ps2.setString( 1, newName );</span>
+<span class="fc" id="L557">            ps2.setString( 2, loginName );</span>
+<span class="fc" id="L558">            ps2.execute();</span>
+
+            // Set the profile name and mod time
+<span class="fc" id="L561">            profile.setLoginName( newName );</span>
+<span class="fc" id="L562">            profile.setLastModified( modDate );</span>
+
+            // Commit and close connection
+<span class="pc bpc" id="L565" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L566">                conn.commit();</span>
+            }
+<span class="nc" id="L568">        } catch( SQLException e ) {</span>
+<span class="nc" id="L569">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L570">        }</span>
+<span class="fc" id="L571">    }</span>
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#save(org.apache.wiki.auth.user.UserProfile)
+     */
+    @Override
+    public void save( UserProfile profile ) throws WikiSecurityException {
+<span class="fc" id="L578">        String initialRole = &quot;Authenticated&quot;;</span>
+
+        // Figure out which prepared statement to use &amp; execute it
+<span class="fc" id="L581">        String loginName = profile.getLoginName();</span>
+<span class="fc" id="L582">        UserProfile existingProfile = null;</span>
+
+        try {
+<span class="fc" id="L585">            existingProfile = findByLoginName( loginName );</span>
+<span class="fc" id="L586">        } catch( NoSuchPrincipalException e ) {</span>
+            // Existing profile will be null
+<span class="fc" id="L588">        }</span>
+
+        // Get a clean password from the passed profile.
+        // Blank password is the same as null, which means we re-use the existing one.
+<span class="fc" id="L592">        String password = profile.getPassword();</span>
+<span class="fc bfc" id="L593" title="All 2 branches covered.">        String existingPassword = (existingProfile == null) ? null : existingProfile.getPassword();</span>
+<span class="pc bpc" id="L594" title="1 of 2 branches missed.">        if( NOTHING.equals( password ) ) {</span>
+<span class="nc" id="L595">            password = null;</span>
+        }
+<span class="pc bpc" id="L597" title="1 of 2 branches missed.">        if( password == null ) {</span>
+<span class="nc" id="L598">            password = existingPassword;</span>
+        }
+
+        // If password changed, hash it before we save
+<span class="fc bfc" id="L602" title="All 2 branches covered.">        if( !StringUtils.equals( password, existingPassword ) ) {</span>
+<span class="fc" id="L603">            password = getHash( password );</span>
+        }
+
+<span class="fc" id="L606">        try( Connection conn = m_ds.getConnection();</span>
+<span class="fc" id="L607">             PreparedStatement ps1 = conn.prepareStatement( m_insertProfile );</span>
+<span class="fc" id="L608">             PreparedStatement ps2 = conn.prepareStatement( m_findRoles );</span>
+<span class="fc" id="L609">             PreparedStatement ps3 = conn.prepareStatement( m_insertRole );</span>
+<span class="fc" id="L610">             PreparedStatement ps4 = conn.prepareStatement( m_updateProfile ) )</span>
+        {
+<span class="pc bpc" id="L612" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L613">                conn.setAutoCommit( false );</span>
+            }
+
+<span class="fc" id="L616">            Timestamp ts = new Timestamp( System.currentTimeMillis() );</span>
+<span class="fc" id="L617">            Date modDate = new Date( ts.getTime() );</span>
+<span class="pc bpc" id="L618" title="1 of 2 branches missed.">            java.sql.Date lockExpiry = profile.getLockExpiry() == null ? null : new java.sql.Date( profile.getLockExpiry().getTime() );</span>
+<span class="fc bfc" id="L619" title="All 2 branches covered.">            if( existingProfile == null )</span>
+            {
+                // User is new: insert new user record
+<span class="fc" id="L622">                ps1.setString( 1, profile.getUid() );</span>
+<span class="fc" id="L623">                ps1.setString( 2, profile.getEmail() );</span>
+<span class="fc" id="L624">                ps1.setString( 3, profile.getFullname() );</span>
+<span class="fc" id="L625">                ps1.setString( 4, password );</span>
+<span class="fc" id="L626">                ps1.setString( 5, profile.getWikiName() );</span>
+<span class="fc" id="L627">                ps1.setTimestamp( 6, ts );</span>
+<span class="fc" id="L628">                ps1.setString( 7, profile.getLoginName() );</span>
+                try {
+<span class="fc" id="L630">                    ps1.setString( 8, Serializer.serializeToBase64( profile.getAttributes() ) );</span>
+<span class="nc" id="L631">                } catch ( IOException e ) {</span>
+<span class="nc" id="L632">                    throw new WikiSecurityException( &quot;Could not save user profile attribute. Reason: &quot; + e.getMessage(), e );</span>
+<span class="fc" id="L633">                }</span>
+<span class="fc" id="L634">                ps1.setTimestamp( 9, ts );</span>
+<span class="fc" id="L635">                ps1.execute();</span>
+
+                // Insert new role record
+<span class="fc" id="L638">                ps2.setString( 1, profile.getLoginName() );</span>
+<span class="fc" id="L639">                int roles = 0;</span>
+<span class="fc" id="L640">                try ( ResultSet rs = ps2.executeQuery() ) {</span>
+<span class="pc bpc" id="L641" title="1 of 2 branches missed.">                    while ( rs.next() ) {</span>
+<span class="nc" id="L642">                        roles++;</span>
+                    }
+                }
+                
+<span class="pc bpc" id="L646" title="1 of 2 branches missed.">                if( roles == 0 ) {</span>
+<span class="fc" id="L647">                    ps3.setString( 1, profile.getLoginName() );</span>
+<span class="fc" id="L648">                    ps3.setString( 2, initialRole );</span>
+<span class="fc" id="L649">                    ps3.execute();</span>
+                }
+
+                // Set the profile creation time
+<span class="fc" id="L653">                profile.setCreated( modDate );</span>
+<span class="fc" id="L654">            } else {</span>
+                // User exists: modify existing record
+<span class="fc" id="L656">                ps4.setString( 1, profile.getUid() );</span>
+<span class="fc" id="L657">                ps4.setString( 2, profile.getEmail() );</span>
+<span class="fc" id="L658">                ps4.setString( 3, profile.getFullname() );</span>
+<span class="fc" id="L659">                ps4.setString( 4, password );</span>
+<span class="fc" id="L660">                ps4.setString( 5, profile.getWikiName() );</span>
+<span class="fc" id="L661">                ps4.setTimestamp( 6, ts );</span>
+<span class="fc" id="L662">                ps4.setString( 7, profile.getLoginName() );</span>
+                try
+                {
+<span class="fc" id="L665">                    ps4.setString( 8, Serializer.serializeToBase64( profile.getAttributes() ) );</span>
+                }
+<span class="nc" id="L667">                catch ( IOException e )</span>
+                {
+<span class="nc" id="L669">                    throw new WikiSecurityException( &quot;Could not save user profile attribute. Reason: &quot; + e.getMessage(), e );</span>
+<span class="fc" id="L670">                }</span>
+<span class="fc" id="L671">                ps4.setDate( 9, lockExpiry );</span>
+<span class="fc" id="L672">                ps4.setString( 10, profile.getLoginName() );</span>
+<span class="fc" id="L673">                ps4.execute();</span>
+            }
+            // Set the profile mod time
+<span class="fc" id="L676">            profile.setLastModified( modDate );</span>
+
+            // Commit and close connection
+<span class="pc bpc" id="L679" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L680">                conn.commit();</span>
+            }
+        }
+<span class="nc" id="L683">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L685">            throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L686">        }</span>
+<span class="fc" id="L687">    }</span>
+
+    /**
+     * Private method that returns the first {@link UserProfile} matching a
+     * named column's value. This method will also set the UID if it has not yet been set.     
+     * @param sql the SQL statement that should be prepared; it must have one parameter
+     * to set (either a String or a Long)
+     * @param index the value to match
+     * @return the resolved UserProfile
+     * @throws SQLException
+     */
+    private UserProfile findByPreparedStatement( String sql, Object index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L700">        UserProfile profile = null;</span>
+<span class="fc" id="L701">        boolean found = false;</span>
+<span class="fc" id="L702">        boolean unique = true;</span>
+<span class="fc" id="L703">        try( Connection conn = m_ds.getConnection(); PreparedStatement ps = conn.prepareStatement( sql ) ) {</span>
+<span class="pc bpc" id="L704" title="1 of 2 branches missed.">            if( m_supportsCommits ) {</span>
+<span class="fc" id="L705">                conn.setAutoCommit( false );</span>
+            }
+            
+            // Set the parameter to search by
+<span class="pc bpc" id="L709" title="1 of 2 branches missed.">            if ( index instanceof String ) {</span>
+<span class="fc" id="L710">                ps.setString( 1, (String)index );</span>
+<span class="nc bnc" id="L711" title="All 2 branches missed.">            } else if ( index instanceof Long ) {</span>
+<span class="nc" id="L712">                ps.setLong( 1, ( (Long)index).longValue() );</span>
+            } else {
+<span class="nc" id="L714">                throw new IllegalArgumentException( &quot;Index type not recognized!&quot; );</span>
+            }
+            
+            // Go and get the record!
+<span class="fc" id="L718">            try ( ResultSet rs = ps.executeQuery() ) {</span>
+<span class="fc bfc" id="L719" title="All 2 branches covered.">                while ( rs.next() ) {</span>
+<span class="pc bpc" id="L720" title="1 of 2 branches missed.">                    if( profile != null ) {</span>
+<span class="nc" id="L721">                        unique = false;</span>
+<span class="nc" id="L722">                        break;</span>
+                    }
+<span class="fc" id="L724">                    profile = newProfile();</span>
+                    
+                    // Fetch the basic user attributes
+<span class="fc" id="L727">                    profile.setUid( rs.getString( m_uid ) );</span>
+<span class="pc bpc" id="L728" title="1 of 2 branches missed.">                    if ( profile.getUid() == null ) {</span>
+<span class="nc" id="L729">                        profile.setUid( generateUid( this ) );</span>
+                    }
+<span class="fc" id="L731">                    profile.setCreated( rs.getTimestamp( m_created ) );</span>
+<span class="fc" id="L732">                    profile.setEmail( rs.getString( m_email ) );</span>
+<span class="fc" id="L733">                    profile.setFullname( rs.getString( m_fullName ) );</span>
+<span class="fc" id="L734">                    profile.setLastModified( rs.getTimestamp( m_modified ) );</span>
+<span class="fc" id="L735">                    Date lockExpiry = rs.getDate( m_lockExpiry );</span>
+<span class="pc bpc" id="L736" title="1 of 2 branches missed.">                    profile.setLockExpiry( rs.wasNull() ? null : lockExpiry );</span>
+<span class="fc" id="L737">                    profile.setLoginName( rs.getString( m_loginName ) );</span>
+<span class="fc" id="L738">                    profile.setPassword( rs.getString( m_password ) );</span>
+                    
+                    // Fetch the user attributes
+<span class="fc" id="L741">                    String rawAttributes = rs.getString( m_attributes );</span>
+<span class="fc bfc" id="L742" title="All 2 branches covered.">                    if ( rawAttributes != null ) {</span>
+                        try {
+<span class="fc" id="L744">                            Map&lt;String,? extends Serializable&gt; attributes = Serializer.deserializeFromBase64( rawAttributes );</span>
+<span class="fc" id="L745">                            profile.getAttributes().putAll( attributes );</span>
+<span class="nc" id="L746">                        } catch ( IOException e ) {</span>
+<span class="nc" id="L747">                            log.error( &quot;Could not parse user profile attributes!&quot;, e );</span>
+<span class="fc" id="L748">                        }</span>
+                    }
+<span class="fc" id="L750">                    found = true;</span>
+<span class="fc" id="L751">                }</span>
+            }
+<span class="nc" id="L753">        } catch( SQLException e ) {</span>
+<span class="nc" id="L754">            throw new NoSuchPrincipalException( e.getMessage() );</span>
+<span class="fc" id="L755">        }</span>
+
+<span class="fc bfc" id="L757" title="All 2 branches covered.">        if( !found ) {</span>
+<span class="fc" id="L758">            throw new NoSuchPrincipalException( &quot;Could not find profile in database!&quot; );</span>
+        }
+<span class="pc bpc" id="L760" title="1 of 2 branches missed.">        if( !unique ) {</span>
+<span class="nc" id="L761">            throw new NoSuchPrincipalException( &quot;More than one profile in database!&quot; );</span>
+        }
+<span class="fc" id="L763">        return profile;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

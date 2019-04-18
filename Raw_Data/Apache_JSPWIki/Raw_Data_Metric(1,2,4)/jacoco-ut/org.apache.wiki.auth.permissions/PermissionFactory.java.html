@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PermissionFactory.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.permissions</a> &gt; <span class="el_source">PermissionFactory.java</span></div><h1>PermissionFactory.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.permissions;
+
+import java.util.WeakHashMap;
+
+import org.apache.wiki.WikiPage;
+
+/**
+ *  Provides a factory for Permission objects.  Since the Permissions are immutable,
+ *  and creating them takes a bit of time, caching them makes sense.
+ *  &lt;p&gt;
+ *  This class stores the permissions in a static HashMap.
+ *  @since 2.5.54
+ */
+public final class PermissionFactory
+{
+    /**
+     *  Prevent instantiation.
+     */
+    private PermissionFactory() {}
+    
+    /**
+     *  This is a WeakHashMap&lt;Integer,PagePermission&gt;, which stores the
+     *  cached page permissions.
+     */
+<span class="fc" id="L43">    private static WeakHashMap&lt;Integer, PagePermission&gt; c_cache = new WeakHashMap&lt;Integer, PagePermission&gt;();</span>
+    
+    /**
+     *  Get a permission object for a WikiPage and a set of actions.
+     *  
+     *  @param page The page object.
+     *  @param actions A list of actions.
+     *  @return A PagePermission object, presenting this page+actions combination.
+     */
+    public static PagePermission getPagePermission( WikiPage page, String actions )
+    {
+<span class="fc" id="L54">        return getPagePermission( page.getWiki(), page.getName(), actions );</span>
+    }
+    
+    /**
+     *  Get a permission object for a WikiPage and a set of actions.
+     *  
+     *  @param page The name of the page.
+     *  @param actions A list of actions.
+     *  @return A PagePermission object, presenting this page+actions combination.
+     */
+    public static PagePermission getPagePermission( String page, String actions )
+    {
+<span class="fc" id="L66">        return getPagePermission( &quot;&quot;, page, actions );</span>
+    }
+
+    /**
+     *  Get a page permission based on a wiki, page, and actions.
+     *  
+     *  @param wiki The name of the wiki. Can be an empty string, but must not be null.
+     *  @param page The page name
+     *  @param actions A list of actions.
+     *  @return A PagePermission object.
+     */
+    private static PagePermission getPagePermission( String wiki, String page, String actions )
+    {
+        PagePermission perm;
+        //
+        //  Since this is pretty speed-critical, we try to avoid the StringBuffer creation
+        //  overhead by XORring the hashcodes.  However, if page name length &gt; 32 characters,
+        //  this might result in two same hashCodes.
+        //  FIXME: Make this work for page-name lengths &gt; 32 characters (use the alt implementation
+        //         if page.length() &gt; 32?)
+        // Alternative implementation below, but it does create an extra StringBuffer.
+        //String         key = wiki+&quot;:&quot;+page+&quot;:&quot;+actions;
+        
+<span class="fc" id="L89">        Integer key = wiki.hashCode() ^ page.hashCode() ^ actions.hashCode();</span>
+   
+        //
+        //  It's fine if two threads update the cache, since the objects mean the same
+        //  thing anyway.  And this avoids nasty blocking effects.
+        //
+<span class="fc" id="L95">        synchronized( c_cache )</span>
+        {
+<span class="fc" id="L97">            perm = c_cache.get( key );</span>
+<span class="fc" id="L98">        }</span>
+        
+<span class="fc bfc" id="L100" title="All 2 branches covered.">        if( perm == null )</span>
+        {
+<span class="fc bfc" id="L102" title="All 2 branches covered.">            if( wiki.length() &gt; 0 ) page = wiki+&quot;:&quot;+page;</span>
+<span class="fc" id="L103">            perm = new PagePermission( page, actions );</span>
+            
+<span class="fc" id="L105">            synchronized( c_cache )</span>
+            {
+<span class="fc" id="L107">                c_cache.put( key, perm );</span>
+<span class="fc" id="L108">            }</span>
+        }
+        
+<span class="fc" id="L111">        return perm;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

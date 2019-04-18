@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiEventUtils.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">WikiEventUtils.java</span></div><h1>WikiEventUtils.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.event;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.engine.FilterManager;
+
+/**
+ *  A utility class that adds some JSPWiki-specific functionality to the
+ *  WikiEventManager (which is really a general-purpose event manager).
+ *
+ * @since 2.4.20
+ */
+<span class="nc" id="L31">public class WikiEventUtils</span>
+{
+    /**
+     *  This ungainly convenience method adds a WikiEventListener to the
+     *  appropriate component of the provided client Object, to listen
+     *  for events of the provided type (or related types, see the table
+     *  below).
+     *  &lt;p&gt;
+     *  If the type value is valid but does not match any WikiEvent type
+     *  known to this method, this will just attach the listener to the
+     *  client Object. This may mean that the Object never fires events
+     *  of the desired type; type-to-client matching is left to you to
+     *  guarantee. Silence is golden, but not if you want those events.
+     *  &lt;/p&gt;
+     *  &lt;p&gt;
+     *  Most event types expect a WikiEngine as the client, with the rest
+     *  attaching the listener directly to the supplied source object, as
+     *  described below:
+     *  &lt;/p&gt;
+     *  &lt;table border=&quot;1&quot; cellpadding=&quot;4&quot;&gt;
+     *    &lt;tr&gt;&lt;th&gt;WikiEvent Type(s) &lt;/th&gt;&lt;th&gt;Required Source Object &lt;/th&gt;&lt;th&gt;Actually Attached To &lt;/th&gt;
+     *    &lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;any WikiEngineEvent       &lt;/td&gt;&lt;td&gt;WikiEngine  &lt;/td&gt;&lt;td&gt;WikiEngine        &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiPageEvent.PAGE_LOCK,
+     *            WikiPageEvent.PAGE_UNLOCK &lt;/td&gt;&lt;td&gt;WikiEngine or
+     *                                               PageManager &lt;/td&gt;&lt;td&gt;PageManager       &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiPageEvent.PAGE_REQUESTED,
+     *            WikiPageEvent.PAGE_DELIVERED &lt;/td&gt;
+     *                                           &lt;td&gt;WikiServletFilter &lt;/td&gt;
+     *                                                                &lt;td&gt;WikiServletFilter &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiPageEvent (&lt;a href=&quot;#pbeTypes&quot;&gt;phase boundary event&lt;/a&gt;)&lt;/td&gt;
+     *                                           &lt;td&gt;WikiEngine  &lt;/td&gt;&lt;td&gt;FilterManager     &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiPageEvent (&lt;a href=&quot;#ipeTypes&quot;&gt;in-phase event&lt;/a&gt;)&lt;/td&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiPageEvent (in-phase event)&lt;/td&gt;
+     *                                           &lt;td&gt;any         &lt;/td&gt;&lt;td&gt;source object     &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;WikiSecurityEvent         &lt;/td&gt;&lt;td&gt;any         &lt;/td&gt;&lt;td&gt;source object     &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;any other valid type      &lt;/td&gt;&lt;td&gt;any         &lt;/td&gt;&lt;td&gt;source object     &lt;/td&gt;&lt;/tr&gt;
+     *    &lt;tr&gt;&lt;td&gt;any invalid type          &lt;/td&gt;&lt;td&gt;any         &lt;/td&gt;&lt;td&gt;nothing           &lt;/td&gt;&lt;/tr&gt;
+     *  &lt;/table&gt;
+     *
+     * &lt;p id=&quot;pbeTypes&quot;&gt;&lt;small&gt;&lt;b&gt;phase boundary event types:&lt;/b&gt;
+     * &lt;tt&gt;WikiPageEvent.PRE_TRANSLATE_BEGIN&lt;/tt&gt;, &lt;tt&gt;WikiPageEvent.PRE_TRANSLATE_END&lt;/tt&gt;,
+     * &lt;tt&gt;WikiPageEvent.POST_TRANSLATE_BEGIN&lt;/tt&gt;, &lt;tt&gt;WikiPageEvent.POST_TRANSLATE_END&lt;/tt&gt;,
+     * &lt;tt&gt;WikiPageEvent.PRE_SAVE_BEGIN&lt;/tt&gt;, &lt;tt&gt;WikiPageEvent.PRE_SAVE_END&lt;/tt&gt;,
+     * &lt;tt&gt;WikiPageEvent.POST_SAVE_BEGIN&lt;/tt&gt;, and &lt;tt&gt;WikiPageEvent.POST_SAVE_END&lt;/tt&gt;.
+     * &lt;/small&gt;&lt;/p&gt;
+     * &lt;p id=&quot;ipeTypes&quot;&gt;&lt;small&gt;&lt;b&gt;in-phase event types:&lt;/b&gt;
+     * &lt;tt&gt;WikiPageEvent.PRE_TRANSLATE&lt;/tt&gt;, &lt;tt&gt;WikiPageEvent.POST_TRANSLATE&lt;/tt&gt;,
+     * &lt;tt&gt;WikiPageEvent.PRE_SAVE&lt;/tt&gt;, and &lt;tt&gt;WikiPageEvent.POST_SAVE&lt;/tt&gt;.
+     * &lt;/small&gt;&lt;/p&gt;
+     *
+     * &lt;p&gt;
+     * &lt;b&gt;Note:&lt;/b&gt; The &lt;i&gt;Actually Attached To&lt;/i&gt; column may also be considered as the
+     * class(es) that fire events of the type(s) shown in the &lt;i&gt;WikiEvent Type&lt;/i&gt; column.
+     * &lt;/p&gt;
+     *
+     * @see org.apache.wiki.event.WikiEvent
+     * @see org.apache.wiki.event.WikiEngineEvent
+     * @see org.apache.wiki.event.WikiPageEvent
+     * @see org.apache.wiki.event.WikiSecurityEvent
+     * @throws ClassCastException if there is a type mismatch between certain event types and the client Object
+     */
+    public static synchronized void addWikiEventListener(
+            Object client, int type, WikiEventListener listener )
+    {
+        // Make sure WikiEventManager exists
+<span class="fc" id="L97">        WikiEventManager.getInstance();</span>
+        
+        // first, figure out what kind of event is expected to be generated this does
+        // tie us into known types, but WikiEvent.isValidType() will return true so
+        // long as the type was set to any non-ERROR or non-UNKNOWN value
+
+<span class="pc bpc" id="L103" title="1 of 2 branches missed.">        if ( WikiEngineEvent.isValidType(type) )</span>
+        {
+            // add listener directly to WikiEngine
+<span class="nc" id="L106">            WikiEventManager.addWikiEventListener( client, listener );</span>
+        }
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">        else if ( WikiPageEvent.isValidType(type) )</span>
+        {
+            // add listener to one of several options
+<span class="pc bpc" id="L111" title="2 of 4 branches missed.">            if(  type == WikiPageEvent.PAGE_LOCK</span>
+              || type == WikiPageEvent.PAGE_UNLOCK )
+            {
+                // attach to PageManager
+<span class="nc bnc" id="L115" title="All 2 branches missed.">                if( client instanceof WikiEngine )</span>
+                {
+<span class="nc" id="L117">                    WikiEventManager.addWikiEventListener( ((WikiEngine)client).getPageManager(), listener );</span>
+                }
+                else
+                {
+                    // client instanceof PageManager
+<span class="nc" id="L122">                    WikiEventManager.addWikiEventListener( client, listener );</span>
+                }
+            }
+<span class="pc bpc" id="L125" title="2 of 4 branches missed.">            else if(  type == WikiPageEvent.PAGE_REQUESTED</span>
+                   || type == WikiPageEvent.PAGE_DELIVERED )
+            {
+                // attach directly to WikiServletFilter
+<span class="nc" id="L129">                WikiEventManager.addWikiEventListener( client, listener );</span>
+            }
+<span class="pc bpc" id="L131" title="7 of 16 branches missed.">            else if(  type == WikiPageEvent.PRE_TRANSLATE_BEGIN</span>
+                   || type == WikiPageEvent.PRE_TRANSLATE_END
+                   || type == WikiPageEvent.POST_TRANSLATE_BEGIN
+                   || type == WikiPageEvent.POST_TRANSLATE_END
+                   || type == WikiPageEvent.PRE_SAVE_BEGIN
+                   || type == WikiPageEvent.PRE_SAVE_END
+                   || type == WikiPageEvent.POST_SAVE_BEGIN
+                   || type == WikiPageEvent.POST_SAVE_END )
+            {
+                // attach to FilterManager
+<span class="fc" id="L141">                FilterManager fm = ((WikiEngine)client).getFilterManager();</span>
+<span class="fc" id="L142">                WikiEventManager.addWikiEventListener( fm, listener );</span>
+<span class="fc" id="L143">            }</span>
+            else //if (  type == WikiPageEvent.PRE_TRANSLATE
+                 // || type == WikiPageEvent.POST_TRANSLATE
+                 // || type == WikiPageEvent.PRE_SAVE
+                 // || type == WikiPageEvent.POST_SAVE ) // attach to client
+            {
+<span class="fc" id="L149">                WikiEventManager.addWikiEventListener( client, listener );</span>
+            }
+        }
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        else if( WikiSecurityEvent.isValidType(type) )</span>
+        {
+            // currently just attach it to the client (we are ignorant of other options)
+<span class="nc" id="L155">            WikiEventManager.addWikiEventListener( client, listener );</span>
+        }
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        else if( WikiEvent.isValidType(type) )</span>
+        {
+            // we don't know what to do
+<span class="nc" id="L160">            WikiEventManager.addWikiEventListener( client, listener );</span>
+        }
+        else
+        {
+            // is error or unknown
+            // why are we being called with this?
+        }
+<span class="fc" id="L167">    }</span>
+
+} // end org.apache.wiki.event.WikiEventUtils
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

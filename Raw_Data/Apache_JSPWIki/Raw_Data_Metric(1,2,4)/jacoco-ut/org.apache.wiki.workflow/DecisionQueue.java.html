@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DecisionQueue.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">DecisionQueue.java</span></div><h1>DecisionQueue.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.io.Serializable;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedList;
+
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.WikiSession;
+
+/**
+ * Keeps a queue of pending Decisions that need to be acted on by named
+ * Principals.
+ *
+ * @since 2.5
+ */
+public class DecisionQueue implements Serializable
+{
+    private static final long serialVersionUID = -7172912793410302533L;
+
+<span class="fc" id="L40">    private LinkedList&lt;Decision&gt; m_queue = new LinkedList&lt;Decision&gt;();</span>
+
+    private volatile int m_next;
+
+    /**
+     * Constructs a new DecisionQueue.
+     */
+    public DecisionQueue()
+<span class="fc" id="L48">    {</span>
+<span class="fc" id="L49">        m_next = 1000;</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     * Adds a Decision to the DecisionQueue; also sets the Decision's unique
+     * identifier.
+     *
+     * @param decision
+     *            the Decision to add
+     */
+    protected synchronized void add( Decision decision )
+    {
+<span class="fc" id="L61">        m_queue.addLast( decision );</span>
+<span class="fc" id="L62">        decision.setId( nextId() );</span>
+<span class="fc" id="L63">    }</span>
+
+    /**
+     * Protected method that returns all pending Decisions in the queue, in
+     * order of submission. If no Decisions are pending, this method returns a
+     * zero-length array.
+     *
+     * @return the pending decisions 
+     */
+    protected Decision[] decisions()
+    {
+<span class="fc" id="L74">        return m_queue.toArray( new Decision[m_queue.size()] );</span>
+    }
+
+    /**
+     * Protected method that removes a Decision from the queue.
+     * @param decision the decision to remove
+     */
+    protected synchronized void remove(Decision decision)
+    {
+<span class="fc" id="L83">        m_queue.remove( decision );</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Returns a Collection representing the current Decisions that pertain to a
+     * users's WikiSession. The Decisions are obtained by iterating through the
+     * WikiSession's Principals and selecting those Decisions whose
+     * {@link Decision#getActor()} value match. If the wiki session is not
+     * authenticated, this method returns an empty Collection.
+     *
+     * @param session
+     *            the wiki session
+     * @return the collection of Decisions, which may be empty
+     */
+    public Collection&lt;Decision&gt; getActorDecisions(WikiSession session)
+    {
+<span class="fc" id="L99">        ArrayList&lt;Decision&gt; decisions = new ArrayList&lt;&gt;();</span>
+<span class="pc bpc" id="L100" title="1 of 2 branches missed.">        if ( session.isAuthenticated() )</span>
+        {
+<span class="fc" id="L102">            Principal[] principals = session.getPrincipals();</span>
+<span class="fc" id="L103">            Principal[] rolePrincipals = session.getRoles();</span>
+<span class="fc bfc" id="L104" title="All 2 branches covered.">            for ( Decision decision : m_queue )</span>
+            {
+                // Iterate through the Principal set
+<span class="fc bfc" id="L107" title="All 2 branches covered.">                for ( Principal principal : principals )</span>
+                {
+<span class="fc bfc" id="L109" title="All 2 branches covered.">                    if ( principal.equals( decision.getActor() ) )</span>
+                    {
+<span class="fc" id="L111">                        decisions.add( decision );</span>
+                    }
+                }
+                // Iterate through the Role set
+<span class="fc bfc" id="L115" title="All 2 branches covered.">                for ( Principal principal : rolePrincipals )</span>
+                {
+<span class="fc bfc" id="L117" title="All 2 branches covered.">                    if ( principal.equals( decision.getActor() ) )</span>
+                    {
+<span class="fc" id="L119">                        decisions.add( decision );</span>
+                    }
+                }
+<span class="fc" id="L122">            }</span>
+        }
+<span class="fc" id="L124">        return decisions;</span>
+    }
+
+    /**
+     * Attempts to complete a Decision by calling
+     * {@link Decision#decide(Outcome)}. This will cause the Step immediately
+     * following the Decision (if any) to start. If the decision completes
+     * successfully, this method also removes the completed decision from the
+     * queue.
+     *
+     * @param decision the Decision for which the Outcome will be supplied
+     * @param outcome the Outcome of the Decision
+     * @throws WikiException if the succeeding Step cannot start
+     * for any reason
+     */
+    public void decide( Decision decision, Outcome outcome ) throws WikiException
+    {
+<span class="fc" id="L141">        decision.decide( outcome );</span>
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">        if ( decision.isCompleted() )</span>
+        {
+<span class="fc" id="L144">            remove( decision );</span>
+        }
+
+        // TODO: We should fire an event indicating the Outcome, and whether the
+        // Decision completed successfully
+<span class="fc" id="L149">    }</span>
+
+    /**
+     * Reassigns the owner of the Decision to a new owner. Under the covers,
+     * this method calls {@link Decision#reassign(Principal)}.
+     *
+     * @param decision the Decision to reassign
+     * @param owner the new owner
+     * @throws WikiException never
+     */
+    public synchronized void reassign(Decision decision, Principal owner) throws WikiException
+    {
+<span class="pc bpc" id="L161" title="1 of 2 branches missed.">        if (decision.isReassignable())</span>
+        {
+<span class="fc" id="L163">            decision.reassign( owner );</span>
+
+            // TODO: We should fire an event indicating the reassignment
+<span class="fc" id="L166">            return;</span>
+        }
+<span class="nc" id="L168">        throw new IllegalStateException( &quot;Reassignments not allowed for this decision.&quot; );</span>
+    }
+
+    /**
+     * Returns the next available unique identifier, which is subsequently
+     * incremented.
+     *
+     * @return the id
+     */
+    private synchronized int nextId()
+    {
+<span class="fc" id="L179">        int current = m_next;</span>
+<span class="fc" id="L180">        m_next++;</span>
+<span class="fc" id="L181">        return current;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InsertDiffTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">InsertDiffTag.java</span></div><h1>InsertDiffTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.PageContext;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+
+/**
+ *  Writes difference between two pages using a HTML table.  If there is
+ *  no difference, includes the body.
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;page - Page name to refer to.  Default is the current page.
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L41">public class InsertDiffTag extends WikiTagBase {</span>
+
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L44">    private static final Logger log = Logger.getLogger( InsertDiffTag.class );</span>
+    
+    /** Attribute which is used to store the old page content to the Page Context */
+    public static final String ATTR_OLDVERSION = &quot;olddiff&quot;;
+
+    /** Attribute which is used to store the new page content to the Page Context */
+    public static final String ATTR_NEWVERSION = &quot;newdiff&quot;;
+
+    protected String m_pageName;
+
+    /** {@inheritDoc} */
+    public void initTag()
+    {
+<span class="nc" id="L57">        super.initTag();</span>
+<span class="nc" id="L58">        m_pageName = null;</span>
+<span class="nc" id="L59">    }</span>
+
+    /**
+     *  Sets the page name.
+     *  @param page Page to get diff from.
+     */
+    public void setPage( String page )
+    {
+<span class="nc" id="L67">        m_pageName = page;</span>
+<span class="nc" id="L68">    }</span>
+
+    /**
+     *  Gets the page name.
+     * @return The page name.
+     */
+    public String getPage()
+    {
+<span class="nc" id="L76">        return m_pageName;</span>
+    }
+
+    /** {@inheritDoc} */
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc" id="L83">        WikiEngine engine = m_wikiContext.getEngine();</span>
+        WikiContext ctx;
+        
+<span class="nc bnc" id="L86" title="All 2 branches missed.">        if( m_pageName == null )</span>
+        {
+<span class="nc" id="L88">            ctx = m_wikiContext;</span>
+        }
+        else
+        {
+<span class="nc" id="L92">            ctx = (WikiContext)m_wikiContext.clone();</span>
+<span class="nc" id="L93">            ctx.setPage( engine.getPage(m_pageName) );</span>
+        }
+
+<span class="nc" id="L96">        Integer vernew = (Integer) pageContext.getAttribute( ATTR_NEWVERSION,</span>
+                                                             PageContext.REQUEST_SCOPE );
+<span class="nc" id="L98">        Integer verold = (Integer) pageContext.getAttribute( ATTR_OLDVERSION,</span>
+                                                             PageContext.REQUEST_SCOPE );
+
+<span class="nc" id="L101">        log.debug(&quot;Request diff between version &quot;+verold+&quot; and &quot;+vernew);</span>
+
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if( ctx.getPage() != null )</span>
+        {
+<span class="nc" id="L105">            JspWriter out = pageContext.getOut();</span>
+
+<span class="nc" id="L107">            String diff = engine.getDiff( ctx, </span>
+<span class="nc" id="L108">                                          vernew.intValue(), </span>
+<span class="nc" id="L109">                                          verold.intValue() );</span>
+
+<span class="nc bnc" id="L111" title="All 2 branches missed.">            if( diff.length() == 0 )</span>
+            {
+<span class="nc" id="L113">                return EVAL_BODY_INCLUDE;</span>
+            }
+
+<span class="nc" id="L116">            out.write( diff );</span>
+        }
+
+<span class="nc" id="L119">        return SKIP_BODY;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiAjaxDispatcherServlet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ajax</a> &gt; <span class="el_source">WikiAjaxDispatcherServlet.java</span></div><h1>WikiAjaxDispatcherServlet.java</h1><pre class="source lang-java linenums">/*
+
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ajax;
+
+import java.io.IOException;
+import java.security.Permission;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * This provides a simple ajax servlet for handling /ajax/&lt;ClassName&gt; requests.
+ * HttpServlet classes need to be registered using {@link WikiAjaxDispatcherServlet#registerServlet(WikiAjaxServlet)}
+ *
+ * @since 2.10.2-svn12
+ */
+<span class="fc" id="L50">public class WikiAjaxDispatcherServlet extends HttpServlet {</span>
+    private static final long serialVersionUID = 1L;
+<span class="fc" id="L52">    private static Map&lt;String,AjaxServletContainer&gt; ajaxServlets = new HashMap&lt;String,AjaxServletContainer&gt;();</span>
+<span class="fc" id="L53">    static final Logger log = Logger.getLogger(WikiAjaxDispatcherServlet.class.getName());</span>
+<span class="fc" id="L54">    private String PATH_AJAX = &quot;/ajax/&quot;;</span>
+    private WikiEngine m_engine;
+
+    /**
+     * {@inheritDoc}
+     *
+     * This sets the AjaxPath to &quot;/ajax/&quot; as configured in &quot;jspwiki.ajax.url.prefix&quot;.
+     * Note: Do not change this without also changing the web.xml file.
+     */
+    @Override
+    public void init(ServletConfig config)
+            throws ServletException {
+<span class="nc" id="L66">        super.init(config);</span>
+<span class="nc" id="L67">        m_engine = WikiEngine.getInstance(config);</span>
+<span class="nc" id="L68">        PATH_AJAX = &quot;/&quot;+TextUtil.getStringProperty(m_engine.getWikiProperties(), &quot;jspwiki.ajax.url.prefix&quot;, &quot;ajax&quot;)+&quot;/&quot;;</span>
+<span class="nc" id="L69">        log.info(&quot;WikiAjaxDispatcherServlet initialized.&quot;);</span>
+<span class="nc" id="L70">    }</span>
+
+    /**
+     * Register a {@link WikiAjaxServlet} using the servlet mapping as the alias
+     */
+    public static void registerServlet(WikiAjaxServlet servlet) {
+<span class="fc" id="L76">        registerServlet(servlet.getServletMapping(),servlet);</span>
+<span class="fc" id="L77">    }</span>
+
+    /**
+     * Register a {@link WikiAjaxServlet} with a specific alias, and default permission {@link PagePermission#VIEW}.
+     */
+    public static void registerServlet(String alias, WikiAjaxServlet servlet) {
+<span class="fc" id="L83">        registerServlet(alias, servlet, PagePermission.VIEW);</span>
+<span class="fc" id="L84">    }</span>
+
+    /**
+     * Regster a {@link WikiAjaxServlet} given an alias, the servlet, and the permission.
+     * This creates a temporary bundle object called {@link WikiAjaxDispatcherServlet.AjaxServletContainer}
+     * @param alias the uri link to this servlet
+     * @param servlet the servlet being registered
+     * @param perm the permission required to execute the servlet.
+     */
+    public static void registerServlet(String alias, WikiAjaxServlet servlet, Permission perm) {
+<span class="fc" id="L94">        log.info(&quot;WikiAjaxDispatcherServlet registering &quot;+alias+&quot;=&quot;+servlet+&quot; perm=&quot;+perm);</span>
+<span class="fc" id="L95">        ajaxServlets.put(alias,new AjaxServletContainer(alias, servlet, perm));</span>
+<span class="fc" id="L96">    }</span>
+
+    /**
+     * Calls {@link #performAction}
+     */
+    @Override
+    public void doPost(HttpServletRequest req, HttpServletResponse res)
+            throws IOException, ServletException {
+<span class="nc" id="L104">        performAction(req,res);</span>
+<span class="nc" id="L105">    }</span>
+
+    /**
+     * Calls {@link #performAction}
+     */
+    @Override
+    public void doGet(HttpServletRequest req, HttpServletResponse res)
+            throws IOException, ServletException {
+<span class="nc" id="L113">        performAction(req,res);</span>
+<span class="nc" id="L114">    }</span>
+
+    /**
+     * The main method which get the requestURI &quot;/ajax/&lt;ServletName&gt;&quot;, gets the
+     * {@link #getServletName} and finds the servlet using {@link #findServletByName}.
+     * It then calls {@link WikiAjaxServlet#service} method.
+     * @param req the inbound request
+     * @param res the outbound response
+     * @throws IOException
+     * @throws ServletException if no registered servlet can be found
+     */
+    private void performAction(HttpServletRequest req, HttpServletResponse res)
+            throws IOException, ServletException {
+<span class="nc" id="L127">        final String path = req.getRequestURI();</span>
+<span class="nc" id="L128">        final String servletName = getServletName(path);</span>
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        if (servletName!=null) {</span>
+<span class="nc" id="L130">            final AjaxServletContainer container = findServletContainer(servletName);</span>
+<span class="nc bnc" id="L131" title="All 2 branches missed.">            if (container != null) {</span>
+<span class="nc" id="L132">                final WikiAjaxServlet servlet = container.servlet;</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">                if ( validatePermission(req,container) ) {</span>
+<span class="nc" id="L134">                    req.setCharacterEncoding(m_engine.getContentEncoding());</span>
+<span class="nc" id="L135">                    res.setCharacterEncoding(m_engine.getContentEncoding());</span>
+<span class="nc" id="L136">                    final String actionName = AjaxUtil.getNextPathPart(req.getRequestURI(), servlet.getServletMapping());</span>
+<span class="nc" id="L137">                    log.debug(&quot;actionName=&quot;+actionName);</span>
+<span class="nc" id="L138">                    final Object params = req.getParameter(&quot;params&quot;);</span>
+<span class="nc" id="L139">                    log.debug(&quot;params=&quot;+params);</span>
+<span class="nc" id="L140">                    List&lt;String&gt; paramValues = new ArrayList&lt;String&gt;();</span>
+<span class="nc bnc" id="L141" title="All 2 branches missed.">                    if (params instanceof String) {</span>
+<span class="nc" id="L142">                        final String paramString = (String)params;</span>
+<span class="nc bnc" id="L143" title="All 2 branches missed.">                        if (StringUtils.isNotBlank(paramString)) {</span>
+<span class="nc" id="L144">                            paramValues = Arrays.asList(paramString.trim().split(&quot;,&quot;));</span>
+                        }
+                    }
+<span class="nc" id="L147">                    servlet.service(req, res, actionName, paramValues);</span>
+<span class="nc" id="L148">                } else {</span>
+<span class="nc" id="L149">                    log.warn(&quot;Servlet container &quot;+container+&quot; not authorised. Permission required.&quot;);</span>
+                }
+<span class="nc" id="L151">            } else {</span>
+<span class="nc" id="L152">                log.error(&quot;No registered class for servletName=&quot; + servletName + &quot; in path=&quot; + path);</span>
+<span class="nc" id="L153">                throw new ServletException(&quot;No registered class for servletName=&quot; + servletName);</span>
+            }
+        }
+<span class="nc" id="L156">    }</span>
+
+    /**
+     * Validate the permission of the {@link WikiAjaxServlet} using the {@link AuthorizationManager#checkPermission}
+     *
+     * @param req the servlet request
+     * @param container the container info of the servlet
+     * @return true if permission is valid
+     */
+    private boolean validatePermission(HttpServletRequest req, AjaxServletContainer container) {
+<span class="nc" id="L166">        final WikiEngine e = WikiEngine.getInstance(req.getSession().getServletContext(), null);</span>
+<span class="nc" id="L167">        boolean valid = false;</span>
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if (container != null) {</span>
+<span class="nc" id="L169">            valid = e.getAuthorizationManager().checkPermission(WikiSession.getWikiSession(e, req), container.permission);</span>
+        }
+<span class="nc" id="L171">        return valid;</span>
+    }
+
+    /**
+     * Get the ServletName from the requestURI &quot;/ajax/&lt;ServletName&gt;&quot;, using {@link AjaxUtil#getNextPathPart}.
+     *
+     * @param path The requestURI, which must contains &quot;/ajax/&lt;ServletName&gt;&quot; in the path
+     * @return The ServletName for the requestURI, or null
+     * @throws ServletException if the path is invalid
+     */
+    public String getServletName(String path) throws ServletException {
+<span class="fc" id="L182">        return AjaxUtil.getNextPathPart(path, PATH_AJAX);</span>
+    }
+
+    /**
+     * Find the {@link AjaxServletContainer} as registered in {@link #registerServlet}.
+     *
+     * @param servletName the name of the servlet from {@link #getServletName}
+     * @return The first servlet found, or null.
+     */
+    private AjaxServletContainer findServletContainer(String servletAlias) {
+<span class="nc" id="L192">        return ajaxServlets.get(servletAlias);</span>
+    }
+
+    /**
+     * Find the {@link WikiAjaxServlet} given the servletAlias that it was registered with.
+     *
+     * @param servletAlias the value provided to {@link #registerServlet}
+     * @return the {@link WikiAjaxServlet} given the servletAlias that it was registered with.
+     */
+    public WikiAjaxServlet findServletByName(String servletAlias) {
+<span class="fc" id="L202">        final AjaxServletContainer container = ajaxServlets.get(servletAlias);</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        if (container != null) {</span>
+<span class="fc" id="L204">            return container.servlet;</span>
+        }
+<span class="fc" id="L206">        return null;</span>
+    }
+
+    private static class AjaxServletContainer {
+        String alias;
+        WikiAjaxServlet servlet;
+        Permission permission;
+
+<span class="fc" id="L214">        public AjaxServletContainer(String alias, WikiAjaxServlet servlet, Permission permission) {</span>
+<span class="fc" id="L215">            this.alias = alias;</span>
+<span class="fc" id="L216">            this.servlet = servlet;</span>
+<span class="fc" id="L217">            this.permission = permission;</span>
+<span class="fc" id="L218">        }</span>
+
+        @Override
+        public String toString() {
+<span class="nc" id="L222">            return getClass().getSimpleName()+&quot; &quot;+alias+&quot;=&quot;+servlet.getClass().getSimpleName()+&quot; permission=&quot;+permission;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

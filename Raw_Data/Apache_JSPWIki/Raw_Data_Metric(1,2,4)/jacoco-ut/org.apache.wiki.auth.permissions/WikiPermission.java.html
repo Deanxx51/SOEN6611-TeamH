@@ -1,0 +1,272 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiPermission.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.permissions</a> &gt; <span class="el_source">WikiPermission.java</span></div><h1>WikiPermission.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.permissions;
+
+import java.io.Serializable;
+import java.security.Permission;
+import java.security.PermissionCollection;
+import java.util.Arrays;
+
+/**
+ * &lt;p&gt; Permission to perform an global wiki operation, such as self-registering
+ * or creating new pages. Permission actions include: &lt;code&gt;createGroups&lt;/code&gt;,
+ * &lt;code&gt;createPages&lt;/code&gt;, &lt;code&gt;editPreferences&lt;/code&gt;,
+ * &lt;code&gt;editProfile&lt;/code&gt; and &lt;code&gt;login&lt;/code&gt;. &lt;/p&gt; &lt;p&gt;The target is
+ * a given wiki. The syntax for the target is the wiki name. &quot;All wikis&quot; can be
+ * specified using a wildcard (*). Page collections may also be specified using
+ * a wildcard. For pages, the wildcard may be a prefix, suffix, or all by
+ * itself. &lt;p&gt; Certain permissions imply others. Currently,
+ * &lt;code&gt;createGroups&lt;/code&gt; implies &lt;code&gt;createPages&lt;/code&gt;. &lt;/p&gt;
+ * @since 2.3
+ */
+public final class WikiPermission extends Permission implements Serializable
+{
+    private static final long          serialVersionUID        = 1L;
+
+    /** Name of the action for createGroups permission. */
+    public static final String         CREATE_GROUPS_ACTION    = &quot;createGroups&quot;;
+
+    /** Name of the action for createPages permission. */   
+    public static final String         CREATE_PAGES_ACTION     = &quot;createPages&quot;;
+
+    /** Name of the action for login permission. */
+    public static final String         LOGIN_ACTION            = &quot;login&quot;;
+
+    /** Name of the action for editPreferences permission. */
+    public static final String         EDIT_PREFERENCES_ACTION = &quot;editPreferences&quot;;
+
+    /** Name of the action for editProfile permission. */
+    public static final String         EDIT_PROFILE_ACTION     = &quot;editProfile&quot;;
+
+    /** Value for a generic wildcard. */
+    public static final String         WILDCARD                = &quot;*&quot;;
+
+    protected static final int         CREATE_GROUPS_MASK      = 0x1;
+
+    protected static final int         CREATE_PAGES_MASK       = 0x2;
+
+    protected static final int         EDIT_PREFERENCES_MASK   = 0x4;
+
+    protected static final int         EDIT_PROFILE_MASK       = 0x8;
+
+    protected static final int         LOGIN_MASK              = 0x10;
+
+    /** A static instance of the createGroups permission. */
+<span class="fc" id="L71">    public static final WikiPermission CREATE_GROUPS           = new WikiPermission( WILDCARD, CREATE_GROUPS_ACTION );</span>
+
+    /** A static instance of the createPages permission. */
+<span class="fc" id="L74">    public static final WikiPermission CREATE_PAGES            = new WikiPermission( WILDCARD, CREATE_PAGES_ACTION );</span>
+
+    /** A static instance of the login permission. */
+<span class="fc" id="L77">    public static final WikiPermission LOGIN                   = new WikiPermission( WILDCARD, LOGIN_ACTION );</span>
+
+    /** A static instance of the editPreferences permission. */
+<span class="fc" id="L80">    public static final WikiPermission EDIT_PREFERENCES        = new WikiPermission( WILDCARD, EDIT_PREFERENCES_ACTION );</span>
+
+    /** A static instance of the editProfile permission. */
+<span class="fc" id="L83">    public static final WikiPermission EDIT_PROFILE            = new WikiPermission( WILDCARD, EDIT_PROFILE_ACTION );</span>
+
+    private final String               m_actionString;
+
+    private final String               m_wiki;
+
+    private final int                  m_mask;
+
+    /**
+     * Creates a new WikiPermission for a specified set of actions.
+     * @param actions the actions for this permission
+     * @param wiki The name of the wiki the permission belongs to.
+     */
+    public WikiPermission( String wiki, String actions )
+    {
+<span class="fc" id="L98">        super( wiki );</span>
+<span class="fc" id="L99">        String[] pageActions = actions.toLowerCase().split( &quot;,&quot; );</span>
+<span class="fc" id="L100">        Arrays.sort( pageActions, String.CASE_INSENSITIVE_ORDER );</span>
+<span class="fc" id="L101">        m_mask = createMask( actions );</span>
+<span class="fc" id="L102">        StringBuilder buffer = new StringBuilder();</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        for( int i = 0; i &lt; pageActions.length; i++ )</span>
+        {
+<span class="fc" id="L105">            buffer.append( pageActions[i] );</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">            if ( i &lt; ( pageActions.length - 1 ) )</span>
+            {
+<span class="fc" id="L108">                buffer.append( &quot;,&quot; );</span>
+            }
+        }
+<span class="fc" id="L111">        m_actionString = buffer.toString();</span>
+<span class="pc bpc" id="L112" title="1 of 2 branches missed.">        m_wiki = ( wiki == null ) ? WILDCARD : wiki;</span>
+<span class="fc" id="L113">    }</span>
+
+    /**
+     * Two WikiPermission objects are considered equal if their wikis and
+     * actions (after normalization) are equal.
+     * @param obj the object to test
+     * @return the result
+     * @see java.lang.Object#equals(java.lang.Object)
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">        if ( !( obj instanceof WikiPermission ) )</span>
+        {
+<span class="nc" id="L126">            return false;</span>
+        }
+<span class="fc" id="L128">        WikiPermission p = (WikiPermission) obj;</span>
+<span class="pc bpc" id="L129" title="1 of 6 branches missed.">        return  p.m_mask == m_mask &amp;&amp; p.m_wiki != null &amp;&amp; p.m_wiki.equals( m_wiki );</span>
+    }
+
+    /**
+     * Returns the actions for this permission: &quot;createGroups&quot;, &quot;createPages&quot;,
+     * &quot;editPreferences&quot;, &quot;editProfile&quot;, or &quot;login&quot;. The actions
+     * will always be sorted in alphabetic order, and will always appear in
+     * lower case.
+     * @return the actions
+     * @see java.security.Permission#getActions()
+     */
+    public String getActions()
+    {
+<span class="fc" id="L142">        return m_actionString;</span>
+    }
+
+    /**
+     * Returns the name of the wiki containing the page represented by this
+     * permission; may return the wildcard string.
+     * @return the wiki
+     */
+    public String getWiki()
+    {
+<span class="fc" id="L152">        return m_wiki;</span>
+    }
+
+    /**
+     * Returns the hash code for this WikiPermission.
+     * @return {@inheritDoc}
+     */
+    public int hashCode()
+    {
+<span class="fc" id="L161">        return m_mask + ( ( 13 * m_actionString.hashCode() ) * 23 * m_wiki.hashCode() );</span>
+    }
+
+    /**
+     * WikiPermission can only imply other WikiPermissions; no other permission
+     * types are implied. One WikiPermission implies another if all of the other
+     * WikiPermission's actions are equal to, or a subset of, those for this
+     * permission.
+     * @param permission the permission which may (or may not) be implied by
+     * this instance
+     * @return &lt;code&gt;true&lt;/code&gt; if the permission is implied,
+     * &lt;code&gt;false&lt;/code&gt; otherwise
+     * @see java.security.Permission#implies(java.security.Permission)
+     */
+    public boolean implies( Permission permission )
+    {
+        // Permission must be a WikiPermission
+<span class="fc bfc" id="L178" title="All 2 branches covered.">        if ( !( permission instanceof WikiPermission ) )</span>
+        {
+<span class="fc" id="L180">            return false;</span>
+        }
+<span class="fc" id="L182">        WikiPermission p = (WikiPermission) permission;</span>
+
+        // See if the wiki is implied
+<span class="fc" id="L185">        boolean impliedWiki = PagePermission.isSubset( m_wiki, p.m_wiki );</span>
+
+        // Build up an &quot;implied mask&quot; for actions
+<span class="fc" id="L188">        int impliedMask = impliedMask( m_mask );</span>
+
+        // If actions aren't a proper subset, return false
+<span class="fc bfc" id="L191" title="All 4 branches covered.">        return impliedWiki &amp;&amp; ( impliedMask &amp; p.m_mask ) == p.m_mask;</span>
+    }
+
+    /**
+     * Returns a new {@link AllPermissionCollection}.
+     * @return {@inheritDoc}
+     */
+    public PermissionCollection newPermissionCollection()
+    {
+<span class="fc" id="L200">        return new AllPermissionCollection();</span>
+    }
+
+    /**
+     * Prints a human-readable representation of this permission.
+     * @return {@inheritDoc}
+     */
+    public String toString()
+    {
+<span class="fc" id="L209">        return &quot;(\&quot;&quot; + this.getClass().getName() + &quot;\&quot;,\&quot;&quot; + m_wiki + &quot;\&quot;,\&quot;&quot; + getActions() + &quot;\&quot;)&quot;;</span>
+    }
+
+    /**
+     * Creates an &quot;implied mask&quot; based on the actions originally assigned: for
+     * example, &lt;code&gt;createGroups&lt;/code&gt; implies &lt;code&gt;createPages&lt;/code&gt;.
+     * @param mask the initial mask
+     * @return the implied mask
+     */
+    protected static int impliedMask( int mask )
+    {
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        if ( ( mask &amp; CREATE_GROUPS_MASK ) &gt; 0 )</span>
+        {
+<span class="fc" id="L222">            mask |= CREATE_PAGES_MASK;</span>
+        }
+<span class="fc" id="L224">        return mask;</span>
+    }
+
+    /**
+     * Private method that creates a binary mask based on the actions specified.
+     * This is used by {@link #implies(Permission)}.
+     * @param actions the permission actions, separated by commas
+     * @return binary mask representing the permissions
+     */
+    protected static int createMask( String actions )
+    {
+<span class="pc bpc" id="L235" title="2 of 4 branches missed.">        if ( actions == null || actions.length() == 0 )</span>
+        {
+<span class="nc" id="L237">            throw new IllegalArgumentException( &quot;Actions cannot be blank or null&quot; );</span>
+        }
+<span class="fc" id="L239">        int mask = 0;</span>
+<span class="fc" id="L240">        String[] actionList = actions.split( &quot;,&quot; );</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        for( int i = 0; i &lt; actionList.length; i++ )</span>
+        {
+<span class="fc" id="L243">            String action = actionList[i];</span>
+<span class="fc bfc" id="L244" title="All 2 branches covered.">            if ( action.equalsIgnoreCase( CREATE_GROUPS_ACTION ) )</span>
+            {
+<span class="fc" id="L246">                mask |= CREATE_GROUPS_MASK;</span>
+            }
+<span class="fc bfc" id="L248" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( CREATE_PAGES_ACTION ) )</span>
+            {
+<span class="fc" id="L250">                mask |= CREATE_PAGES_MASK;</span>
+            }
+<span class="fc bfc" id="L252" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( LOGIN_ACTION ) )</span>
+            {
+<span class="fc" id="L254">                mask |= LOGIN_MASK;</span>
+            }
+<span class="fc bfc" id="L256" title="All 2 branches covered.">            else if ( action.equalsIgnoreCase( EDIT_PREFERENCES_ACTION ) )</span>
+            {
+<span class="fc" id="L258">                mask |= EDIT_PREFERENCES_MASK;</span>
+            }
+<span class="pc bpc" id="L260" title="1 of 2 branches missed.">            else if ( action.equalsIgnoreCase( EDIT_PROFILE_ACTION ) )</span>
+            {
+<span class="fc" id="L262">                mask |= EDIT_PROFILE_MASK;</span>
+            }
+            else
+            {
+<span class="nc" id="L266">                throw new IllegalArgumentException( &quot;Unrecognized action: &quot; + action );</span>
+            }
+        }
+<span class="fc" id="L269">        return mask;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

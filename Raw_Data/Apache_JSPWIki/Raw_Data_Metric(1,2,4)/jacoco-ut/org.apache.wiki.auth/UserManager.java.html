@@ -1,0 +1,817 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth</a> &gt; <span class="el_source">UserManager.java</span></div><h1>UserManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.auth;
+
+import java.io.IOException;
+import java.security.Permission;
+import java.security.Principal;
+import java.text.MessageFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.WeakHashMap;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.ajax.AjaxUtil;
+import org.apache.wiki.ajax.WikiAjaxDispatcherServlet;
+import org.apache.wiki.ajax.WikiAjaxServlet;
+import org.apache.wiki.api.engine.FilterManager;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.api.filters.PageFilter;
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.permissions.WikiPermission;
+import org.apache.wiki.auth.user.AbstractUserDatabase;
+import org.apache.wiki.auth.user.DuplicateUserException;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiSecurityEvent;
+import org.apache.wiki.filters.SpamFilter;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.ui.InputValidator;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.workflow.Decision;
+import org.apache.wiki.workflow.DecisionRequiredException;
+import org.apache.wiki.workflow.Fact;
+import org.apache.wiki.workflow.Step;
+import org.apache.wiki.workflow.Workflow;
+import org.apache.wiki.workflow.WorkflowBuilder;
+import org.apache.wiki.workflow.WorkflowManager;
+
+
+/**
+ * Provides a facade for obtaining user information.
+ * @since 2.3
+ */
+<span class="fc" id="L74">public class UserManager {</span>
+
+    private static final String USERDATABASE_PACKAGE = &quot;org.apache.wiki.auth.user&quot;;
+    private static final String SESSION_MESSAGES = &quot;profile&quot;;
+    private static final String PARAM_EMAIL = &quot;email&quot;;
+    private static final String PARAM_FULLNAME = &quot;fullname&quot;;
+    private static final String PARAM_PASSWORD = &quot;password&quot;;
+    private static final String PARAM_LOGINNAME = &quot;loginname&quot;;
+    private static final String UNKNOWN_CLASS = &quot;&lt;unknown&gt;&quot;;
+
+    private WikiEngine m_engine;
+
+<span class="fc" id="L86">    private static final Logger log = Logger.getLogger(UserManager.class);</span>
+
+    /** Message key for the &quot;save profile&quot; message. */
+    private static final String PROP_DATABASE               = &quot;jspwiki.userdatabase&quot;;
+
+    public static final String JSON_USERS = &quot;users&quot;;
+
+    // private static final String  PROP_ACLMANAGER     = &quot;jspwiki.aclManager&quot;;
+
+    /** Associates wiki sessions with profiles */
+<span class="fc" id="L96">    private final Map&lt;WikiSession,UserProfile&gt; m_profiles = new WeakHashMap&lt;&gt;();</span>
+
+    /** The user database loads, manages and persists user identities */
+    private UserDatabase     m_database;
+
+    /**
+     * Initializes the engine for its nefarious purposes.
+     * @param engine the current wiki engine
+     * @param props the wiki engine initialization properties
+     */
+    public void initialize( WikiEngine engine, Properties props )
+    {
+<span class="fc" id="L108">        m_engine = engine;</span>
+
+        // Attach the PageManager as a listener
+        // TODO: it would be better if we did this in PageManager directly
+<span class="fc" id="L112">        addWikiEventListener( engine.getPageManager() );</span>
+
+        //TODO: Replace with custom annotations. See JSPWIKI-566
+<span class="fc" id="L115">        WikiAjaxDispatcherServlet.registerServlet( JSON_USERS, new JSONUserModule(this), new AllPermission(null));</span>
+<span class="fc" id="L116">    }</span>
+
+    /**
+     * Returns the UserDatabase employed by this WikiEngine. The UserDatabase is
+     * lazily initialized by this method, if it does not exist yet. If the
+     * initialization fails, this method will use the inner class
+     * DummyUserDatabase as a default (which is enough to get JSPWiki running).
+     * @return the dummy user database
+     * @since 2.3
+     */
+    public UserDatabase getUserDatabase()
+    {
+        // FIXME: Must not throw RuntimeException, but something else.
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        if( m_database != null )</span>
+        {
+<span class="fc" id="L131">            return m_database;</span>
+        }
+
+<span class="fc" id="L134">        String dbClassName = UNKNOWN_CLASS;</span>
+
+        try
+        {
+<span class="fc" id="L138">            dbClassName = m_engine.getRequiredProperty( m_engine.getWikiProperties(), PROP_DATABASE );</span>
+
+<span class="fc" id="L140">            log.info(&quot;Attempting to load user database class &quot;+dbClassName);</span>
+<span class="fc" id="L141">            final Class&lt;?&gt; dbClass = ClassUtil.findClass( USERDATABASE_PACKAGE, dbClassName );</span>
+<span class="fc" id="L142">            m_database = (UserDatabase) dbClass.newInstance();</span>
+<span class="fc" id="L143">            m_database.initialize( m_engine, m_engine.getWikiProperties() );</span>
+<span class="fc" id="L144">            log.info(&quot;UserDatabase initialized.&quot;);</span>
+        }
+<span class="nc" id="L146">        catch( final NoRequiredPropertyException e )</span>
+        {
+<span class="nc" id="L148">            log.error( &quot;You have not set the '&quot;+PROP_DATABASE+&quot;'. You need to do this if you want to enable user management by JSPWiki.&quot;, e );</span>
+        }
+<span class="nc" id="L150">        catch( final ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L152">            log.error( &quot;UserDatabase class &quot; + dbClassName + &quot; cannot be found&quot;, e );</span>
+        }
+<span class="nc" id="L154">        catch( final InstantiationException e )</span>
+        {
+<span class="nc" id="L156">            log.error( &quot;UserDatabase class &quot; + dbClassName + &quot; cannot be created&quot;, e );</span>
+        }
+<span class="nc" id="L158">        catch( final IllegalAccessException e )</span>
+        {
+<span class="nc" id="L160">            log.error( &quot;You are not allowed to access this user database class&quot;, e );</span>
+        }
+<span class="nc" id="L162">        catch( final WikiSecurityException e )</span>
+        {
+<span class="nc" id="L164">            log.error( &quot;Exception initializing user database: &quot; + e.getMessage(), e );</span>
+        }
+        finally
+        {
+<span class="pc bpc" id="L168" title="1 of 2 branches missed.">            if( m_database == null )</span>
+            {
+<span class="nc" id="L170">                log.info(&quot;I could not create a database object you specified (or didn't specify), so I am falling back to a default.&quot;);</span>
+<span class="nc" id="L171">                m_database = new DummyUserDatabase();</span>
+            }
+        }
+
+<span class="fc" id="L175">        return m_database;</span>
+    }
+
+    /**
+     * &lt;p&gt;Retrieves the {@link org.apache.wiki.auth.user.UserProfile}for the
+     * user in a wiki session. If the user is authenticated, the UserProfile
+     * returned will be the one stored in the user database; if one does not
+     * exist, a new one will be initialized and returned. If the user is
+     * anonymous or asserted, the UserProfile will &lt;i&gt;always&lt;/i&gt; be newly
+     * initialized to prevent spoofing of identities. If a UserProfile needs to
+     * be initialized, its
+     * {@link org.apache.wiki.auth.user.UserProfile#isNew()} method will
+     * return &lt;code&gt;true&lt;/code&gt;, and its login name will will be set
+     * automatically if the user is authenticated. Note that this method does
+     * not modify the retrieved (or newly created) profile otherwise; other
+     * fields in the user profile may be &lt;code&gt;null&lt;/code&gt;.&lt;/p&gt;
+     * &lt;p&gt;If a new UserProfile was created, but its
+     * {@link org.apache.wiki.auth.user.UserProfile#isNew()} method returns
+     * &lt;code&gt;false&lt;/code&gt;, this method throws an {@link IllegalStateException}.
+     * This is meant as a quality check for UserDatabase providers;
+     * it should only be thrown if the implementation is faulty.&lt;/p&gt;
+     * @param session the wiki session, which may not be &lt;code&gt;null&lt;/code&gt;
+     * @return the user's profile, which will be newly initialized if the user
+     * is anonymous or asserted, or if the user cannot be found in the user
+     * database
+     */
+    public UserProfile getUserProfile( WikiSession session )
+    {
+        // Look up cached user profile
+<span class="fc" id="L204">        UserProfile profile = m_profiles.get( session );</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        boolean newProfile = profile == null;</span>
+<span class="fc" id="L206">        Principal user = null;</span>
+
+        // If user is authenticated, figure out if this is an existing profile
+<span class="fc bfc" id="L209" title="All 2 branches covered.">        if ( session.isAuthenticated() )</span>
+        {
+<span class="fc" id="L211">            user = session.getUserPrincipal();</span>
+            try
+            {
+<span class="fc" id="L214">                profile = getUserDatabase().find( user.getName() );</span>
+<span class="fc" id="L215">                newProfile = false;</span>
+            }
+<span class="nc" id="L217">            catch( final NoSuchPrincipalException e )</span>
+            {
+<span class="fc" id="L219">            }</span>
+        }
+
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        if ( newProfile )</span>
+        {
+<span class="fc" id="L224">            profile = getUserDatabase().newProfile();</span>
+<span class="pc bpc" id="L225" title="1 of 2 branches missed.">            if ( user != null )</span>
+            {
+<span class="nc" id="L227">                profile.setLoginName( user.getName() );</span>
+            }
+<span class="pc bpc" id="L229" title="1 of 2 branches missed.">            if ( !profile.isNew() )</span>
+            {
+<span class="nc" id="L231">                throw new IllegalStateException(</span>
+                        &quot;New profile should be marked 'new'. Check your UserProfile implementation.&quot; );
+            }
+        }
+
+        // Stash the profile for next time
+<span class="fc" id="L237">        m_profiles.put( session, profile );</span>
+<span class="fc" id="L238">        return profile;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Saves the {@link org.apache.wiki.auth.user.UserProfile}for the user in
+     * a wiki session. This method verifies that a user profile to be saved
+     * doesn't collide with existing profiles; that is, the login name
+     * or full name is already used by another profile. If the profile
+     * collides, a &lt;code&gt;DuplicateUserException&lt;/code&gt; is thrown. After saving
+     * the profile, the user database changes are committed, and the user's
+     * credential set is refreshed; if custom authentication is used, this means
+     * the user will be automatically be logged in.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * When the user's profile is saved successfully, this method fires a
+     * {@link WikiSecurityEvent#PROFILE_SAVE} event with the WikiSession as the
+     * source and the UserProfile as target. For existing profiles, if the
+     * user's full name changes, this method also fires a &quot;name changed&quot;
+     * event ({@link WikiSecurityEvent#PROFILE_NAME_CHANGED}) with the
+     * WikiSession as the source and an array containing the old and new
+     * UserProfiles, respectively. The &lt;code&gt;NAME_CHANGED&lt;/code&gt; event allows
+     * the GroupManager and PageManager can change group memberships and
+     * ACLs if needed.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Note that WikiSessions normally attach event listeners to the
+     * UserManager, so changes to the profile will automatically cause the
+     * correct Principals to be reloaded into the current WikiSession's Subject.
+     * &lt;/p&gt;
+     * @param session the wiki session, which may not be &lt;code&gt;null&lt;/code&gt;
+     * @param profile the user profile, which may not be &lt;code&gt;null&lt;/code&gt;
+     * @throws DuplicateUserException if the proposed profile's login name or full name collides with another
+     * @throws WikiException if the save fails for some reason. If the current user does not have
+     * permission to save the profile, this will be a {@link org.apache.wiki.auth.WikiSecurityException};
+     * if if the user profile must be approved before it can be saved, it will be a
+     * {@link org.apache.wiki.workflow.DecisionRequiredException}. All other WikiException
+     * indicate a condition that is not normal is probably due to mis-configuration
+     */
+    public void setUserProfile( WikiSession session, UserProfile profile ) throws DuplicateUserException, WikiException
+    {
+        // Verify user is allowed to save profile!
+<span class="fc" id="L280">        final Permission p = new WikiPermission( m_engine.getApplicationName(), WikiPermission.EDIT_PROFILE_ACTION );</span>
+<span class="pc bpc" id="L281" title="1 of 2 branches missed.">        if ( !m_engine.getAuthorizationManager().checkPermission( session, p ) )</span>
+        {
+<span class="nc" id="L283">            throw new WikiSecurityException( &quot;You are not allowed to save wiki profiles.&quot; );</span>
+        }
+
+        // Check if profile is new, and see if container allows creation
+<span class="fc" id="L287">        final boolean newProfile = profile.isNew();</span>
+
+        // Check if another user profile already has the fullname or loginname
+<span class="fc" id="L290">        final UserProfile oldProfile = getUserProfile( session );</span>
+<span class="pc bpc" id="L291" title="1 of 4 branches missed.">        final boolean nameChanged = ( oldProfile == null  || oldProfile.getFullname() == null )</span>
+            ? false
+<span class="pc bpc" id="L293" title="1 of 2 branches missed.">            : !( oldProfile.getFullname().equals( profile.getFullname() ) &amp;&amp;</span>
+<span class="pc bnc" id="L294" title="All 2 branches missed.">                 oldProfile.getLoginName().equals( profile.getLoginName() ) );</span>
+        UserProfile otherProfile;
+        try
+        {
+<span class="fc" id="L298">            otherProfile = getUserDatabase().findByLoginName( profile.getLoginName() );</span>
+<span class="pc bpc" id="L299" title="1 of 4 branches missed.">            if ( otherProfile != null &amp;&amp; !otherProfile.equals( oldProfile ) )</span>
+            {
+<span class="fc" id="L301">                throw new DuplicateUserException( &quot;security.error.login.taken&quot;, profile.getLoginName() );</span>
+            }
+        }
+<span class="fc" id="L304">        catch( final NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L306">        }</span>
+        try
+        {
+<span class="fc" id="L309">            otherProfile = getUserDatabase().findByFullName( profile.getFullname() );</span>
+<span class="pc bpc" id="L310" title="2 of 4 branches missed.">            if ( otherProfile != null &amp;&amp; !otherProfile.equals( oldProfile ) )</span>
+            {
+<span class="fc" id="L312">                throw new DuplicateUserException( &quot;security.error.fullname.taken&quot;, profile.getFullname() );</span>
+            }
+        }
+<span class="fc" id="L315">        catch( final NoSuchPrincipalException e )</span>
+        {
+<span class="nc" id="L317">        }</span>
+
+        // For new accounts, create approval workflow for user profile save.
+<span class="pc bpc" id="L320" title="2 of 6 branches missed.">        if ( newProfile &amp;&amp; oldProfile != null &amp;&amp; oldProfile.isNew() )</span>
+        {
+<span class="fc" id="L322">            startUserProfileCreationWorkflow(session, profile);</span>
+
+            // If the profile doesn't need approval, then just log the user in
+
+            try
+            {
+<span class="fc" id="L328">                final AuthenticationManager mgr = m_engine.getAuthenticationManager();</span>
+<span class="pc bpc" id="L329" title="2 of 4 branches missed.">                if ( newProfile &amp;&amp; !mgr.isContainerAuthenticated() )</span>
+                {
+<span class="fc" id="L331">                    mgr.login( session, null, profile.getLoginName(), profile.getPassword() );</span>
+                }
+            }
+<span class="nc" id="L334">            catch ( final WikiException e )</span>
+            {
+<span class="nc" id="L336">                throw new WikiSecurityException( e.getMessage(), e );</span>
+<span class="fc" id="L337">            }</span>
+
+            // Alert all listeners that the profile changed...
+            // ...this will cause credentials to be reloaded in the wiki session
+<span class="fc" id="L341">            fireEvent( WikiSecurityEvent.PROFILE_SAVE, session, profile );</span>
+        }
+
+        // For existing accounts, just save the profile
+        else
+        {
+            // If login name changed, rename it first
+<span class="pc bpc" id="L348" title="2 of 6 branches missed.">            if ( nameChanged &amp;&amp; oldProfile != null &amp;&amp; !oldProfile.getLoginName().equals( profile.getLoginName() ) )</span>
+            {
+<span class="fc" id="L350">                getUserDatabase().rename( oldProfile.getLoginName(), profile.getLoginName() );</span>
+            }
+
+            // Now, save the profile (userdatabase will take care of timestamps for us)
+<span class="fc" id="L354">            getUserDatabase().save( profile );</span>
+
+<span class="pc bpc" id="L356" title="1 of 2 branches missed.">            if ( nameChanged )</span>
+            {
+                // Fire an event if the login name or full name changed
+<span class="fc" id="L359">                final UserProfile[] profiles = new UserProfile[] { oldProfile, profile };</span>
+<span class="fc" id="L360">                fireEvent( WikiSecurityEvent.PROFILE_NAME_CHANGED, session, profiles );</span>
+<span class="fc" id="L361">            }</span>
+            else
+            {
+                // Fire an event that says we have new a new profile (new principals)
+<span class="nc" id="L365">                fireEvent( WikiSecurityEvent.PROFILE_SAVE, session, profile );</span>
+            }
+        }
+<span class="fc" id="L368">    }</span>
+
+    public void startUserProfileCreationWorkflow( final WikiSession session, final UserProfile profile ) throws WikiException {
+<span class="fc" id="L371">        final WorkflowBuilder builder = WorkflowBuilder.getBuilder( m_engine );</span>
+<span class="fc" id="L372">        final Principal submitter = session.getUserPrincipal();</span>
+<span class="fc" id="L373">        final Step completionTask = m_engine.getTasksManager().buildSaveUserProfileTask( m_engine, session.getLocale() );</span>
+
+        // Add user profile attribute as Facts for the approver (if required)
+<span class="pc bpc" id="L376" title="1 of 2 branches missed.">        final boolean hasEmail = profile.getEmail() != null;</span>
+<span class="pc bpc" id="L377" title="1 of 2 branches missed.">        final Fact[] facts = new Fact[ hasEmail ? 4 : 3];</span>
+<span class="fc" id="L378">        facts[0] = new Fact( WorkflowManager.WF_UP_CREATE_SAVE_FACT_PREFS_FULL_NAME, profile.getFullname() );</span>
+<span class="fc" id="L379">        facts[1] = new Fact( WorkflowManager.WF_UP_CREATE_SAVE_FACT_PREFS_LOGIN_NAME, profile.getLoginName() );</span>
+<span class="fc" id="L380">        facts[2] = new Fact( WorkflowManager.WF_UP_CREATE_SAVE_FACT_SUBMITTER, submitter.getName() );</span>
+<span class="pc bpc" id="L381" title="1 of 2 branches missed.">        if ( hasEmail )</span>
+        {
+<span class="fc" id="L383">            facts[3] = new Fact( WorkflowManager.WF_UP_CREATE_SAVE_FACT_PREFS_EMAIL, profile.getEmail() );</span>
+        }
+<span class="fc" id="L385">        final Workflow workflow = builder.buildApprovalWorkflow( submitter, </span>
+                                                                 WorkflowManager.WF_UP_CREATE_SAVE_APPROVER, 
+                                                                 null, 
+                                                                 WorkflowManager.WF_UP_CREATE_SAVE_DECISION_MESSAGE_KEY, 
+                                                                 facts, 
+                                                                 completionTask, 
+                                                                 null );
+
+<span class="fc" id="L393">        workflow.setAttribute( WorkflowManager.WF_UP_CREATE_SAVE_ATTR_SAVED_PROFILE, profile );</span>
+<span class="fc" id="L394">        m_engine.getWorkflowManager().start(workflow);</span>
+
+<span class="fc" id="L396">        final boolean approvalRequired = workflow.getCurrentStep() instanceof Decision;</span>
+
+        // If the profile requires approval, redirect user to message page
+<span class="fc bfc" id="L399" title="All 2 branches covered.">        if ( approvalRequired )</span>
+        {
+<span class="fc" id="L401">            throw new DecisionRequiredException( &quot;This profile must be approved before it becomes active&quot; );</span>
+        }
+<span class="fc" id="L403">    }</span>
+
+    /**
+     * &lt;p&gt; Extracts user profile parameters from the HTTP request and populates
+     * a UserProfile with them. The UserProfile will either be a copy of the
+     * user's existing profile (if one can be found), or a new profile (if not).
+     * The rules for populating the profile as as follows: &lt;/p&gt; &lt;ul&gt; &lt;li&gt;If the
+     * &lt;code&gt;email&lt;/code&gt; or &lt;code&gt;password&lt;/code&gt; parameter values differ
+     * from those in the existing profile, the passed parameters override the
+     * old values.&lt;/li&gt; &lt;li&gt;For new profiles, the user-supplied
+     * &lt;code&gt;fullname&lt;/code&gt; parameter is always
+     * used; for existing profiles the existing value is used, and whatever
+     * value the user supplied is discarded. The wiki name is automatically
+     * computed by taking the full name and extracting all whitespace.&lt;/li&gt;
+     * &lt;li&gt;In all cases, the
+     * created/last modified timestamps of the user's existing or new profile
+     * always override whatever values the user supplied.&lt;/li&gt; &lt;li&gt;If
+     * container authentication is used, the login name property of the profile
+     * is set to the name of
+     * {@link org.apache.wiki.WikiSession#getLoginPrincipal()}. Otherwise,
+     * the value of the &lt;code&gt;loginname&lt;/code&gt; parameter is used.&lt;/li&gt; &lt;/ul&gt;
+     * @param context the current wiki context
+     * @return a new, populated user profile
+     */
+    public UserProfile parseProfile( WikiContext context )
+    {
+        // Retrieve the user's profile (may have been previously cached)
+<span class="nc" id="L430">        final UserProfile profile = getUserProfile( context.getWikiSession() );</span>
+<span class="nc" id="L431">        final HttpServletRequest request = context.getHttpRequest();</span>
+
+        // Extract values from request stream (cleanse whitespace as needed)
+<span class="nc" id="L434">        String loginName = request.getParameter( PARAM_LOGINNAME );</span>
+<span class="nc" id="L435">        String password = request.getParameter( PARAM_PASSWORD );</span>
+<span class="nc" id="L436">        String fullname = request.getParameter( PARAM_FULLNAME );</span>
+<span class="nc" id="L437">        String email = request.getParameter( PARAM_EMAIL );</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">        loginName = InputValidator.isBlank( loginName ) ? null : loginName;</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">        password = InputValidator.isBlank( password ) ? null : password;</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">        fullname = InputValidator.isBlank( fullname ) ? null : fullname;</span>
+<span class="nc bnc" id="L441" title="All 2 branches missed.">        email = InputValidator.isBlank( email ) ? null : email;</span>
+
+        // A special case if we have container authentication
+        // If authenticated, login name is always taken from container
+<span class="nc bnc" id="L445" title="All 2 branches missed.">        if ( m_engine.getAuthenticationManager().isContainerAuthenticated() &amp;&amp;</span>
+<span class="nc bnc" id="L446" title="All 2 branches missed.">                context.getWikiSession().isAuthenticated() )</span>
+        {
+<span class="nc" id="L448">            loginName = context.getWikiSession().getLoginPrincipal().getName();</span>
+        }
+
+        // Set the profile fields!
+<span class="nc" id="L452">        profile.setLoginName( loginName );</span>
+<span class="nc" id="L453">        profile.setEmail( email );</span>
+<span class="nc" id="L454">        profile.setFullname( fullname );</span>
+<span class="nc" id="L455">        profile.setPassword( password );</span>
+<span class="nc" id="L456">        return profile;</span>
+    }
+
+    /**
+     * Validates a user profile, and appends any errors to the session errors
+     * list. If the profile is new, the password will be checked to make sure it
+     * isn't null. Otherwise, the password is checked for length and that it
+     * matches the value of the 'password2' HTTP parameter. Note that we have a
+     * special case when container-managed authentication is used and the user
+     * is not authenticated; this will always cause validation to fail. Any
+     * validation errors are added to the wiki session's messages collection
+     * (see {@link WikiSession#getMessages()}.
+     * @param context the current wiki context
+     * @param profile the supplied UserProfile
+     */
+    public void validateProfile( WikiContext context, UserProfile profile )
+    {
+<span class="nc" id="L473">        final boolean isNew = profile.isNew();</span>
+<span class="nc" id="L474">        final WikiSession session = context.getWikiSession();</span>
+<span class="nc" id="L475">        final InputValidator validator = new InputValidator( SESSION_MESSAGES, context );</span>
+<span class="nc" id="L476">        final ResourceBundle rb = Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE );</span>
+
+        //
+        //  Query the SpamFilter first
+        //
+<span class="nc" id="L481">        final FilterManager fm = m_engine.getFilterManager();</span>
+<span class="nc" id="L482">        final List&lt;PageFilter&gt; ls = fm.getFilterList();</span>
+<span class="nc bnc" id="L483" title="All 2 branches missed.">        for( final PageFilter pf : ls )</span>
+        {
+<span class="nc bnc" id="L485" title="All 2 branches missed.">            if( pf instanceof SpamFilter )</span>
+            {
+<span class="nc bnc" id="L487" title="All 2 branches missed.">                if( ((SpamFilter)pf).isValidUserProfile( context, profile ) == false )</span>
+                {
+<span class="nc" id="L489">                    session.addMessage( SESSION_MESSAGES, &quot;Invalid userprofile&quot; );</span>
+<span class="nc" id="L490">                    return;</span>
+                }
+                break;
+            }
+<span class="nc" id="L494">        }</span>
+
+        // If container-managed auth and user not logged in, throw an error
+<span class="nc bnc" id="L497" title="All 2 branches missed.">        if ( m_engine.getAuthenticationManager().isContainerAuthenticated()</span>
+<span class="nc bnc" id="L498" title="All 2 branches missed.">             &amp;&amp; !context.getWikiSession().isAuthenticated() )</span>
+        {
+<span class="nc" id="L500">            session.addMessage( SESSION_MESSAGES, rb.getString(&quot;security.error.createprofilebeforelogin&quot;) );</span>
+        }
+
+<span class="nc" id="L503">        validator.validateNotNull( profile.getLoginName(), rb.getString(&quot;security.user.loginname&quot;) );</span>
+<span class="nc" id="L504">        validator.validateNotNull( profile.getFullname(), rb.getString(&quot;security.user.fullname&quot;) );</span>
+<span class="nc" id="L505">        validator.validate( profile.getEmail(), rb.getString(&quot;security.user.email&quot;), InputValidator.EMAIL );</span>
+
+        // If new profile, passwords must match and can't be null
+<span class="nc bnc" id="L508" title="All 2 branches missed.">        if ( !m_engine.getAuthenticationManager().isContainerAuthenticated() )</span>
+        {
+<span class="nc" id="L510">            final String password = profile.getPassword();</span>
+<span class="nc bnc" id="L511" title="All 2 branches missed.">            if ( password == null )</span>
+            {
+<span class="nc bnc" id="L513" title="All 2 branches missed.">                if ( isNew )</span>
+                {
+<span class="nc" id="L515">                    session.addMessage( SESSION_MESSAGES, rb.getString(&quot;security.error.blankpassword&quot;) );</span>
+                }
+            }
+            else
+            {
+<span class="nc" id="L520">                final HttpServletRequest request = context.getHttpRequest();</span>
+<span class="nc bnc" id="L521" title="All 2 branches missed.">                final String password2 = ( request == null ) ? null : request.getParameter( &quot;password2&quot; );</span>
+<span class="nc bnc" id="L522" title="All 2 branches missed.">                if ( !password.equals( password2 ) )</span>
+                {
+<span class="nc" id="L524">                    session.addMessage( SESSION_MESSAGES, rb.getString(&quot;security.error.passwordnomatch&quot;) );</span>
+                }
+            }
+        }
+
+        UserProfile otherProfile;
+<span class="nc" id="L530">        final String fullName = profile.getFullname();</span>
+<span class="nc" id="L531">        final String loginName = profile.getLoginName();</span>
+<span class="nc" id="L532">        final String email = profile.getEmail();</span>
+
+        // It's illegal to use as a full name someone else's login name
+        try
+        {
+<span class="nc" id="L537">            otherProfile = getUserDatabase().find( fullName );</span>
+<span class="nc bnc" id="L538" title="All 6 branches missed.">            if ( otherProfile != null &amp;&amp; !profile.equals( otherProfile ) &amp;&amp; !fullName.equals( otherProfile.getFullname() ) )</span>
+            {
+<span class="nc" id="L540">                final Object[] args = { fullName };</span>
+<span class="nc" id="L541">                session.addMessage( SESSION_MESSAGES, MessageFormat.format( rb.getString(&quot;security.error.illegalfullname&quot;), args ) );</span>
+            }
+        }
+<span class="nc" id="L544">        catch ( final NoSuchPrincipalException e)</span>
+<span class="nc" id="L545">        { /* It's clean */ }</span>
+
+        // It's illegal to use as a login name someone else's full name
+        try
+        {
+<span class="nc" id="L550">            otherProfile = getUserDatabase().find( loginName );</span>
+<span class="nc bnc" id="L551" title="All 6 branches missed.">            if ( otherProfile != null &amp;&amp; !profile.equals( otherProfile ) &amp;&amp; !loginName.equals( otherProfile.getLoginName() ) )</span>
+            {
+<span class="nc" id="L553">                final Object[] args = { loginName };</span>
+<span class="nc" id="L554">                session.addMessage( SESSION_MESSAGES, MessageFormat.format( rb.getString(&quot;security.error.illegalloginname&quot;), args ) );</span>
+            }
+        }
+<span class="nc" id="L557">        catch ( final NoSuchPrincipalException e)</span>
+<span class="nc" id="L558">        { /* It's clean */ }</span>
+
+        // It's illegal to use multiple accounts with the same email
+        try
+        {
+<span class="nc" id="L563">            otherProfile = getUserDatabase().findByEmail( email );</span>
+<span class="nc bnc" id="L564" title="All 2 branches missed.">            if ( otherProfile != null</span>
+<span class="nc bnc" id="L565" title="All 2 branches missed.">                &amp;&amp; !profile.getUid().equals(otherProfile.getUid()) // Issue JSPWIKI-1042</span>
+<span class="nc bnc" id="L566" title="All 4 branches missed.">                &amp;&amp; !profile.equals( otherProfile ) &amp;&amp; StringUtils.lowerCase( email ).equals( StringUtils.lowerCase(otherProfile.getEmail() ) ) )</span>
+            {
+<span class="nc" id="L568">                final Object[] args = { email };</span>
+<span class="nc" id="L569">                session.addMessage( SESSION_MESSAGES, MessageFormat.format( rb.getString(&quot;security.error.email.taken&quot;), args ) );</span>
+            }
+        }
+<span class="nc" id="L572">        catch ( final NoSuchPrincipalException e)</span>
+<span class="nc" id="L573">        { /* It's clean */ }</span>
+<span class="nc" id="L574">    }</span>
+
+    /**
+     *  A helper method for returning all of the known WikiNames in this system.
+     *
+     *  @return An Array of Principals
+     *  @throws WikiSecurityException If for reason the names cannot be fetched
+     */
+    public Principal[] listWikiNames()
+        throws WikiSecurityException
+    {
+<span class="nc" id="L585">        return getUserDatabase().getWikiNames();</span>
+    }
+
+    /**
+     * This is a database that gets used if nothing else is available. It does
+     * nothing of note - it just mostly throws NoSuchPrincipalExceptions if
+     * someone tries to log in.
+     */
+<span class="nc" id="L593">    public static class DummyUserDatabase extends AbstractUserDatabase</span>
+    {
+
+        /**
+         * No-op.
+         * @param loginName the login name to delete
+         * @throws WikiSecurityException never...
+         */
+        @Override
+        public void deleteByLoginName( String loginName ) throws WikiSecurityException
+        {
+            // No operation
+<span class="nc" id="L605">        }</span>
+
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param index the name to search for
+         * @return the user profile
+         * @throws NoSuchPrincipalException never...
+         */
+        @Override
+        public UserProfile findByEmail(String index) throws NoSuchPrincipalException
+        {
+<span class="nc" id="L616">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param index the name to search for
+         * @return the user profile
+         * @throws NoSuchPrincipalException never...
+         */
+        @Override
+        public UserProfile findByFullName(String index) throws NoSuchPrincipalException
+        {
+<span class="nc" id="L628">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param index the name to search for
+         * @return the user profile
+         * @throws NoSuchPrincipalException never...
+         */
+        @Override
+        public UserProfile findByLoginName(String index) throws NoSuchPrincipalException
+        {
+<span class="nc" id="L640">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param uid the unique identifier to search for
+         * @return the user profile
+         * @throws NoSuchPrincipalException never...
+         */
+        @Override
+        public UserProfile findByUid( String uid ) throws NoSuchPrincipalException
+        {
+<span class="nc" id="L652">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param index the name to search for
+         * @return the user profile
+         * @throws NoSuchPrincipalException never...
+         */
+        @Override
+        public UserProfile findByWikiName(String index) throws NoSuchPrincipalException
+        {
+<span class="nc" id="L663">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+
+        /**
+         * No-op.
+         * @return a zero-length array
+         * @throws WikiSecurityException never...
+         */
+        @Override
+        public Principal[] getWikiNames() throws WikiSecurityException
+        {
+<span class="nc" id="L674">            return new Principal[0];</span>
+        }
+
+        /**
+         * No-op.
+         *
+         * @param engine the wiki engine
+         * @param props the properties used to initialize the wiki engine
+         * @throws NoRequiredPropertyException never...
+         */
+        @Override
+        public void initialize(WikiEngine engine, Properties props) throws NoRequiredPropertyException
+        {
+<span class="nc" id="L687">        }</span>
+
+        /**
+         * No-op; always throws &lt;code&gt;NoSuchPrincipalException&lt;/code&gt;.
+         * @param loginName the login name
+         * @param newName the proposed new login name
+         * @throws DuplicateUserException never...
+         * @throws WikiSecurityException never...
+         */
+        @Override
+        public void rename( String loginName, String newName ) throws DuplicateUserException, WikiSecurityException
+        {
+<span class="nc" id="L699">            throw new NoSuchPrincipalException(&quot;No user profiles available&quot;);</span>
+        }
+
+        /**
+         * No-op.
+         * @param profile the user profile
+         * @throws WikiSecurityException never...
+         */
+        @Override
+        public void save( UserProfile profile ) throws WikiSecurityException
+        {
+<span class="nc" id="L710">        }</span>
+
+    }
+
+    // events processing .......................................................
+
+    /**
+     * Registers a WikiEventListener with this instance.
+     * This is a convenience method.
+     * @param listener the event listener
+     */
+    public synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="fc" id="L723">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="fc" id="L724">    }</span>
+
+    /**
+     * Un-registers a WikiEventListener with this instance.
+     * This is a convenience method.
+     * @param listener the event listener
+     */
+    public synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L733">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L734">    }</span>
+
+    /**
+     *  Fires a WikiSecurityEvent of the provided type, Principal and target Object
+     *  to all registered listeners.
+     *
+     * @see org.apache.wiki.event.WikiSecurityEvent
+     * @param type       the event type to be fired
+     * @param session    the wiki session supporting the event
+     * @param profile    the user profile (or array of user profiles), which may be &lt;code&gt;null&lt;/code&gt;
+     */
+    protected void fireEvent( int type, WikiSession session, Object profile )
+    {
+<span class="pc bpc" id="L747" title="1 of 2 branches missed.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="fc" id="L749">            WikiEventManager.fireEvent(this,new WikiSecurityEvent(session,type,profile));</span>
+        }
+<span class="fc" id="L751">    }</span>
+
+    /**
+     *  Implements the JSON API for usermanager.
+     *  &lt;p&gt;
+     *  Even though this gets serialized whenever container shuts down/restarts,
+     *  this gets reinstalled to the session when JSPWiki starts.  This means
+     *  that it's not actually necessary to save anything.
+     */
+    public static final class JSONUserModule implements WikiAjaxServlet
+    {
+		private volatile UserManager m_manager;
+
+        /**
+         *  Create a new JSONUserModule.
+         *  @param mgr Manager
+         */
+        public JSONUserModule( UserManager mgr )
+<span class="fc" id="L769">        {</span>
+<span class="fc" id="L770">            m_manager = mgr;</span>
+<span class="fc" id="L771">        }</span>
+
+        @Override
+        public String getServletMapping() {
+<span class="nc" id="L775">        	return JSON_USERS;</span>
+        }
+
+        @Override
+        public void service(HttpServletRequest req, HttpServletResponse resp, String actionName, List&lt;String&gt; params) throws ServletException, IOException {
+        	try {
+<span class="nc" id="L781">        		String uid = null;</span>
+<span class="nc bnc" id="L782" title="All 2 branches missed.">            	if (params.size()&lt;1) {</span>
+<span class="nc" id="L783">            		return;</span>
+            	}
+<span class="nc" id="L785">        		uid = params.get(0);</span>
+<span class="nc" id="L786">	        	log.debug(&quot;uid=&quot;+uid);</span>
+<span class="nc bnc" id="L787" title="All 2 branches missed.">	        	if (StringUtils.isNotBlank(uid)) {</span>
+<span class="nc" id="L788">		            final UserProfile prof = getUserInfo(uid);</span>
+<span class="nc" id="L789">		            resp.getWriter().write(AjaxUtil.toJson(prof));</span>
+	        	}
+<span class="nc" id="L791">        	} catch (final NoSuchPrincipalException e) {</span>
+<span class="nc" id="L792">        		throw new ServletException(e);</span>
+<span class="nc" id="L793">        	}</span>
+<span class="nc" id="L794">        }</span>
+
+        /**
+         *  Directly returns the UserProfile object attached to an uid.
+         *
+         *  @param uid The user id (e.g. WikiName)
+         *  @return A UserProfile object
+         *  @throws NoSuchPrincipalException If such a name does not exist.
+         */
+        public UserProfile getUserInfo( String uid )
+            throws NoSuchPrincipalException
+        {
+<span class="nc bnc" id="L806" title="All 2 branches missed.">            if( m_manager != null )</span>
+            {
+<span class="nc" id="L808">                final UserProfile prof = m_manager.getUserDatabase().find( uid );</span>
+
+<span class="nc" id="L810">                return prof;</span>
+            }
+
+<span class="nc" id="L813">            throw new IllegalStateException(&quot;The manager is offline.&quot;);</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

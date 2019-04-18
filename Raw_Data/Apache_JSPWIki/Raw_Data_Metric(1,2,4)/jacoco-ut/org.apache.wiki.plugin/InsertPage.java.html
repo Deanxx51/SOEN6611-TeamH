@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>InsertPage.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">InsertPage.java</span></div><h1>InsertPage.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.plugin;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Inserts page contents.  Muchos thanks to Scott Hurlbert for the initial code.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;page&lt;/b&gt; - the name of the page to be inserted&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;style&lt;/b&gt; - the style to use&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;maxlength&lt;/b&gt; - the maximum length of the page to be inserted (page contents)&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;class&lt;/b&gt; - the class to use&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;section&lt;/b&gt; - the section of the page that has to be inserted (separated by &quot;----&quot;&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;default&lt;/b&gt; - the text to insert if the requested page does not exist&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 2.1.37
+ */
+<span class="fc" id="L50">public class InsertPage</span>
+    implements WikiPlugin
+{
+    /** Parameter name for setting the page.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_PAGENAME  = &quot;page&quot;;
+    /** Parameter name for setting the style.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_STYLE     = &quot;style&quot;;
+    /** Parameter name for setting the maxlength.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_MAXLENGTH = &quot;maxlength&quot;;
+    /** Parameter name for setting the class.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_CLASS     = &quot;class&quot;;
+    /** Parameter name for setting the section.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_SECTION   = &quot;section&quot;;
+    /** Parameter name for setting the default.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_DEFAULT   = &quot;default&quot;;
+
+    private static final String DEFAULT_STYLE = &quot;&quot;;
+
+    /** This attribute is stashed in the WikiContext to make sure that we don't
+     *  have circular references.
+     */
+    public static final String ATTR_RECURSE    = &quot;org.apache.wiki.plugin.InsertPage.recurseCheck&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="fc" id="L80">        WikiEngine engine = context.getEngine();</span>
+
+<span class="fc" id="L82">        StringBuilder res = new StringBuilder();</span>
+
+<span class="fc" id="L84">        String clazz        = params.get( PARAM_CLASS );</span>
+<span class="fc" id="L85">        String includedPage = params.get( PARAM_PAGENAME );</span>
+<span class="fc" id="L86">        String style        = params.get( PARAM_STYLE );</span>
+<span class="fc" id="L87">        String defaultstr   = params.get( PARAM_DEFAULT );</span>
+<span class="fc" id="L88">        int    section      = TextUtil.parseIntParameter(params.get( PARAM_SECTION ), -1 );</span>
+<span class="fc" id="L89">        int    maxlen       = TextUtil.parseIntParameter(params.get( PARAM_MAXLENGTH ), -1 );</span>
+
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">        if( style == null ) style = DEFAULT_STYLE;</span>
+
+<span class="pc bpc" id="L93" title="1 of 2 branches missed.">        if( maxlen == -1 ) maxlen = Integer.MAX_VALUE;</span>
+
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">        if( includedPage != null )</span>
+        {
+<span class="fc" id="L97">            WikiPage page = null;</span>
+            try
+            {
+<span class="fc" id="L100">                String pageName = engine.getFinalPageName( includedPage );</span>
+<span class="fc bfc" id="L101" title="All 2 branches covered.">                if( pageName != null )</span>
+                {
+<span class="fc" id="L103">                    page = engine.getPage( pageName );</span>
+                }
+                else
+                {
+<span class="fc" id="L107">                    page = engine.getPage( includedPage );</span>
+                }
+            }
+<span class="nc" id="L110">            catch( ProviderException e )</span>
+            {
+<span class="nc" id="L112">                res.append( &quot;&lt;span class=\&quot;error\&quot;&gt;Page could not be found by the page provider.&lt;/span&gt;&quot; );</span>
+<span class="nc" id="L113">                return res.toString();</span>
+<span class="fc" id="L114">            }</span>
+
+<span class="fc bfc" id="L116" title="All 2 branches covered.">            if( page != null )</span>
+            {
+                //
+                //  Check for recursivity
+                //
+
+<span class="fc" id="L122">                List&lt;String&gt; previousIncludes = (List&lt;String&gt;)context.getVariable( ATTR_RECURSE );</span>
+
+<span class="fc bfc" id="L124" title="All 2 branches covered.">                if( previousIncludes != null )</span>
+                {
+<span class="fc bfc" id="L126" title="All 2 branches covered.">                    if( previousIncludes.contains( page.getName() ) )</span>
+                    {
+<span class="fc" id="L128">                        return &quot;&lt;span class=\&quot;error\&quot;&gt;Error: Circular reference - you can't include a page in itself!&lt;/span&gt;&quot;;</span>
+                    }
+                }
+                else
+                {
+<span class="fc" id="L133">                    previousIncludes = new ArrayList&lt;String&gt;();</span>
+                }
+
+<span class="fc" id="L136">                previousIncludes.add( page.getName() );</span>
+<span class="fc" id="L137">                context.setVariable( ATTR_RECURSE, previousIncludes );</span>
+
+                //
+                // Check for permissions
+                //
+<span class="fc" id="L142">                AuthorizationManager mgr = engine.getAuthorizationManager();</span>
+
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">                if( !mgr.checkPermission( context.getWikiSession(),</span>
+<span class="fc" id="L145">                                          PermissionFactory.getPagePermission( page, &quot;view&quot;) ) )</span>
+                {
+<span class="nc" id="L147">                    res.append(&quot;&lt;span class=\&quot;error\&quot;&gt;You do not have permission to view this included page.&lt;/span&gt;&quot;);</span>
+<span class="nc" id="L148">                    return res.toString();</span>
+                }
+
+                /**
+                 *  We want inclusion to occur within the context of
+                 *  its own page, because we need the links to be correct.
+                 */
+
+<span class="fc" id="L156">                WikiContext includedContext = (WikiContext) context.clone();</span>
+<span class="fc" id="L157">                includedContext.setPage( page );</span>
+
+<span class="fc" id="L159">                String pageData = engine.getPureText( page );</span>
+<span class="fc" id="L160">                String moreLink = &quot;&quot;;</span>
+
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">                if( section != -1 )</span>
+                {
+                    try
+                    {
+<span class="nc" id="L166">                        pageData = TextUtil.getSection( pageData, section );</span>
+                    }
+<span class="nc" id="L168">                    catch( IllegalArgumentException e )</span>
+                    {
+<span class="nc" id="L170">                        throw new PluginException( e.getMessage() );</span>
+<span class="nc" id="L171">                    }</span>
+                }
+
+<span class="pc bpc" id="L174" title="1 of 2 branches missed.">                if( pageData.length() &gt; maxlen )</span>
+                {
+<span class="nc" id="L176">                    pageData = pageData.substring( 0, maxlen )+&quot; ...&quot;;</span>
+<span class="nc" id="L177">                    moreLink = &quot;&lt;p&gt;&lt;a href=\&quot;&quot;+context.getURL(WikiContext.VIEW,includedPage)+&quot;\&quot;&gt;More...&lt;/a&gt;&lt;/p&gt;&quot;;</span>
+                }
+
+<span class="pc bpc" id="L180" title="1 of 2 branches missed.">                res.append(&quot;&lt;div style=\&quot;&quot;+style+&quot;\&quot;&quot;+(clazz != null ? &quot; class=\&quot;&quot;+clazz+&quot;\&quot;&quot; : &quot;&quot;)+&quot;&gt;&quot;);</span>
+<span class="fc" id="L181">                res.append( engine.textToHTML( includedContext, pageData ) );</span>
+<span class="fc" id="L182">                res.append( moreLink );</span>
+<span class="fc" id="L183">                res.append(&quot;&lt;/div&gt;&quot;);</span>
+
+                //
+                //  Remove the name from the stack; we're now done with this.
+                //
+<span class="fc" id="L188">                previousIncludes.remove( page.getName() );</span>
+<span class="fc" id="L189">                context.setVariable( ATTR_RECURSE, previousIncludes );</span>
+<span class="fc" id="L190">            }</span>
+            else
+            {
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">                if( defaultstr != null )</span>
+                {
+<span class="nc" id="L195">                    res.append( defaultstr );</span>
+                }
+                else
+                {
+<span class="fc" id="L199">                    res.append(&quot;There is no page called '&quot;+includedPage+&quot;'.  Would you like to &quot;);</span>
+<span class="fc" id="L200">                    res.append(&quot;&lt;a href=\&quot;&quot;+context.getURL( WikiContext.EDIT, includedPage )+&quot;\&quot;&gt;create it?&lt;/a&gt;&quot;);</span>
+                }
+            }
+<span class="fc" id="L203">        }</span>
+        else
+        {
+<span class="nc" id="L206">            res.append(&quot;&lt;span class=\&quot;error\&quot;&gt;&quot;);</span>
+<span class="nc" id="L207">            res.append(&quot;You have to define a page!&quot;);</span>
+<span class="nc" id="L208">            res.append(&quot;&lt;/span&gt;&quot;);</span>
+        }
+
+<span class="fc" id="L211">        return res.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

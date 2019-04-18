@@ -1,0 +1,268 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractLoginModule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">AbstractLoginModule.java</span></div><h1>AbstractLoginModule.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth.login;
+
+import java.security.Principal;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+
+import javax.security.auth.Subject;
+import javax.security.auth.callback.CallbackHandler;
+import javax.security.auth.login.LoginException;
+import javax.security.auth.spi.LoginModule;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.auth.WikiPrincipal;
+
+/**
+ * Abstract JAAS {@link javax.security.auth.spi.LoginModule}that implements
+ * base functionality. The methods {@link #login()} and {@link #commit()} must
+ * be implemented by subclasses. The default implementations of
+ * {@link #initialize(Subject, CallbackHandler, Map, Map)}, {@link #abort()} and
+ * {@link #logout()} should be sufficient for most purposes.
+ * @since 2.3
+ */
+<span class="fc" id="L43">public abstract class AbstractLoginModule implements LoginModule</span>
+{
+
+<span class="fc" id="L46">    private static final Logger   log = Logger.getLogger( AbstractLoginModule.class );</span>
+
+    protected CallbackHandler m_handler;
+
+    protected Map&lt;String,?&gt;             m_options;
+
+    /**
+     * Collection of Principals set during login module initialization.
+     * These represent the user's identities prior to the overall login.
+     * Typically these will contain earlier, less-authoritative principals
+     * like a WikiPrincipal for the user cookie, or an IP address.
+     * These Principals are forcibly removed during the commit phase
+     * if login succeeds.
+     * @deprecated
+     */
+    protected Collection&lt;Principal&gt;      m_previousWikiPrincipals;
+
+    /**
+     * Implementing classes should add Principals to this collection; these
+     * will be added to the principal set when the overall login succeeds.
+     * These Principals will be added to the Subject
+     * during the {@link #commit()} phase of login.
+     */
+    protected Collection&lt;Principal&gt; m_principals;
+
+    /**
+     * Implementing classes should add Principals to this collection
+     * to specify what Principals &lt;em&gt;must&lt;/em&gt; be removed if login for
+     * this module, or for the entire login configuration overall, fails.
+     * Generally, these will be Principals of type
+     * {@link org.apache.wiki.auth.authorize.Role}.
+     * @deprecated
+     */
+    protected Collection&lt;Principal&gt;      m_principalsToRemove;
+
+    /**
+     * Implementing classes should add Principals to this collection to specify
+     * what Principals, perhaps suppled by other LoginModules, &lt;em&gt;must&lt;/em&gt;
+     * be removed if login for this module, or for the entire login
+     * configuration overall, succeeds. Generally, these will be Principals of
+     * type {@link org.apache.wiki.auth.authorize.Role}. For example,
+     * {@link CookieAssertionLoginModule} adds
+     * {@link org.apache.wiki.auth.authorize.Role#ANONYMOUS} to its
+     * &lt;code&gt;m_principalsToOverwrite&lt;/code&gt; collection because when it
+     * succeeds, its own {@link org.apache.wiki.auth.authorize.Role#AUTHENTICATED}
+     * should over-write {@link org.apache.wiki.auth.authorize.Role#ANONYMOUS}.
+     * @deprecated
+     */
+    protected Collection&lt;Principal&gt;      m_principalsToOverwrite;
+
+    protected Map&lt;String,?&gt;             m_state;
+
+    protected Subject         m_subject;
+
+    protected static final String NULL           = &quot;(null)&quot;;
+
+    /**
+     * Aborts the login; called if the LoginContext's overall authentication
+     * failed. (the relevant REQUIRED, REQUISITE, SUFFICIENT and OPTIONAL
+     * LoginModules did not succeed). Specifically, it removes
+     * Principals from the Subject that are associated with the
+     * individual LoginModule; these will be those contained in
+     * {@link #m_principalsToRemove}.
+     * It always returns &lt;code&gt;true&lt;/code&gt;.
+     * @see javax.security.auth.spi.LoginModule#abort()
+     * @throws LoginException if the abort itself fails
+     * @return True, always.
+     */
+    public final boolean abort() throws LoginException
+    {
+<span class="nc" id="L116">        removePrincipals( m_principals );</span>
+<span class="nc" id="L117">        removePrincipals( m_principalsToRemove );</span>
+
+        // Clear the principals/principalsToRemove sets
+<span class="nc" id="L120">        m_principals.clear();</span>
+<span class="nc" id="L121">        m_principalsToRemove.clear();</span>
+
+<span class="nc" id="L123">        return true;</span>
+    }
+
+    /**
+     * Commits the login. If the overall login method succeeded, adds
+     * principals to the Subject's set; generally, these will be the user's
+     * actual Principal, plus one or more Role principals. The state of the
+     * &lt;code&gt;m_principals&lt;/code&gt; member variable is consulted to determine
+     * whether to add the principals. If its size is 0 (because the login
+     * failed), the login is considered to have failed; in this case,
+     * all principals in {@link #m_principalsToRemove} are removed
+     * from the Subject's set. Otherwise, the principals added to
+     * &lt;code&gt;m_principals&lt;/code&gt; in the {@link #login()} method are added to
+     * the Subject's set.
+     * @return &lt;code&gt;true&lt;/code&gt; if the commit succeeded, or
+     *         &lt;code&gt;false&lt;/code&gt; if the previous call to {@link #login()}
+     *         failed
+     * @see javax.security.auth.spi.LoginModule#commit()
+     */
+    public final boolean commit()
+    {
+<span class="pc bpc" id="L144" title="1 of 2 branches missed.">        if ( succeeded() )</span>
+        {
+<span class="fc" id="L146">            removePrincipals( m_previousWikiPrincipals );</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">            for ( Principal principal : m_principals )</span>
+            {
+<span class="fc" id="L149">                m_subject.getPrincipals().add( principal );</span>
+<span class="pc bpc" id="L150" title="1 of 2 branches missed.">                if ( log.isDebugEnabled() )</span>
+                {
+<span class="nc" id="L152">                    log.debug(&quot;Committed Principal &quot; + principal.getName() );</span>
+                }
+<span class="fc" id="L154">            }</span>
+<span class="fc" id="L155">            removePrincipals( m_principalsToOverwrite );</span>
+<span class="fc" id="L156">            return true;</span>
+        }
+
+        // If login did not succeed, clean up after ourselves
+<span class="nc" id="L160">        removePrincipals( m_principals );</span>
+<span class="nc" id="L161">        removePrincipals( m_principalsToRemove );</span>
+
+        // Clear the principals/principalsToRemove sets
+<span class="nc" id="L164">        m_principals.clear();</span>
+<span class="nc" id="L165">        m_principalsToRemove.clear();</span>
+
+<span class="nc" id="L167">        return false;</span>
+    }
+
+    /**
+     * Initializes the LoginModule with a given &lt;code&gt;Subject&lt;/code&gt;,
+     * callback handler, options and shared state. In particular, the member
+     * variable &lt;code&gt;m_principals&lt;/code&gt; is initialized as a blank Set.
+     * @see javax.security.auth.spi.LoginModule#initialize(javax.security.auth.Subject,
+     *      javax.security.auth.callback.CallbackHandler, java.util.Map,
+     *      java.util.Map)
+     *      
+     * @param subject {@inheritDoc}
+     * @param callbackHandler {@inheritDoc}
+     * @param sharedState {@inheritDoc}
+     * @param options {@inheritDoc}
+     */
+    public final void initialize( Subject subject, CallbackHandler callbackHandler, Map&lt;String,?&gt; sharedState, Map&lt;String,?&gt; options )
+    {
+<span class="fc" id="L185">        m_previousWikiPrincipals = new HashSet&lt;Principal&gt;();</span>
+<span class="fc" id="L186">        m_principals = new HashSet&lt;Principal&gt;();</span>
+<span class="fc" id="L187">        m_principalsToRemove = new HashSet&lt;Principal&gt;();</span>
+<span class="fc" id="L188">        m_principalsToOverwrite = new HashSet&lt;Principal&gt;();</span>
+<span class="fc" id="L189">        m_subject = subject;</span>
+<span class="fc" id="L190">        m_handler = callbackHandler;</span>
+<span class="fc" id="L191">        m_state = sharedState;</span>
+<span class="fc" id="L192">        m_options = options;</span>
+<span class="pc bpc" id="L193" title="1 of 2 branches missed.">        if ( subject == null )</span>
+        {
+<span class="nc" id="L195">            throw new IllegalStateException( &quot;Subject cannot be null&quot; );</span>
+        }
+<span class="pc bpc" id="L197" title="1 of 2 branches missed.">        if ( callbackHandler == null )</span>
+        {
+<span class="nc" id="L199">            throw new IllegalStateException( &quot;Callback handler cannot be null&quot; );</span>
+        }
+        // Stash the previous WikiPrincipals; we will flush these if login succeeds
+<span class="fc" id="L202">        m_previousWikiPrincipals.addAll( subject.getPrincipals( WikiPrincipal.class ) );</span>
+<span class="fc" id="L203">    }</span>
+
+    /**
+     * Logs in the user by calling back to the registered CallbackHandler with a
+     * series of callbacks. If the login succeeds, this method returns
+     * &lt;code&gt;true&lt;/code&gt;
+     * @return &lt;code&gt;true&lt;/code&gt; if the commit succeeded, or
+     *         &lt;code&gt;false&lt;/code&gt; if this LoginModule should be ignored.
+     * @throws LoginException if the authentication fails
+     * @see javax.security.auth.spi.LoginModule#login()
+     */
+    public abstract boolean login() throws LoginException;
+
+    /**
+     * Logs the user out. Removes all principals in {@link #m_principalsToRemove}
+     * from the Subject's principal set.
+     * @return &lt;code&gt;true&lt;/code&gt; if the commit succeeded, or
+     *         &lt;code&gt;false&lt;/code&gt; if this LoginModule should be ignored
+     * @throws LoginException if the logout itself fails
+     * @see javax.security.auth.spi.LoginModule#logout()
+     */
+    public final boolean logout() throws LoginException
+    {
+<span class="nc" id="L226">        removePrincipals( m_principals );</span>
+<span class="nc" id="L227">        removePrincipals( m_principalsToRemove );</span>
+
+        // Clear the principals/principalsToRemove sets
+<span class="nc" id="L230">        m_principals.clear();</span>
+<span class="nc" id="L231">        m_principalsToRemove.clear();</span>
+
+<span class="nc" id="L233">        return true;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the number of principals
+     * contained in {@link #m_principals} is non-zero;
+     * &lt;code&gt;false&lt;/code&gt; otherwise.
+     * @return True, if a login has succeeded.
+     */
+    private boolean succeeded()
+    {
+<span class="pc bpc" id="L244" title="1 of 2 branches missed.">        return m_principals.size() &gt; 0;</span>
+    }
+
+    /**
+     * Removes a specified collection of Principals from the Subject's
+     * Principal set.
+     * @param principals the principals to remove
+     */
+    private void removePrincipals( Collection&lt;Principal&gt; principals )
+    {
+<span class="pc bpc" id="L254" title="1 of 2 branches missed.">        for ( Principal principal : principals )</span>
+        {
+<span class="nc bnc" id="L256" title="All 2 branches missed.">            if ( m_subject.getPrincipals().contains( principal ) )</span>
+            {
+<span class="nc" id="L258">                m_subject.getPrincipals().remove( principal );</span>
+<span class="nc bnc" id="L259" title="All 2 branches missed.">                if ( log.isDebugEnabled() )</span>
+                {
+<span class="nc" id="L261">                    log.debug(&quot;Removed Principal &quot; + principal.getName() );</span>
+                }
+            }
+<span class="nc" id="L264">        }</span>
+<span class="fc" id="L265">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

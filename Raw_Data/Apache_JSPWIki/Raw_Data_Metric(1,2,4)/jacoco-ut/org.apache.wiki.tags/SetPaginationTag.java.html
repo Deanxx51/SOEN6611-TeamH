@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SetPaginationTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">SetPaginationTag.java</span></div><h1>SetPaginationTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.jstl.fmt.LocaleSupport;
+
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  Calculate pagination string. Used for page-info and search results
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt; start - start item of the page to be highlighted
+ *    &lt;LI&gt; total - total number of items
+ *    &lt;LI&gt; pagesize - total number of items per page
+ *    &lt;LI&gt; maxlinks - number of page links to be generated
+ *    &lt;LI&gt; fmtkey - pagination prefix of the i18n resource keys. Following keys are used:
+ *    &lt;br&gt;fmtkey=&quot;info.pagination&quot;
+ *      &lt;UL&gt;
+ *        &lt;LI&gt; info.pagination.first=&lt;span class=&quot;first&quot;&gt;First&lt;/span&gt;
+ *        &lt;LI&gt; info.pagination.last=&lt;span class=&quot;last&quot;&gt;Last&lt;/span&gt;
+ *        &lt;LI&gt; info.pagination.previous=&lt;span class=&quot;prev&quot;&gt;Previous&lt;/span&gt;
+ *        &lt;LI&gt; info.pagination.next=&lt;span class=&quot;next&quot;&gt;Next&lt;/span&gt;
+ *        &lt;LI&gt; info.pagination.all=&lt;span class=&quot;all&quot;&gt;all&lt;/span&gt;
+ *        &lt;LI&gt; info.pagination.total=&amp;nbsp;(Total items: {0} ) 
+ *        &lt;LI&gt; info.pagination.show.title=Show items from {0} to {1}
+ *        &lt;LI&gt; info.pagination.showall.title=Show all items
+ *      &lt;/UL&gt;
+ *  &lt;/UL&gt;
+ *  &lt;P&gt;Following optional attributes can be parameterized with '%s' (item count)&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt; href - href of each page link. (optional)
+ *    &lt;LI&gt; onclick - onclick of each page link. (optional)
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.5.109
+ */
+<span class="nc" id="L58">public class SetPaginationTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 0L;
+    private static final int ALLITEMS = -1;
+
+    private int m_start;
+    private int m_total;
+    private int m_pagesize;
+    private int m_maxlinks;
+    private String m_fmtkey;
+    private String m_href;
+    private String m_onclick;
+
+    public void initTag()
+    {
+<span class="nc" id="L74">        super.initTag();</span>
+<span class="nc" id="L75">        m_start = 0;</span>
+<span class="nc" id="L76">        m_total = 0;</span>
+<span class="nc" id="L77">        m_pagesize = 20;</span>
+<span class="nc" id="L78">        m_maxlinks = 9;</span>
+<span class="nc" id="L79">        m_fmtkey = null;</span>
+<span class="nc" id="L80">        m_href = null;</span>
+<span class="nc" id="L81">        m_onclick = null;</span>
+<span class="nc" id="L82">    }</span>
+
+    public void setStart(int arg)
+    {
+<span class="nc" id="L86">        m_start = arg;</span>
+<span class="nc" id="L87">    }</span>
+
+    public void setTotal(int arg)
+    {
+<span class="nc" id="L91">        m_total = arg;</span>
+<span class="nc" id="L92">    }</span>
+
+    public void setPagesize(int arg)
+    {
+<span class="nc" id="L96">        m_pagesize = arg;</span>
+<span class="nc" id="L97">    }</span>
+
+    public void setMaxlinks(int arg)
+    {
+<span class="nc" id="L101">        m_maxlinks = arg;</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if( m_maxlinks % 2 == 0 ) m_maxlinks--; /* must be odd */</span>
+<span class="nc" id="L103">    }</span>
+
+    public void setFmtkey(String arg)
+    {
+<span class="nc" id="L107">        m_fmtkey = arg;</span>
+<span class="nc" id="L108">    }</span>
+
+    public void setHref(String arg)
+    {
+<span class="nc" id="L112">        m_href = arg;</span>
+<span class="nc" id="L113">    }</span>
+
+    public void setOnclick(String arg)
+    {
+<span class="nc" id="L117">        m_onclick = arg;</span>
+<span class="nc" id="L118">    }</span>
+
+
+    // 0 20 40 60
+    // 0 20 40 60 80 next last
+    // first previous 20 40 *60* 80 100 next last
+    // fist previous 40 60 80 100 120
+    public int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if( m_total &lt;= m_pagesize ) return SKIP_BODY;</span>
+
+<span class="nc" id="L130">        StringBuilder pagination = new StringBuilder();</span>
+
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if( m_start &gt; m_total ) m_start = m_total;</span>
+<span class="nc bnc" id="L133" title="All 2 branches missed.">        if( m_start &lt; ALLITEMS ) m_start = 0;</span>
+
+<span class="nc" id="L135">        int maxs = m_pagesize * m_maxlinks;</span>
+<span class="nc" id="L136">        int mids = m_pagesize * ( m_maxlinks / 2 );</span>
+
+<span class="nc" id="L138">        pagination.append( &quot;&lt;div class='pagination'&gt;&quot;);</span>
+
+<span class="nc" id="L140">        pagination.append( LocaleSupport.getLocalizedMessage(pageContext, m_fmtkey )+ &quot; &quot; );</span>
+
+<span class="nc" id="L142">        int cursor = 0;</span>
+<span class="nc" id="L143">        int cursormax = m_total;</span>
+
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        if( m_total &gt; maxs )   //need to calculate real window ends</span>
+        {
+<span class="nc bnc" id="L147" title="All 2 branches missed.">          if( m_start &gt; mids ) cursor = m_start - mids;</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">          if( (cursor + maxs) &gt; m_total )</span>
+<span class="nc" id="L149">            cursor = ( ( 1 + m_total/m_pagesize ) * m_pagesize ) - maxs ;</span>
+
+<span class="nc" id="L151">          cursormax = cursor + maxs;</span>
+        }
+
+
+<span class="nc bnc" id="L155" title="All 4 branches missed.">        if( ( m_start == ALLITEMS ) || (cursor &gt; 0) )</span>
+        {
+<span class="nc" id="L157">            appendLink ( pagination, 0, m_fmtkey + &quot;.first&quot; );</span>
+        }
+
+
+<span class="nc bnc" id="L161" title="All 4 branches missed.">        if( (m_start != ALLITEMS ) &amp;&amp; (m_start-m_pagesize &gt;= 0) )</span>
+        {
+<span class="nc" id="L163">            appendLink( pagination, m_start-m_pagesize, m_fmtkey + &quot;.previous&quot; );</span>
+        }
+
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        if( m_start != ALLITEMS )</span>
+        {
+<span class="nc bnc" id="L168" title="All 2 branches missed.">          while( cursor &lt; cursormax )</span>
+          {
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            if( cursor == m_start )</span>
+            {
+<span class="nc" id="L172">              pagination.append( &quot;&lt;span class='cursor'&gt;&quot; );</span>
+<span class="nc" id="L173">              pagination.append( 1 + cursor/m_pagesize );</span>
+<span class="nc" id="L174">              pagination.append( &quot;&lt;/span&gt;&quot; );</span>
+            }
+            else
+            {
+<span class="nc" id="L178">              appendLink( pagination, cursor, 1+cursor/m_pagesize );</span>
+            }
+<span class="nc" id="L180">            cursor += m_pagesize;</span>
+          }
+        }
+
+
+<span class="nc bnc" id="L185" title="All 4 branches missed.">        if( (m_start != ALLITEMS ) &amp;&amp; (m_start + m_pagesize &lt; m_total) )</span>
+        {
+<span class="nc" id="L187">            appendLink( pagination, m_start+m_pagesize, m_fmtkey + &quot;.next&quot; );</span>
+
+<span class="nc bnc" id="L189" title="All 4 branches missed.">        if( (m_start == ALLITEMS ) || (cursormax &lt; m_total) )</span>
+<span class="nc" id="L190">          appendLink ( pagination, ( (m_total/m_pagesize) * m_pagesize ), m_fmtkey + &quot;.last&quot; );</span>
+        }
+
+<span class="nc bnc" id="L193" title="All 2 branches missed.">        if( m_start == ALLITEMS )</span>
+        {
+<span class="nc" id="L195">          pagination.append( &quot;&lt;span class='cursor'&gt;&quot; );</span>
+<span class="nc" id="L196">          pagination.append( LocaleSupport.getLocalizedMessage(pageContext, m_fmtkey + &quot;.all&quot; ) );</span>
+<span class="nc" id="L197">          pagination.append( &quot;&lt;/span&gt;&amp;nbsp;&amp;nbsp;&quot; );</span>
+        }
+        else
+        {
+<span class="nc" id="L201">          appendLink ( pagination, ALLITEMS, m_fmtkey + &quot;.all&quot; );</span>
+        }
+
+        //(Total items: &quot; + m_total + &quot;)&quot; );
+<span class="nc" id="L205">        pagination.append( LocaleSupport.getLocalizedMessage(pageContext, m_fmtkey + &quot;.total&quot;,</span>
+<span class="nc" id="L206">                           new Object[]{ m_total } ) );</span>
+
+<span class="nc" id="L208">        pagination.append( &quot;&lt;/div&gt;&quot; );</span>
+
+
+        /* +++ processing done +++ */
+
+<span class="nc" id="L213">        String p = pagination.toString();</span>
+
+<span class="nc" id="L215">        pageContext.getOut().println( p );</span>
+
+<span class="nc" id="L217">        pageContext.setAttribute( &quot;pagination&quot;, p ); /* and cache for later use in page context */</span>
+
+<span class="nc" id="L219">        return SKIP_BODY;</span>
+    }
+
+
+    /**
+     * Generate pagination links &lt;a href='' title='' onclick=''&gt;text&lt;/a&gt;
+     * for pagination blocks starting a page.
+     * Uses m_href and m_onclick as attribute patterns
+     * '%s' in the patterns are replaced with page offset
+     *
+     * @param sb  : stringbuilder to write output to
+     * @param page : start of page block
+     * @param onclick : link text
+     *
+     **/
+    private void appendLink( StringBuilder sb, int page, String fmttextkey )
+    {
+<span class="nc" id="L236">        appendLink2( sb, page, LocaleSupport.getLocalizedMessage( pageContext, fmttextkey ) );</span>
+<span class="nc" id="L237">    }</span>
+    private void appendLink( StringBuilder sb, int page, int paginationblock )
+    {
+<span class="nc" id="L240">        appendLink2( sb, page, Integer.toString( paginationblock ) );</span>
+<span class="nc" id="L241">    }</span>
+    private void appendLink2( StringBuilder sb, int page, String text )
+    {
+<span class="nc" id="L244">        sb.append( &quot;&lt;a title=\&quot;&quot; );</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if( page == ALLITEMS )</span>
+        {
+<span class="nc" id="L247">            sb.append( LocaleSupport.getLocalizedMessage( pageContext, m_fmtkey + &quot;.showall.title&quot; ) );</span>
+        }
+        else
+        {
+<span class="nc" id="L251">            sb.append( LocaleSupport.getLocalizedMessage( pageContext, m_fmtkey + &quot;.show.title&quot;,</span>
+<span class="nc" id="L252">                       new Object[]{ page + 1, page + m_pagesize } ) );</span>
+        }
+<span class="nc" id="L254">        sb.append( &quot;\&quot; &quot; );</span>
+
+<span class="nc bnc" id="L256" title="All 2 branches missed.">        if( m_href != null )</span>
+        {
+<span class="nc" id="L258">            sb.append( &quot;href=\&quot;&quot; );</span>
+<span class="nc" id="L259">            sb.append( TextUtil.replaceString( m_href, &quot;%s&quot;, Integer.toString( page ) ) );</span>
+<span class="nc" id="L260">            sb.append( &quot;\&quot; &quot; );</span>
+        }
+
+<span class="nc bnc" id="L263" title="All 2 branches missed.">        if( m_onclick != null )</span>
+        {
+<span class="nc" id="L265">            sb.append( &quot;onclick=\&quot;&quot; );</span>
+<span class="nc" id="L266">            sb.append( TextUtil.replaceString( m_onclick, &quot;%s&quot;, Integer.toString( page ) ) );</span>
+<span class="nc" id="L267">            sb.append( &quot;\&quot; &quot; );</span>
+        }
+
+<span class="nc" id="L270">        sb.append( &quot;&gt;&quot; );</span>
+<span class="nc" id="L271">        sb.append( text );</span>
+<span class="nc" id="L272">        sb.append( &quot;&lt;/a&gt;&quot; );</span>
+<span class="nc" id="L273">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

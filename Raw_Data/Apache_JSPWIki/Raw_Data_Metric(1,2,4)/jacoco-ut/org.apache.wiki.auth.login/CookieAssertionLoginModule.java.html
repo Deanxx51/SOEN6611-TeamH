@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CookieAssertionLoginModule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">CookieAssertionLoginModule.java</span></div><h1>CookieAssertionLoginModule.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth.login;
+
+import java.io.IOException;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.FailedLoginException;
+import javax.security.auth.login.LoginException;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * &lt;p&gt;
+ * Logs in a user based on assertion of a name supplied in a cookie. If the
+ * cookie is not found, authentication fails.
+ * &lt;/p&gt;
+ * This module must be used with a CallbackHandler (such as
+ * {@link WebContainerCallbackHandler}) that supports the following Callback
+ * types:
+ * &lt;/p&gt;
+ * &lt;ol&gt;
+ * &lt;li&gt;{@link HttpRequestCallback}- supplies the cookie, which should contain
+ * a user name.&lt;/li&gt;
+ * &lt;/ol&gt;
+ * &lt;p&gt;
+ * After authentication, a generic WikiPrincipal based on the username will be
+ * created and associated with the Subject.
+ * &lt;/p&gt;
+ * @see javax.security.auth.spi.LoginModule#commit()
+ * @see CookieAuthenticationLoginModule
+ * @since 2.3
+ */
+<span class="fc" id="L58">public class CookieAssertionLoginModule extends AbstractLoginModule</span>
+{
+
+    /** The name of the cookie that gets stored to the user browser. */
+    public static final String PREFS_COOKIE_NAME = &quot;JSPWikiAssertedName&quot;;
+
+    /** Believed to be unused.
+     *  @deprecated */
+    public static final String PROMPT            = &quot;User name&quot;;
+
+<span class="fc" id="L68">    protected static final Logger    log         = Logger.getLogger( CookieAssertionLoginModule.class );</span>
+
+    /**
+     * Logs in the user by calling back to the registered CallbackHandler with
+     * an HttpRequestCallback. The CallbackHandler must supply the current
+     * servlet HTTP request as its response.
+     * @return the result of the login; if a cookie is
+     * found, this method returns &lt;code&gt;true&lt;/code&gt;. If not found, this
+     * method throws a &lt;code&gt;FailedLoginException&lt;/code&gt;.
+     * @see javax.security.auth.spi.LoginModule#login()
+     * @throws {@inheritDoc}
+     */
+    public boolean login() throws LoginException
+    {
+        // Otherwise, let's go and look for the cookie!
+<span class="fc" id="L83">        HttpRequestCallback hcb = new HttpRequestCallback();</span>
+<span class="fc" id="L84">        Callback[] callbacks = new Callback[]</span>
+        { hcb };
+        try
+        {
+<span class="fc" id="L88">            m_handler.handle( callbacks );</span>
+<span class="fc" id="L89">            HttpServletRequest request = hcb.getRequest();</span>
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">            HttpSession session = ( request == null ) ? null : request.getSession( false );</span>
+<span class="pc bpc" id="L91" title="1 of 2 branches missed.">            String sid = ( session == null ) ? NULL : session.getId();</span>
+<span class="pc bpc" id="L92" title="1 of 2 branches missed.">            String name = (request != null) ? getUserCookie( request ) : null;</span>
+<span class="fc bfc" id="L93" title="All 2 branches covered.">            if ( name == null )</span>
+            {
+<span class="pc bpc" id="L95" title="1 of 2 branches missed.">                if ( log.isDebugEnabled() )</span>
+                {
+<span class="nc" id="L97">                    log.debug( &quot;No cookie &quot; + PREFS_COOKIE_NAME + &quot; present in session ID=:  &quot; + sid );</span>
+                }
+<span class="fc" id="L99">                throw new FailedLoginException( &quot;The user cookie was not found.&quot; );</span>
+            }
+
+<span class="pc bpc" id="L102" title="1 of 2 branches missed.">            if ( log.isDebugEnabled() )</span>
+            {
+<span class="nc" id="L104">                log.debug( &quot;Logged in session ID=&quot; + sid + &quot;; asserted=&quot; + name );</span>
+            }
+            // If login succeeds, commit these principals/roles
+<span class="fc" id="L107">            m_principals.add( new WikiPrincipal( name, WikiPrincipal.FULL_NAME ) );</span>
+<span class="fc" id="L108">            return true;</span>
+        }
+<span class="nc" id="L110">        catch( IOException e )</span>
+        {
+<span class="nc" id="L112">            log.error( &quot;IOException: &quot; + e.getMessage() );</span>
+<span class="nc" id="L113">            return false;</span>
+        }
+<span class="nc" id="L115">        catch( UnsupportedCallbackException e )</span>
+        {
+<span class="nc" id="L117">            String message = &quot;Unable to handle callback, disallowing login.&quot;;</span>
+<span class="nc" id="L118">            log.error( message, e );</span>
+<span class="nc" id="L119">            throw new LoginException( message );</span>
+        }
+
+    }
+
+    /**
+     *  Returns the username cookie value.
+     *
+     *  @param request The Servlet request, as usual.
+     *  @return the username, as retrieved from the cookie
+     */
+    public static String getUserCookie( HttpServletRequest request )
+    {
+<span class="fc" id="L132">        String cookie = HttpUtil.retrieveCookieValue( request, PREFS_COOKIE_NAME );</span>
+
+<span class="fc" id="L134">        return TextUtil.urlDecodeUTF8(cookie);</span>
+    }
+
+    /**
+     *  Sets the username cookie.  The cookie value is URLEncoded in UTF-8.
+     *
+     *  @param response The Servlet response
+     *  @param name     The name to write into the cookie.
+     */
+    public static void setUserCookie( HttpServletResponse response, String name )
+    {
+<span class="nc" id="L145">        name = TextUtil.urlEncodeUTF8(name);</span>
+<span class="nc" id="L146">        Cookie userId = new Cookie( PREFS_COOKIE_NAME, name );</span>
+<span class="nc" id="L147">        userId.setMaxAge( 1001 * 24 * 60 * 60 ); // 1001 days is default.</span>
+<span class="nc" id="L148">        response.addCookie( userId );</span>
+<span class="nc" id="L149">    }</span>
+
+    /**
+     *  Removes the user cookie from the response.  This makes the user appear
+     *  again as an anonymous coward.
+     *
+     *  @param response The servlet response.
+     */
+    public static void clearUserCookie( HttpServletResponse response )
+    {
+<span class="nc" id="L159">        Cookie userId = new Cookie( PREFS_COOKIE_NAME, &quot;&quot; );</span>
+<span class="nc" id="L160">        userId.setMaxAge( 0 );</span>
+<span class="nc" id="L161">        response.addCookie( userId );</span>
+<span class="nc" id="L162">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

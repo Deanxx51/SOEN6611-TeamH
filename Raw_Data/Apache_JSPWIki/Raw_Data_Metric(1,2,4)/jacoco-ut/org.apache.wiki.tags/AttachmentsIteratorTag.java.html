@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AttachmentsIteratorTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">AttachmentsIteratorTag.java</span></div><h1>AttachmentsIteratorTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.util.List;
+
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.PageContext;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.attachment.AttachmentManager;
+
+/**
+ *  Iterates through the list of attachments one has.
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;page - Page name to refer to.  Default is the current page.
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.0
+ */
+
+// FIXME: Too much in common with IteratorTag - REFACTOR
+<span class="nc" id="L47">public class AttachmentsIteratorTag</span>
+    extends IteratorTag
+{
+    private static final long serialVersionUID = 0L;
+    
+<span class="nc" id="L52">    static    Logger    log = Logger.getLogger( AttachmentsIteratorTag.class );</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doStartTag()
+    {
+<span class="nc" id="L60">        m_wikiContext = (WikiContext) pageContext.getAttribute( WikiTagBase.ATTR_CONTEXT,</span>
+                                                                PageContext.REQUEST_SCOPE );
+
+<span class="nc" id="L63">        WikiEngine        engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L64">        AttachmentManager mgr    = engine.getAttachmentManager();</span>
+        WikiPage          page;
+
+<span class="nc" id="L67">        page = m_wikiContext.getPage();</span>
+
+<span class="nc bnc" id="L69" title="All 2 branches missed.">        if( !mgr.attachmentsEnabled() )</span>
+        {
+<span class="nc" id="L71">            return SKIP_BODY;</span>
+        }
+
+        try
+        {
+<span class="nc bnc" id="L76" title="All 4 branches missed.">            if( page != null &amp;&amp; engine.pageExists(page) )</span>
+            {
+<span class="nc" id="L78">                List&lt; Attachment &gt; atts = mgr.listAttachments( page );</span>
+
+<span class="nc bnc" id="L80" title="All 2 branches missed.">                if( atts == null )</span>
+                {
+<span class="nc" id="L82">                    log.debug(&quot;No attachments to display.&quot;);</span>
+                    // There are no attachments included
+<span class="nc" id="L84">                    return SKIP_BODY;</span>
+                }
+
+<span class="nc" id="L87">                m_iterator = atts.iterator();</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">                if( m_iterator.hasNext() )</span>
+                {
+<span class="nc" id="L91">                    Attachment  att = (Attachment) m_iterator.next();</span>
+
+<span class="nc" id="L93">                    WikiContext context = (WikiContext)m_wikiContext.clone();</span>
+<span class="nc" id="L94">                    context.setPage( att );</span>
+<span class="nc" id="L95">                    pageContext.setAttribute( WikiTagBase.ATTR_CONTEXT,</span>
+                                              context,
+                                              PageContext.REQUEST_SCOPE );
+
+<span class="nc" id="L99">                    pageContext.setAttribute( getId(), att );</span>
+<span class="nc" id="L100">                }</span>
+                else
+                {
+<span class="nc" id="L103">                    return SKIP_BODY;</span>
+                }
+<span class="nc" id="L105">            }</span>
+            else
+            {
+<span class="nc" id="L108">                return SKIP_BODY;</span>
+            }
+
+<span class="nc" id="L111">            return EVAL_BODY_BUFFERED;</span>
+        }
+<span class="nc" id="L113">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L115">            log.fatal(&quot;Provider failed while trying to iterator through history&quot;,e);</span>
+            // FIXME: THrow something.
+        }
+
+<span class="nc" id="L119">        return SKIP_BODY;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doAfterBody()
+    {
+<span class="nc bnc" id="L128" title="All 2 branches missed.">        if( bodyContent != null )</span>
+        {
+            try
+            {
+<span class="nc" id="L132">                JspWriter out = getPreviousOut();</span>
+<span class="nc" id="L133">                out.print(bodyContent.getString());</span>
+<span class="nc" id="L134">                bodyContent.clearBody();</span>
+            }
+<span class="nc" id="L136">            catch( IOException e )</span>
+            {
+<span class="nc" id="L138">                log.error(&quot;Unable to get inner tag text&quot;, e);</span>
+                // FIXME: throw something?
+<span class="nc" id="L140">            }</span>
+        }
+
+<span class="nc bnc" id="L143" title="All 4 branches missed.">        if( m_iterator != null &amp;&amp; m_iterator.hasNext() )</span>
+        {
+<span class="nc" id="L145">            Attachment att = (Attachment) m_iterator.next();</span>
+
+<span class="nc" id="L147">            WikiContext context = (WikiContext)m_wikiContext.clone();</span>
+<span class="nc" id="L148">            context.setPage( att );</span>
+<span class="nc" id="L149">            pageContext.setAttribute( WikiTagBase.ATTR_CONTEXT,</span>
+                                      context,
+                                      PageContext.REQUEST_SCOPE );
+
+<span class="nc" id="L153">            pageContext.setAttribute( getId(), att );</span>
+
+<span class="nc" id="L155">            return EVAL_BODY_BUFFERED;</span>
+        }
+
+<span class="nc" id="L158">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

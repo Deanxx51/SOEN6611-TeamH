@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultAdminBeanManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.admin</a> &gt; <span class="el_source">DefaultAdminBeanManager.java</span></div><h1>DefaultAdminBeanManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ui.admin;
+
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.List;
+
+import javax.management.DynamicMBean;
+import javax.management.InstanceAlreadyExistsException;
+import javax.management.InstanceNotFoundException;
+import javax.management.MBeanRegistrationException;
+import javax.management.MBeanServer;
+import javax.management.MalformedObjectNameException;
+import javax.management.NotCompliantMBeanException;
+import javax.management.ObjectName;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.Release;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.engine.AdminBeanManager;
+import org.apache.wiki.event.WikiEngineEvent;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.ui.admin.beans.CoreBean;
+import org.apache.wiki.ui.admin.beans.FilterBean;
+import org.apache.wiki.ui.admin.beans.PluginBean;
+import org.apache.wiki.ui.admin.beans.SearchManagerBean;
+import org.apache.wiki.ui.admin.beans.UserBean;
+
+
+/**
+ *  Provides a manager class for all AdminBeans within JSPWiki.  This class also manages registration for any
+ *  AdminBean which is also a JMX bean.
+ *
+ *  @since  2.5.52
+ */
+public class DefaultAdminBeanManager implements WikiEventListener, AdminBeanManager {
+
+    private WikiEngine m_engine;
+    private ArrayList&lt; AdminBean &gt;  m_allBeans;
+
+<span class="fc" id="L62">    private MBeanServer m_mbeanServer = null;</span>
+
+<span class="fc" id="L64">    private static Logger log = Logger.getLogger(DefaultAdminBeanManager.class);</span>
+
+<span class="fc" id="L66">    public DefaultAdminBeanManager( WikiEngine engine ) {</span>
+<span class="fc" id="L67">        log.info(&quot;Using JDK 1.5 Platform MBeanServer&quot;);</span>
+<span class="fc" id="L68">        m_mbeanServer = MBeanServerFactory15.getServer();</span>
+
+<span class="fc" id="L70">        m_engine = engine;</span>
+
+<span class="pc bpc" id="L72" title="1 of 2 branches missed.">        if( m_mbeanServer != null ) {</span>
+<span class="fc" id="L73">            log.info( m_mbeanServer.getClass().getName() );</span>
+<span class="fc" id="L74">            log.info( m_mbeanServer.getDefaultDomain() );</span>
+        }
+
+<span class="fc" id="L77">        m_engine.addWikiEventListener( this );</span>
+<span class="fc" id="L78">        initialize();</span>
+<span class="fc" id="L79">    }</span>
+
+    /* (non-Javadoc)
+	 * @see org.apache.wiki.ui.admin.AdminBeanManager#initialize()
+	 */
+    @Override
+	public void initialize() {
+<span class="fc" id="L86">        reload();</span>
+<span class="fc" id="L87">    }</span>
+
+    private String getJMXTitleString( int title ) {
+<span class="fc bfc" id="L90" title="All 3 branches covered.">        switch( title ) {</span>
+            case AdminBean.CORE:
+<span class="fc" id="L92">                return &quot;Core&quot;;</span>
+
+            case AdminBean.EDITOR:
+<span class="fc" id="L95">                return &quot;Editors&quot;;</span>
+
+            case AdminBean.UNKNOWN:
+            default:
+<span class="fc" id="L99">                return &quot;Unknown&quot;;</span>
+        }
+    }
+
+
+    /**
+     *  Register an AdminBean.  If the AdminBean is also a JMX MBean, it also gets registered to the MBeanServer
+     *  we've found.
+     *
+     *  @param ab AdminBean to register.
+     */
+    private void registerAdminBean( AdminBean ab ) {
+        try {
+<span class="pc bpc" id="L112" title="2 of 4 branches missed.">            if( ab instanceof DynamicMBean &amp;&amp; m_mbeanServer != null ) {</span>
+<span class="fc" id="L113">                ObjectName name = getObjectName( ab );</span>
+
+<span class="fc bfc" id="L115" title="All 2 branches covered.">                if( !m_mbeanServer.isRegistered( name ) ) {</span>
+<span class="fc" id="L116">                    m_mbeanServer.registerMBean( ab, name );</span>
+                }
+            }
+
+<span class="fc" id="L120">            m_allBeans.add( ab );</span>
+
+<span class="fc" id="L122">            log.info(&quot;Registered new admin bean &quot;+ab.getTitle());</span>
+<span class="nc" id="L123">        } catch( InstanceAlreadyExistsException e ) {</span>
+<span class="nc" id="L124">            log.error(&quot;Admin bean already registered to JMX&quot;,e);</span>
+<span class="nc" id="L125">        } catch( MBeanRegistrationException e ) {</span>
+<span class="nc" id="L126">            log.error(&quot;Admin bean cannot be registered to JMX&quot;,e);</span>
+<span class="nc" id="L127">        } catch( NotCompliantMBeanException e ) {</span>
+<span class="nc" id="L128">            log.error(&quot;Your admin bean is not very good&quot;,e);</span>
+<span class="nc" id="L129">        } catch( MalformedObjectNameException e ) {</span>
+<span class="nc" id="L130">            log.error(&quot;Your admin bean name is not very good&quot;,e);</span>
+<span class="nc" id="L131">        } catch( NullPointerException e ) {</span>
+<span class="nc" id="L132">            log.error(&quot;Evil NPE occurred&quot;,e);</span>
+<span class="pc" id="L133">        }</span>
+<span class="fc" id="L134">    }</span>
+
+    private ObjectName getObjectName(AdminBean ab) throws MalformedObjectNameException {
+<span class="fc" id="L137">        String component = getJMXTitleString( ab.getType() );</span>
+<span class="fc" id="L138">        String title     = ab.getTitle();</span>
+
+<span class="fc" id="L140">        ObjectName name = new ObjectName( Release.APPNAME + &quot;:component=&quot;+component+&quot;,name=&quot;+title );</span>
+<span class="fc" id="L141">        return name;</span>
+    }
+
+    /**
+     *  Registers all the beans from a collection of WikiModuleInfos.  If some of the beans
+     *  fail, logs the message and keeps going to the next bean.
+     *
+     *  @param c Collection of WikiModuleInfo instances
+     */
+    private void registerBeans( Collection&lt; WikiModuleInfo &gt; c ) {
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        for( Iterator&lt; WikiModuleInfo &gt; i = c.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L152">            String abname = i.next().getAdminBeanClass();</span>
+
+            try {
+<span class="pc bpc" id="L155" title="1 of 4 branches missed.">                if( abname != null &amp;&amp; abname.length() &gt; 0 ) {</span>
+<span class="fc" id="L156">                    Class&lt; ? &gt; abclass = Class.forName( abname );</span>
+<span class="fc" id="L157">                    AdminBean ab = ( AdminBean ) abclass.newInstance();</span>
+<span class="fc" id="L158">                    registerAdminBean( ab );</span>
+                }
+<span class="nc" id="L160">            } catch (ClassNotFoundException e) {</span>
+<span class="nc" id="L161">                log.error( e.getMessage(), e );</span>
+<span class="nc" id="L162">            } catch (InstantiationException e) {</span>
+<span class="nc" id="L163">                log.error( e.getMessage(), e );</span>
+<span class="nc" id="L164">            } catch (IllegalAccessException e) {</span>
+<span class="nc" id="L165">                log.error( e.getMessage(), e );</span>
+<span class="pc" id="L166">            }</span>
+<span class="fc" id="L167">        }</span>
+
+<span class="fc" id="L169">    }</span>
+
+    // FIXME: Should unload the beans first.
+    private void reload() {
+<span class="fc" id="L173">        m_allBeans = new ArrayList&lt;AdminBean&gt;();</span>
+
+        try {
+<span class="fc" id="L176">            registerAdminBean( new CoreBean( m_engine ) );</span>
+<span class="fc" id="L177">            registerAdminBean( new UserBean( m_engine ) );</span>
+<span class="fc" id="L178">            registerAdminBean( new SearchManagerBean( m_engine ) );</span>
+<span class="fc" id="L179">            registerAdminBean( new PluginBean( m_engine ) );</span>
+<span class="fc" id="L180">            registerAdminBean( new FilterBean( m_engine ) );</span>
+<span class="nc" id="L181">        } catch( NotCompliantMBeanException e ) {</span>
+<span class="nc" id="L182">            log.error( e.getMessage(), e );</span>
+<span class="fc" id="L183">        }</span>
+<span class="fc" id="L184">        registerBeans( m_engine.getEditorManager().modules() );</span>
+<span class="fc" id="L185">        registerBeans( m_engine.getPluginManager().modules() );</span>
+<span class="fc" id="L186">        registerBeans( m_engine.getFilterManager().modules() );</span>
+<span class="fc" id="L187">    }</span>
+
+    /* (non-Javadoc)
+	 * @see org.apache.wiki.ui.admin.AdminBeanManager#getAllBeans()
+	 */
+    @Override
+	public List&lt; AdminBean &gt; getAllBeans() {
+<span class="nc bnc" id="L194" title="All 2 branches missed.">        if( m_allBeans == null ) {</span>
+<span class="nc" id="L195">        	reload();</span>
+        }
+
+<span class="nc" id="L198">        return m_allBeans;</span>
+    }
+
+    /* (non-Javadoc)
+	 * @see org.apache.wiki.ui.admin.AdminBeanManager#findBean(java.lang.String)
+	 */
+    @Override
+	public AdminBean findBean( String id ) {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        for( Iterator&lt; AdminBean &gt; i = m_allBeans.iterator(); i.hasNext(); ) {</span>
+<span class="nc" id="L207">            AdminBean ab = i.next();</span>
+
+<span class="nc bnc" id="L209" title="All 2 branches missed.">            if( ab.getId().equals(id) ) {</span>
+<span class="nc" id="L210">            	return ab;</span>
+            }
+<span class="nc" id="L212">        }</span>
+
+<span class="nc" id="L214">        return null;</span>
+    }
+
+    /**
+     *  Provides a JDK 1.5-compliant version of the MBeanServerFactory. This will simply bind to the
+     *  platform MBeanServer.
+     */
+    private static final class MBeanServerFactory15 {
+        private MBeanServerFactory15()
+        {}
+
+        public static MBeanServer getServer() {
+<span class="fc" id="L226">            return ManagementFactory.getPlatformMBeanServer();</span>
+        }
+    }
+
+    /**
+     *  Returns the type identifier for a string type.
+     *
+     *  @param type A type string.
+     *  @return A type value.
+     */
+    @Override
+	public int getTypeFromString( String type ) {
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if( &quot;core&quot;.equals( type ) ) {</span>
+<span class="nc" id="L239">            return AdminBean.CORE;</span>
+<span class="nc bnc" id="L240" title="All 2 branches missed.">        } else if( &quot;editors&quot;.equals( type ) ) {</span>
+<span class="nc" id="L241">            return AdminBean.EDITOR;</span>
+        }
+
+<span class="nc" id="L244">        return AdminBean.UNKNOWN;</span>
+    }
+
+    /* (non-Javadoc)
+	 * @see org.apache.wiki.ui.admin.AdminBeanManager#actionPerformed(org.apache.wiki.event.WikiEvent)
+	 */
+    @Override
+	public void actionPerformed(WikiEvent event) {
+<span class="fc bfc" id="L252" title="All 2 branches covered.">        if( event instanceof WikiEngineEvent ) {</span>
+<span class="pc bpc" id="L253" title="1 of 2 branches missed.">            if( ( ( WikiEngineEvent )event ).getType() == WikiEngineEvent.SHUTDOWN ) {</span>
+<span class="nc bnc" id="L254" title="All 2 branches missed.">                for( Iterator&lt; AdminBean &gt; i = m_allBeans.iterator(); i.hasNext(); ) {</span>
+                    try {
+<span class="nc" id="L256">                        AdminBean ab = i.next();</span>
+<span class="nc" id="L257">                        ObjectName on = getObjectName( ab );</span>
+<span class="nc bnc" id="L258" title="All 2 branches missed.">                        if( m_mbeanServer.isRegistered( on ) ) {</span>
+<span class="nc" id="L259">                            m_mbeanServer.unregisterMBean(on);</span>
+<span class="nc" id="L260">                            log.info(&quot;Unregistered AdminBean &quot;+ab.getTitle());</span>
+                        }
+<span class="nc" id="L262">                    } catch( MalformedObjectNameException e ) {</span>
+<span class="nc" id="L263">                        log.error(&quot;Malformed object name when unregistering&quot;,e);</span>
+<span class="nc" id="L264">                    } catch (InstanceNotFoundException e) {</span>
+<span class="nc" id="L265">                        log.error(&quot;Object was registered; yet claims that it's not there&quot;,e);</span>
+<span class="nc" id="L266">                    } catch (MBeanRegistrationException e) {</span>
+<span class="nc" id="L267">                        log.error(&quot;Registration exception while unregistering&quot;,e);</span>
+<span class="nc" id="L268">                    }</span>
+                }
+            }
+        }
+<span class="fc" id="L272">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

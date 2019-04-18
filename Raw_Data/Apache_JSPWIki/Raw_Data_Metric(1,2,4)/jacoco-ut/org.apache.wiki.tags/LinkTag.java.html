@@ -1,0 +1,482 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>LinkTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">LinkTag.java</span></div><h1>LinkTag.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.tags;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.tagext.BodyContent;
+import javax.servlet.jsp.tagext.BodyTag;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.parser.LinkParsingOperations;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Provides a generic link tag for all kinds of linking
+ *  purposes.
+ *  &lt;p&gt;
+ *  If parameter &lt;i&gt;jsp&lt;/i&gt; is defined, constructs a URL pointing
+ *  to the specified JSP page, under the baseURL known by the WikiEngine.
+ *  Any ParamTag name-value pairs contained in the body are added to this
+ *  URL to provide support for arbitrary JSP calls.
+ *  &lt;p&gt;
+ *  @since 2.3.50
+ */
+<span class="nc" id="L52">public class LinkTag extends WikiLinkTag implements ParamHandler, BodyTag {</span>
+
+	static final long serialVersionUID = 0L;
+<span class="nc" id="L55">    private static final Logger log = Logger.getLogger( LinkTag.class );</span>
+
+<span class="nc" id="L57">    private String m_version = null;</span>
+<span class="nc" id="L58">    private String m_cssClass= null;</span>
+<span class="nc" id="L59">    private String m_style   = null;</span>
+<span class="nc" id="L60">    private String m_title   = null;</span>
+<span class="nc" id="L61">    private String m_target  = null;</span>
+<span class="nc" id="L62">    private String m_compareToVersion = null;</span>
+<span class="nc" id="L63">    private String m_rel       = null;</span>
+<span class="nc" id="L64">    private String m_jsp     = null;</span>
+<span class="nc" id="L65">    private String m_ref     = null;</span>
+<span class="nc" id="L66">    private String m_context = WikiContext.VIEW;</span>
+<span class="nc" id="L67">    private String m_accesskey = null;</span>
+<span class="nc" id="L68">    private String m_tabindex = null;</span>
+<span class="nc" id="L69">    private String m_templatefile = null;</span>
+
+<span class="nc" id="L71">    private boolean m_absolute = false;</span>
+<span class="nc" id="L72">    private boolean m_overrideAbsolute = false;</span>
+
+    private Map&lt;String, String&gt; m_containedParams;
+
+    private BodyContent m_bodyContent;
+
+    public void initTag()
+    {
+<span class="nc" id="L80">        super.initTag();</span>
+<span class="nc" id="L81">        m_version = m_cssClass = m_style = m_title = m_target = m_compareToVersion = m_rel = m_jsp = m_ref = m_accesskey = m_templatefile = null;</span>
+<span class="nc" id="L82">        m_context = WikiContext.VIEW;</span>
+<span class="nc" id="L83">        m_containedParams = new HashMap&lt;String, String&gt;();</span>
+<span class="nc" id="L84">        m_absolute = false;</span>
+<span class="nc" id="L85">    }</span>
+
+    public void setTemplatefile( String key )
+    {
+<span class="nc" id="L89">        m_templatefile = key;</span>
+<span class="nc" id="L90">    }</span>
+
+    public void setAccessKey( String key )
+    {
+<span class="nc" id="L94">        m_accesskey = key;</span>
+<span class="nc" id="L95">    }</span>
+
+    public void setAbsolute( String arg )
+    {
+<span class="nc" id="L99">        m_overrideAbsolute = true;</span>
+<span class="nc" id="L100">        m_absolute = TextUtil.isPositive( arg );</span>
+<span class="nc" id="L101">    }</span>
+
+    public String getVersion()
+    {
+<span class="nc" id="L105">        return m_version;</span>
+    }
+
+    public void setVersion( String arg )
+    {
+<span class="nc" id="L110">        m_version = arg;</span>
+<span class="nc" id="L111">    }</span>
+
+    public void setCssClass( String arg )
+    {
+<span class="nc" id="L115">        m_cssClass = arg;</span>
+<span class="nc" id="L116">    }</span>
+
+    public void setStyle( String style )
+    {
+<span class="nc" id="L120">        m_style = style;</span>
+<span class="nc" id="L121">    }</span>
+
+    public void setTitle( String title )
+    {
+<span class="nc" id="L125">        m_title = title;</span>
+<span class="nc" id="L126">    }</span>
+
+    public void setTarget( String target )
+    {
+<span class="nc" id="L130">        m_target = target;</span>
+<span class="nc" id="L131">    }</span>
+
+    public void setTabindex( String tabindex )
+    {
+<span class="nc" id="L135">        m_tabindex = tabindex;</span>
+<span class="nc" id="L136">    }</span>
+
+    public void setCompareToVersion( String ver )
+    {
+<span class="nc" id="L140">        m_compareToVersion = ver;</span>
+<span class="nc" id="L141">    }</span>
+
+    public void setRel( String rel )
+    {
+<span class="nc" id="L145">        m_rel = rel;</span>
+<span class="nc" id="L146">    }</span>
+
+    public void setRef( String ref )
+    {
+<span class="nc" id="L150">        m_ref = ref;</span>
+<span class="nc" id="L151">    }</span>
+
+    public void setJsp( String jsp )
+    {
+<span class="nc" id="L155">        m_jsp = jsp;</span>
+<span class="nc" id="L156">    }</span>
+
+    public void setContext( String context )
+    {
+<span class="nc" id="L160">        m_context = context;</span>
+<span class="nc" id="L161">    }</span>
+
+    /**
+     * Support for ParamTag supplied parameters in body.
+     */
+    public void setContainedParameter( String name, String value )
+    {
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if( name != null )</span>
+        {
+<span class="nc bnc" id="L170" title="All 2 branches missed.">            if( m_containedParams == null )</span>
+            {
+<span class="nc" id="L172">                m_containedParams = new HashMap&lt;String, String&gt;();</span>
+            }
+<span class="nc" id="L174">            m_containedParams.put( name, value );</span>
+        }
+<span class="nc" id="L176">    }</span>
+
+
+    /**
+     *  This method figures out what kind of an URL should be output.  It mirrors heavily
+     *  on JSPWikiMarkupParser.handleHyperlinks();
+     *
+     * @return the URL
+     * @throws ProviderException
+     */
+    private String figureOutURL()
+        throws ProviderException
+    {
+<span class="nc" id="L189">        String url = null;</span>
+<span class="nc" id="L190">        WikiEngine engine = m_wikiContext.getEngine();</span>
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if( m_pageName == null )</span>
+        {
+<span class="nc" id="L194">            WikiPage page = m_wikiContext.getPage();</span>
+
+<span class="nc bnc" id="L196" title="All 2 branches missed.">            if( page != null )</span>
+            {
+<span class="nc" id="L198">                m_pageName = page.getName();</span>
+            }
+        }
+
+<span class="nc bnc" id="L202" title="All 2 branches missed.">        if( m_templatefile != null )</span>
+        {
+<span class="nc" id="L204">            String params = addParamsForRecipient( null, m_containedParams );</span>
+<span class="nc" id="L205">            String template = engine.getTemplateDir();</span>
+<span class="nc" id="L206">            url = engine.getURL( WikiContext.NONE, &quot;templates/&quot;+template+&quot;/&quot;+m_templatefile, params, false );</span>
+<span class="nc" id="L207">        }</span>
+<span class="nc bnc" id="L208" title="All 2 branches missed.">        else if( m_jsp != null )</span>
+        {
+<span class="nc" id="L210">            String params = addParamsForRecipient( null, m_containedParams );</span>
+            //url = m_wikiContext.getURL( WikiContext.NONE, m_jsp, params );
+<span class="nc" id="L212">            url = engine.getURL( WikiContext.NONE, m_jsp, params, m_absolute );</span>
+<span class="nc" id="L213">        }</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">        else if( m_ref != null )</span>
+        {
+            int interwikipoint;
+
+<span class="nc bnc" id="L218" title="All 2 branches missed.">            if( new LinkParsingOperations( m_wikiContext ).isExternalLink(m_ref) )</span>
+            {
+<span class="nc" id="L220">                url = m_ref;</span>
+            }
+<span class="nc bnc" id="L222" title="All 2 branches missed.">            else if( (interwikipoint = m_ref.indexOf(&quot;:&quot;)) != -1 )</span>
+            {
+<span class="nc" id="L224">                String extWiki = m_ref.substring( 0, interwikipoint );</span>
+<span class="nc" id="L225">                String wikiPage = m_ref.substring( interwikipoint+1 );</span>
+
+<span class="nc" id="L227">                url = engine.getInterWikiURL( extWiki );</span>
+
+<span class="nc bnc" id="L229" title="All 2 branches missed.">                if( url != null )</span>
+                {
+<span class="nc" id="L231">                    url = TextUtil.replaceString( url, &quot;%s&quot;, wikiPage );</span>
+                }
+<span class="nc" id="L233">            }</span>
+<span class="nc bnc" id="L234" title="All 2 branches missed.">            else if( m_ref.startsWith(&quot;#&quot;) )</span>
+            {
+                // Local link
+            }
+<span class="nc bnc" id="L238" title="All 2 branches missed.">            else if( TextUtil.isNumber(m_ref) )</span>
+            {
+                // Reference
+            }
+            else
+            {
+<span class="nc" id="L244">                int hashMark = -1;</span>
+
+<span class="nc bnc" id="L246" title="All 2 branches missed.">                String parms = (m_version != null) ? &quot;version=&quot;+getVersion() : null;</span>
+
+                //
+                //  Internal wiki link, but is it an attachment link?
+                //
+<span class="nc" id="L251">                WikiPage p = engine.getPage( m_pageName );</span>
+
+<span class="nc bnc" id="L253" title="All 2 branches missed.">                if( p instanceof Attachment )</span>
+                {
+<span class="nc" id="L255">                    url = m_wikiContext.getURL( WikiContext.ATTACH, m_pageName );</span>
+                }
+<span class="nc bnc" id="L257" title="All 2 branches missed.">                else if( (hashMark = m_ref.indexOf('#')) != -1 )</span>
+                {
+                    // It's an internal Wiki link, but to a named section
+
+<span class="nc" id="L261">                    String namedSection = m_ref.substring( hashMark+1 );</span>
+<span class="nc" id="L262">                    String reallink     = m_ref.substring( 0, hashMark );</span>
+
+<span class="nc" id="L264">                    reallink = MarkupParser.cleanLink( reallink );</span>
+
+                    String matchedLink;
+<span class="nc" id="L267">                    String sectref = &quot;&quot;;</span>
+<span class="nc bnc" id="L268" title="All 2 branches missed.">                    if( (matchedLink = engine.getFinalPageName( reallink )) != null )</span>
+                    {
+<span class="nc" id="L270">                        sectref = &quot;section-&quot;+engine.encodeName(matchedLink)+&quot;-&quot;+namedSection;</span>
+<span class="nc" id="L271">                        sectref = &quot;#&quot;+sectref.replace('%', '_');</span>
+                    }
+                    else
+                    {
+<span class="nc" id="L275">                        matchedLink = reallink;</span>
+                    }
+
+<span class="nc" id="L278">                    url = makeBasicURL( m_context, matchedLink, parms, m_absolute ) + sectref;</span>
+<span class="nc" id="L279">                }</span>
+                else
+                {
+<span class="nc" id="L282">                    String reallink = MarkupParser.cleanLink( m_ref );</span>
+
+<span class="nc" id="L284">                    url = makeBasicURL( m_context, reallink, parms, m_absolute );</span>
+                }
+            }
+<span class="nc" id="L287">        }</span>
+<span class="nc bnc" id="L288" title="All 4 branches missed.">        else if( m_pageName != null &amp;&amp; m_pageName.length() &gt; 0 )</span>
+        {
+<span class="nc" id="L290">            WikiPage p = engine.getPage( m_pageName );</span>
+
+<span class="nc bnc" id="L292" title="All 2 branches missed.">            String parms = (m_version != null) ? &quot;version=&quot;+getVersion() : null;</span>
+
+<span class="nc" id="L294">            parms = addParamsForRecipient( parms, m_containedParams );</span>
+
+<span class="nc bnc" id="L296" title="All 2 branches missed.">            if( p instanceof Attachment )</span>
+            {
+<span class="nc" id="L298">                String ctx = m_context;</span>
+                // Switch context appropriately when attempting to view an
+                // attachment, but don't override the context setting otherwise
+<span class="nc bnc" id="L301" title="All 4 branches missed.">                if( m_context == null || m_context.equals( WikiContext.VIEW ) )</span>
+                {
+<span class="nc" id="L303">                    ctx = WikiContext.ATTACH;</span>
+                }
+<span class="nc" id="L305">                url = engine.getURL( ctx, m_pageName, parms, m_absolute );</span>
+                //url = m_wikiContext.getURL( ctx, m_pageName, parms );
+<span class="nc" id="L307">            }</span>
+            else
+            {
+<span class="nc" id="L310">                url = makeBasicURL( m_context, m_pageName, parms, m_absolute );</span>
+            }
+<span class="nc" id="L312">        }</span>
+        else
+        {
+<span class="nc" id="L315">            String page = engine.getFrontPage();</span>
+<span class="nc" id="L316">            url = makeBasicURL( m_context, page, null, m_absolute );</span>
+        }
+
+<span class="nc" id="L319">        return url;</span>
+    }
+
+    private String addParamsForRecipient( String addTo, Map&lt; String, String &gt; params )
+    {
+<span class="nc bnc" id="L324" title="All 4 branches missed.">        if( params == null || params.size() == 0 )</span>
+        {
+<span class="nc" id="L326">            return addTo;</span>
+        }
+<span class="nc" id="L328">        StringBuilder buf = new StringBuilder();</span>
+<span class="nc" id="L329">        Iterator&lt; Map.Entry&lt; String, String &gt; &gt; it = params.entrySet().iterator();</span>
+<span class="nc bnc" id="L330" title="All 2 branches missed.">        while( it.hasNext() )</span>
+        {
+<span class="nc" id="L332">            Map.Entry&lt; String, String &gt; e = it.next();</span>
+<span class="nc" id="L333">            String n = e.getKey();</span>
+<span class="nc" id="L334">            String v = e.getValue();</span>
+<span class="nc" id="L335">            buf.append( n );</span>
+<span class="nc" id="L336">            buf.append( &quot;=&quot; );</span>
+<span class="nc" id="L337">            buf.append( v );</span>
+<span class="nc bnc" id="L338" title="All 2 branches missed.">            if( it.hasNext() )</span>
+            {
+<span class="nc" id="L340">                buf.append( &quot;&amp;amp;&quot; );</span>
+            }
+<span class="nc" id="L342">        }</span>
+<span class="nc bnc" id="L343" title="All 2 branches missed.">        if( addTo == null )</span>
+        {
+<span class="nc" id="L345">            return buf.toString();</span>
+        }
+<span class="nc bnc" id="L347" title="All 2 branches missed.">        if( !addTo.endsWith( &quot;&amp;amp;&quot; ) )</span>
+        {
+<span class="nc" id="L349">            return addTo + &quot;&amp;amp;&quot; + buf.toString();</span>
+        }
+<span class="nc" id="L351">        return addTo + buf.toString();</span>
+    }
+
+    private String makeBasicURL( String context, String page, String parms, boolean absolute )
+    {
+        String url;
+<span class="nc" id="L357">        WikiEngine engine = m_wikiContext.getEngine();</span>
+
+<span class="nc bnc" id="L359" title="All 2 branches missed.">        if( context.equals( WikiContext.DIFF ) )</span>
+        {
+<span class="nc" id="L361">            int r1 = 0;</span>
+<span class="nc" id="L362">            int r2 = 0;</span>
+
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            if( DiffLinkTag.VER_LATEST.equals(getVersion()) )</span>
+            {
+<span class="nc" id="L366">                WikiPage latest = engine.getPage( page, WikiProvider.LATEST_VERSION );</span>
+
+<span class="nc" id="L368">                r1 = latest.getVersion();</span>
+<span class="nc" id="L369">            }</span>
+<span class="nc bnc" id="L370" title="All 2 branches missed.">            else if( DiffLinkTag.VER_PREVIOUS.equals(getVersion()) )</span>
+            {
+<span class="nc" id="L372">                r1 = m_wikiContext.getPage().getVersion() - 1;</span>
+<span class="nc bnc" id="L373" title="All 2 branches missed.">                r1 = (r1 &lt; 1 ) ? 1 : r1;</span>
+            }
+<span class="nc bnc" id="L375" title="All 2 branches missed.">            else if( DiffLinkTag.VER_CURRENT.equals(getVersion()) )</span>
+            {
+<span class="nc" id="L377">                r1 = m_wikiContext.getPage().getVersion();</span>
+            }
+            else
+            {
+<span class="nc" id="L381">                r1 = Integer.parseInt( getVersion() );</span>
+            }
+
+<span class="nc bnc" id="L384" title="All 2 branches missed.">            if( DiffLinkTag.VER_LATEST.equals(m_compareToVersion) )</span>
+            {
+<span class="nc" id="L386">                WikiPage latest = engine.getPage( page, WikiProvider.LATEST_VERSION );</span>
+
+<span class="nc" id="L388">                r2 = latest.getVersion();</span>
+<span class="nc" id="L389">            }</span>
+<span class="nc bnc" id="L390" title="All 2 branches missed.">            else if( DiffLinkTag.VER_PREVIOUS.equals(m_compareToVersion) )</span>
+            {
+<span class="nc" id="L392">                r2 = m_wikiContext.getPage().getVersion() - 1;</span>
+<span class="nc bnc" id="L393" title="All 2 branches missed.">                r2 = (r2 &lt; 1 ) ? 1 : r2;</span>
+            }
+<span class="nc bnc" id="L395" title="All 2 branches missed.">            else if( DiffLinkTag.VER_CURRENT.equals(m_compareToVersion) )</span>
+            {
+<span class="nc" id="L397">                r2 = m_wikiContext.getPage().getVersion();</span>
+            }
+            else
+            {
+<span class="nc" id="L401">                r2 = Integer.parseInt( m_compareToVersion );</span>
+            }
+
+<span class="nc" id="L404">            parms = &quot;r1=&quot;+r1+&quot;&amp;amp;r2=&quot;+r2;</span>
+        }
+
+        //url = m_wikiContext.getURL( m_context, m_pageName, parms );
+<span class="nc" id="L408">        url = engine.getURL( m_context, m_pageName, parms, m_absolute );</span>
+
+<span class="nc" id="L410">        return url;</span>
+    }
+
+    public int doWikiStartTag() throws Exception
+    {
+<span class="nc" id="L415">        return EVAL_BODY_BUFFERED;</span>
+    }
+
+    public int doEndTag()
+    {
+        try
+        {
+<span class="nc bnc" id="L422" title="All 2 branches missed.">            if( !m_overrideAbsolute )</span>
+            {
+                // TODO: see WikiContext.getURL(); this check needs to be specified somewhere.
+<span class="nc" id="L425">                WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L426">                m_absolute = &quot;absolute&quot;.equals( engine.getWikiProperties().getProperty( WikiEngine.PROP_REFSTYLE ) );</span>
+            }
+
+<span class="nc" id="L429">            JspWriter out = pageContext.getOut();</span>
+<span class="nc" id="L430">            String url = figureOutURL();</span>
+
+<span class="nc" id="L432">            StringBuilder sb = new StringBuilder( 20 );</span>
+
+<span class="nc bnc" id="L434" title="All 2 branches missed.">            sb.append( (m_cssClass != null)   ? &quot;class=\&quot;&quot;+m_cssClass+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L435" title="All 2 branches missed.">            sb.append( (m_style != null)   ? &quot;style=\&quot;&quot;+m_style+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L436" title="All 2 branches missed.">            sb.append( (m_target != null ) ? &quot;target=\&quot;&quot;+m_target+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">            sb.append( (m_title != null )  ? &quot;title=\&quot;&quot;+m_title+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L438" title="All 2 branches missed.">            sb.append( (m_rel != null )    ? &quot;rel=\&quot;&quot;+m_rel+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L439" title="All 2 branches missed.">            sb.append( (m_accesskey != null) ? &quot;accesskey=\&quot;&quot;+m_accesskey+&quot;\&quot; &quot; : &quot;&quot; );</span>
+<span class="nc bnc" id="L440" title="All 2 branches missed.">            sb.append( (m_tabindex != null) ? &quot;tabindex=\&quot;&quot;+m_tabindex+&quot;\&quot; &quot; : &quot;&quot; );</span>
+
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            switch( m_format )</span>
+            {
+              case URL:
+<span class="nc" id="L445">                out.print( url );</span>
+<span class="nc" id="L446">                break;</span>
+              default:
+              case ANCHOR:
+<span class="nc" id="L449">                out.print(&quot;&lt;a &quot;+sb.toString()+&quot; href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;);</span>
+                break;
+            }
+
+            // Add any explicit body content. This is not the intended use
+            // of LinkTag, but happens to be the way it has worked previously.
+<span class="nc bnc" id="L455" title="All 2 branches missed.">            if( m_bodyContent != null )</span>
+            {
+<span class="nc" id="L457">                String linktext = m_bodyContent.getString().trim();</span>
+<span class="nc" id="L458">                out.write( linktext );</span>
+            }
+
+            //  Finish off by closing opened anchor
+<span class="nc bnc" id="L462" title="All 2 branches missed.">            if( m_format == ANCHOR ) out.print(&quot;&lt;/a&gt;&quot;);</span>
+        }
+<span class="nc" id="L464">        catch( Exception e )</span>
+        {
+            // Yes, we want to catch all exceptions here, including RuntimeExceptions
+<span class="nc" id="L467">            log.error( &quot;Tag failed&quot;, e );</span>
+<span class="nc" id="L468">        }</span>
+
+<span class="nc" id="L470">        return EVAL_PAGE;</span>
+    }
+
+    public void setBodyContent( BodyContent bc )
+    {
+<span class="nc" id="L475">        m_bodyContent = bc;</span>
+<span class="nc" id="L476">    }</span>
+
+    public void doInitBody() throws JspException
+    {
+<span class="nc" id="L480">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

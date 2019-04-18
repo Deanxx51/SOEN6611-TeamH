@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SearchManagerBean.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.admin.beans</a> &gt; <span class="el_source">SearchManagerBean.java</span></div><h1>SearchManagerBean.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui.admin.beans;
+
+import java.util.Collection;
+
+import javax.management.NotCompliantMBeanException;
+
+import org.apache.wiki.WikiBackgroundThread;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.search.SearchManager;
+import org.apache.wiki.ui.admin.SimpleAdminBean;
+import org.apache.wiki.ui.progress.ProgressItem;
+
+/**
+ *  The SearchManagerBean is a simple AdminBean interface
+ *  to the SearchManager.  It currently can be used to force
+ *  a reload of all of the pages.
+ *
+ *  @since 2.6
+ */
+public class SearchManagerBean extends SimpleAdminBean
+{
+    private static final String PROGRESS_ID = &quot;searchmanagerbean.reindexer&quot;;
+
+<span class="fc" id="L44">    private static final String[] METHODS = { &quot;reload&quot; };</span>
+
+    // private static Logger log = Logger.getLogger( SearchManagerBean.class );
+
+    private WikiBackgroundThread m_updater;
+
+    public SearchManagerBean(WikiEngine engine) throws NotCompliantMBeanException
+    {
+<span class="fc" id="L52">        super();</span>
+<span class="fc" id="L53">        initialize(engine);</span>
+<span class="fc" id="L54">    }</span>
+
+    public String[] getAttributeNames()
+    {
+<span class="fc" id="L58">        return new String[0];</span>
+    }
+
+    public String[] getMethodNames()
+    {
+<span class="fc" id="L63">        return METHODS;</span>
+    }
+
+    public String getTitle()
+    {
+<span class="fc" id="L68">        return &quot;Search manager&quot;;</span>
+    }
+
+    /**
+     *  Starts a background thread which goes through all the pages and adds them
+     *  to the reindex queue.
+     *  &lt;p&gt;
+     *  This method prevents itself from being called twice.
+     */
+    public synchronized void reload()
+    {
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if( m_updater == null )</span>
+        {
+<span class="nc" id="L81">            m_updater = new WikiBackgroundThread(m_engine, 0) {</span>
+                int m_count;
+                int m_max;
+
+                public void startupTask() throws Exception
+                {
+<span class="nc" id="L87">                    super.startupTask();</span>
+
+<span class="nc" id="L89">                    setName(&quot;Reindexer started&quot;);</span>
+<span class="nc" id="L90">                }</span>
+
+                public void backgroundTask() throws Exception
+                {
+<span class="nc" id="L94">                    Collection&lt;WikiPage&gt; allPages = m_engine.getPageManager().getAllPages();</span>
+
+<span class="nc" id="L96">                    SearchManager mgr = m_engine.getSearchManager();</span>
+<span class="nc" id="L97">                    m_max = allPages.size();</span>
+
+<span class="nc" id="L99">                    ProgressItem pi = new ProgressItem() {</span>
+                        public int getProgress()
+                        {
+<span class="nc" id="L102">                            return 100 * m_count / m_max;</span>
+                        }
+                    };
+
+<span class="nc" id="L106">                    m_engine.getProgressManager().startProgress( pi, PROGRESS_ID );</span>
+
+<span class="nc bnc" id="L108" title="All 2 branches missed.">                    for( WikiPage page : allPages )</span>
+                    {
+<span class="nc" id="L110">                        mgr.reindexPage(page);</span>
+<span class="nc" id="L111">                        m_count++;</span>
+<span class="nc" id="L112">                    }</span>
+
+<span class="nc" id="L114">                    m_engine.getProgressManager().stopProgress( PROGRESS_ID );</span>
+<span class="nc" id="L115">                    shutdown();</span>
+<span class="nc" id="L116">                    m_updater = null;</span>
+<span class="nc" id="L117">                }</span>
+
+            };
+
+<span class="nc" id="L121">            m_updater.start();</span>
+        }
+<span class="nc" id="L123">    }</span>
+
+    public int getType()
+    {
+<span class="fc" id="L127">        return CORE;</span>
+    }
+
+    public String doGet(WikiContext context)
+    {
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if( m_updater != null )</span>
+        {
+<span class="nc" id="L134">            return &quot;Update already in progress (&quot;+</span>
+<span class="nc" id="L135">                   context.getEngine().getProgressManager().getProgress(PROGRESS_ID)+</span>
+                   &quot;%)&quot;;
+        }
+
+<span class="nc" id="L139">        return &quot;&lt;input type='submit' id='searchmanagerbean-reload' name='searchmanagerbean-reload' value='Force index reload'/&gt;&quot;+</span>
+               &quot;&lt;div class='description'&gt;Forces JSPWiki search engine to reindex all pages.  Use this if you think some pages are not being found even if they should.&lt;/div&gt;&quot;;
+    }
+
+    public String doPost(WikiContext context)
+    {
+<span class="nc" id="L145">        String val = context.getHttpParameter(&quot;searchmanagerbean-reload&quot;);</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if( val != null )</span>
+        {
+<span class="nc" id="L149">            reload();</span>
+
+<span class="nc" id="L151">            context.getWikiSession().addMessage( &quot;Started reload of all indexed pages...&quot; );</span>
+
+<span class="nc" id="L153">            return &quot;&quot;;</span>
+        }
+
+<span class="nc" id="L156">        return doGet(context);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

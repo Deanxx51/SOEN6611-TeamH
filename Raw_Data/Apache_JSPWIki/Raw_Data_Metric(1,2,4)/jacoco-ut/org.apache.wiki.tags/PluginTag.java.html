@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PluginTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">PluginTag.java</span></div><h1>PluginTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.util.Map;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.jsp.tagext.BodyContent;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.engine.PluginManager;
+import org.apache.wiki.api.exceptions.PluginException;
+
+/**
+ *  Inserts any Wiki plugin.  The body of the tag becomes then
+ *  the body for the plugin.
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;plugin - name of the plugin you want to insert.
+ *    &lt;LI&gt;args   - An argument string for the tag.
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L43">public class PluginTag</span>
+    extends WikiBodyTag
+{
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L47">    private static final Logger log = Logger.getLogger( PluginTag.class );</span>
+    
+    private String m_plugin;
+    private String m_args;
+
+<span class="nc" id="L52">    private boolean m_evaluated = false;</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void release()
+    {
+<span class="nc" id="L60">        super.release();</span>
+<span class="nc" id="L61">        m_plugin = m_args = null;</span>
+<span class="nc" id="L62">        m_evaluated = false;</span>
+<span class="nc" id="L63">    }</span>
+    
+    /**
+     *  Set the name of the plugin to execute.
+     *  
+     *  @param p Name of the plugin.
+     */
+    public void setPlugin( String p )
+    {
+<span class="nc" id="L72">        m_plugin = p;</span>
+<span class="nc" id="L73">    }</span>
+
+    /**
+     *  Set the argument string to the plugin.
+     *  
+     *  @param a Arguments string.
+     */
+    public void setArgs( String a )
+    {
+<span class="nc" id="L82">        m_args = a;</span>
+<span class="nc" id="L83">    }</span>
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doWikiStartTag() throws JspException, IOException
+    {
+<span class="nc" id="L91">        m_evaluated = false;</span>
+<span class="nc" id="L92">        return EVAL_BODY_BUFFERED;</span>
+    }
+
+    private String executePlugin( String plugin, String args, String body )
+        throws PluginException, IOException
+    {
+<span class="nc" id="L98">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L99">        PluginManager pm  = engine.getPluginManager();</span>
+
+<span class="nc" id="L101">        m_evaluated = true;</span>
+
+<span class="nc" id="L103">        Map&lt;String, String&gt; argmap = pm.parseArgs( args );</span>
+        
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if( body != null ) </span>
+        {
+<span class="nc" id="L107">            argmap.put( &quot;_body&quot;, body );</span>
+        }
+
+<span class="nc" id="L110">        String result = pm.execute( m_wikiContext, plugin, argmap );</span>
+
+<span class="nc" id="L112">        return result;        </span>
+    }
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doEndTag()
+        throws JspException
+    {
+<span class="nc bnc" id="L122" title="All 2 branches missed.">        if( !m_evaluated )</span>
+        {
+            try
+            {
+<span class="nc" id="L126">                pageContext.getOut().write( executePlugin( m_plugin, m_args, null ) );</span>
+            }
+<span class="nc" id="L128">            catch( Exception e )</span>
+            {
+<span class="nc" id="L130">                log.error( &quot;Failed to insert plugin&quot;, e );</span>
+<span class="nc" id="L131">                throw new JspException( &quot;Tag failed, check logs: &quot;+e.getMessage() );</span>
+<span class="nc" id="L132">            }</span>
+        }
+<span class="nc" id="L134">        return EVAL_PAGE;</span>
+    }
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doAfterBody()
+        throws JspException
+    {
+        try
+        {
+<span class="nc" id="L146">            BodyContent bc = getBodyContent();</span>
+            
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            getPreviousOut().write( executePlugin( m_plugin, m_args, (bc != null) ? bc.getString() : null) );</span>
+        }
+<span class="nc" id="L150">        catch( Exception e )</span>
+        {
+<span class="nc" id="L152">            log.error( &quot;Failed to insert plugin&quot;, e );</span>
+<span class="nc" id="L153">            throw new JspException( &quot;Tag failed, check logs: &quot;+e.getMessage() );</span>
+<span class="nc" id="L154">        }</span>
+        
+<span class="nc" id="L156">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

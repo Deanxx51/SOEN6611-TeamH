@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AnonymousLoginModule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">AnonymousLoginModule.java</span></div><h1>AnonymousLoginModule.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth.login;
+
+import java.io.IOException;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.LoginException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.util.HttpUtil;
+
+/**
+ * &lt;p&gt;
+ * Logs in a user based solely on IP address; no other authentication is
+ * performed. Barring a mis-configuration or I/O error, this LoginModule
+ * &lt;em&gt;always&lt;/em&gt; succeeds.
+ * &lt;/p&gt;
+ * This module must be used with a CallbackHandler (such as
+ * {@link WebContainerCallbackHandler}) that supports the following Callback
+ * types:
+ * &lt;/p&gt;
+ * &lt;ol&gt;
+ * &lt;li&gt;{@link HttpRequestCallback}- supplies the IP address, which is used as
+ * a backup in case no name is supplied.&lt;/li&gt;
+ * &lt;/ol&gt;
+ * &lt;p&gt;
+ * After authentication, a generic WikiPrincipal based on the IP address will be
+ * created and associated with the Subject.
+ * @see javax.security.auth.spi.LoginModule#commit()
+ *      &lt;/p&gt;
+ * @since 2.3
+ */
+<span class="fc" id="L55">public class AnonymousLoginModule extends AbstractLoginModule</span>
+{
+
+    /**
+     * Bogus prompt sent to the callback handler.
+     */
+    public static final String PROMPT            = &quot;User name&quot;;
+
+<span class="fc" id="L63">    protected static final Logger log            = Logger.getLogger( AnonymousLoginModule.class );</span>
+
+    /**
+     * Logs in the user by calling back to the registered CallbackHandler with an
+     * HttpRequestCallback. The CallbackHandler must supply the current servlet
+     * HTTP request as its response.
+     * @return the result of the login; this will always be &lt;code&gt;true&lt;/code&gt;.
+     * @see javax.security.auth.spi.LoginModule#login()
+     * @throws {@inheritDoc}
+     */
+    public boolean login() throws LoginException
+    {
+        // Let's go and make a Principal based on the IP address
+<span class="fc" id="L76">        HttpRequestCallback hcb = new HttpRequestCallback();</span>
+<span class="fc" id="L77">        Callback[] callbacks = new Callback[]</span>
+        { hcb };
+        try
+        {
+<span class="fc" id="L81">            m_handler.handle( callbacks );</span>
+<span class="fc" id="L82">            HttpServletRequest request = hcb.getRequest();</span>
+<span class="fc" id="L83">            WikiPrincipal ipAddr = new WikiPrincipal( HttpUtil.getRemoteAddress(request) );</span>
+<span class="pc bpc" id="L84" title="1 of 2 branches missed.">            if ( log.isDebugEnabled() )</span>
+            {
+<span class="nc" id="L86">                HttpSession session = request.getSession( false );</span>
+<span class="nc bnc" id="L87" title="All 2 branches missed.">                String sid = (session == null) ? NULL : session.getId();</span>
+<span class="nc" id="L88">                log.debug(&quot;Logged in session ID=&quot; + sid + &quot;; IP=&quot; + ipAddr);</span>
+            }
+            // If login succeeds, commit these principals/roles
+<span class="fc" id="L91">            m_principals.add( ipAddr );</span>
+<span class="fc" id="L92">            return true;</span>
+        }
+<span class="nc" id="L94">        catch( IOException e )</span>
+        {
+<span class="nc" id="L96">            log.error(&quot;IOException: &quot; + e.getMessage());</span>
+<span class="nc" id="L97">            return false;</span>
+        }
+<span class="nc" id="L99">        catch( UnsupportedCallbackException e )</span>
+        {
+<span class="nc" id="L101">            String message = &quot;Unable to handle callback, disallowing login.&quot;;</span>
+<span class="nc" id="L102">            log.error( message, e );</span>
+<span class="nc" id="L103">            throw new LoginException( message );</span>
+        }
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

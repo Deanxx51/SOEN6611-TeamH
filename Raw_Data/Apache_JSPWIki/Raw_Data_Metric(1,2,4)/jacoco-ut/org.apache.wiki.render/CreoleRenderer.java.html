@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CreoleRenderer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.render</a> &gt; <span class="el_source">CreoleRenderer.java</span></div><h1>CreoleRenderer.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.render;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.parser.PluginContent;
+import org.apache.wiki.parser.WikiDocument;
+import org.jdom2.Content;
+import org.jdom2.Element;
+import org.jdom2.Text;
+
+/**
+ *  Implements DOM-to-Creole rendering.
+ *  &lt;p&gt;
+ *  FIXME: This class is not yet completely done.
+ *
+ */
+public class CreoleRenderer extends WikiRenderer
+{
+    private static final String IMG_START = &quot;{{&quot;;
+    private static final String IMG_END = &quot;}}&quot;;
+    private static final String PLUGIN_START = &quot;&lt;&lt;&quot;;
+    private static final String PLUGIN_END = &quot;&gt;&gt;&quot;;
+    private static final String HREF_START = &quot;[[&quot;;
+    private static final String HREF_DELIMITER = &quot;|&quot;;
+    private static final String HREF_END = &quot;]]&quot;;
+    private static final String PRE_START = &quot;{{{&quot;;
+    private static final String PRE_END = &quot;}}}&quot;;
+    private static final String PLUGIN_IMAGE = &quot;Image&quot;;
+    private static final String PARAM_SRC = &quot;src&quot;;
+    private static final String HREF_ATTRIBUTE = &quot;href&quot;;
+    private static final String ONE_SPACE = &quot; &quot;;
+    private static final String EMPTY_STRING = &quot;&quot;;
+    private static final String LINEBREAK = &quot;\n&quot;;
+    private static final String LI = &quot;li&quot;;
+    private static final String UL = &quot;ul&quot;;
+    private static final String OL = &quot;ol&quot;;
+    private static final String P  = &quot;p&quot;;
+    private static final String A  = &quot;a&quot;;
+    private static final String PRE = &quot;pre&quot;;
+
+    /**
+     * Contains element, start markup, end markup
+     */
+<span class="fc" id="L66">    private static final String[] ELEMENTS = {</span>
+       &quot;i&quot; , &quot;//&quot;    , &quot;//&quot;,
+       &quot;b&quot; , &quot;**&quot;    , &quot;**&quot;,
+       &quot;h2&quot;, &quot;== &quot;   , &quot; ==&quot;,
+       &quot;h3&quot;, &quot;=== &quot;  , &quot; ===&quot;,
+       &quot;h4&quot;, &quot;==== &quot; , &quot; ====&quot;,
+       &quot;hr&quot;, &quot;----&quot;  , EMPTY_STRING,
+       &quot;tt&quot;, &quot;&lt;&lt;{{&gt;&gt;&quot;, &quot;&lt;&lt;}}&gt;&gt;&quot;
+    };
+
+<span class="fc" id="L76">    private int m_listCount = 0;</span>
+<span class="fc" id="L77">    private char m_listChar = 'x';</span>
+
+<span class="fc" id="L79">    private List&lt;PluginContent&gt; m_plugins = new ArrayList&lt;PluginContent&gt;();</span>
+
+    /**
+     *  Creates a new Creole Renderer.
+     *
+     */
+    public CreoleRenderer( WikiContext ctx, WikiDocument doc )
+    {
+<span class="fc" id="L87">        super( ctx, doc );</span>
+<span class="fc" id="L88">    }</span>
+
+    /**
+     * Renders an element into the StringBuilder given
+     * @param ce
+     * @param sb
+     */
+    private void renderElement( Element ce, StringBuilder sb )
+    {
+<span class="fc" id="L97">        String endEl = EMPTY_STRING;</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">        for( int i = 0; i &lt; ELEMENTS.length; i+=3 )</span>
+        {
+<span class="fc bfc" id="L100" title="All 2 branches covered.">            if( ELEMENTS[i].equals(ce.getName()) )</span>
+            {
+<span class="fc" id="L102">                sb.append( ELEMENTS[i+1] );</span>
+<span class="fc" id="L103">                endEl = ELEMENTS[i+2];</span>
+            }
+        }
+
+<span class="fc bfc" id="L107" title="All 2 branches covered.">        if( UL.equals(ce.getName()) )</span>
+        {
+<span class="fc" id="L109">            m_listCount++;</span>
+<span class="fc" id="L110">            m_listChar = '*';</span>
+        }
+<span class="fc bfc" id="L112" title="All 2 branches covered.">        else if( OL.equals(ce.getName()) )</span>
+        {
+<span class="fc" id="L114">            m_listCount++;</span>
+<span class="fc" id="L115">            m_listChar = '#';</span>
+        }
+<span class="fc bfc" id="L117" title="All 2 branches covered.">        else if( LI.equals(ce.getName()) )</span>
+        {
+<span class="fc bfc" id="L119" title="All 2 branches covered.">            for(int i = 0; i &lt; m_listCount; i++ ) sb.append( m_listChar );</span>
+<span class="fc" id="L120">            sb.append( ONE_SPACE );</span>
+        }
+<span class="fc bfc" id="L122" title="All 2 branches covered.">        else if( A.equals(ce.getName()) )</span>
+        {
+<span class="fc" id="L124">            String href = ce.getAttributeValue( HREF_ATTRIBUTE );</span>
+<span class="fc" id="L125">            String text = ce.getText();</span>
+
+<span class="fc bfc" id="L127" title="All 2 branches covered.">            if( href.equals(text) )</span>
+            {
+<span class="fc" id="L129">                sb.append( HREF_START + href + HREF_END );</span>
+            }
+            else
+            {
+<span class="fc" id="L133">                sb.append( HREF_START + href+ HREF_DELIMITER + text +HREF_END);</span>
+            }
+            // Do not render anything else
+<span class="fc" id="L136">            return;</span>
+        }
+<span class="fc bfc" id="L138" title="All 2 branches covered.">        else if( PRE.equals(ce.getName()) )</span>
+        {
+<span class="fc" id="L140">            sb.append( PRE_START );</span>
+<span class="fc" id="L141">            sb.append( ce.getText() );</span>
+<span class="fc" id="L142">            sb.append( PRE_END );</span>
+
+<span class="fc" id="L144">            return;</span>
+        }
+
+        //
+        //  Go through the children
+        //
+<span class="fc bfc" id="L150" title="All 2 branches covered.">        for( Iterator&lt; Content &gt; i = ce.getContent().iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L152">            Content c = i.next();</span>
+
+<span class="fc bfc" id="L154" title="All 2 branches covered.">            if( c instanceof PluginContent )</span>
+            {
+<span class="fc" id="L156">                PluginContent pc = (PluginContent)c;</span>
+
+<span class="fc bfc" id="L158" title="All 2 branches covered.">                if( pc.getPluginName().equals( PLUGIN_IMAGE ) )</span>
+                {
+<span class="fc" id="L160">                    sb.append( IMG_START + pc.getParameter( PARAM_SRC ) + IMG_END );</span>
+                }
+                else
+                {
+<span class="fc" id="L164">                    m_plugins.add(pc);</span>
+<span class="fc" id="L165">                    sb.append( PLUGIN_START + pc.getPluginName() + ONE_SPACE + m_plugins.size() + PLUGIN_END );</span>
+                }
+<span class="fc" id="L167">            }</span>
+<span class="fc bfc" id="L168" title="All 2 branches covered.">            else if( c instanceof Text )</span>
+            {
+<span class="fc" id="L170">                sb.append( ((Text)c).getText() );</span>
+            }
+<span class="fc bfc" id="L172" title="All 2 branches covered.">            else if( c instanceof Element )</span>
+            {
+<span class="fc" id="L174">                renderElement( (Element)c, sb );</span>
+            }
+<span class="fc" id="L176">        }</span>
+
+<span class="fc bfc" id="L178" title="All 4 branches covered.">        if( UL.equals( ce.getName() ) || OL.equals( ce.getName() ) )</span>
+        {
+<span class="fc" id="L180">            m_listCount--;</span>
+        }
+<span class="pc bpc" id="L182" title="1 of 2 branches missed.">        else if( P.equals( ce.getName() ) )</span>
+        {
+<span class="nc" id="L184">            sb.append( LINEBREAK );</span>
+        }
+
+<span class="fc" id="L187">        sb.append(endEl);</span>
+<span class="fc" id="L188">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String getString() throws IOException
+    {
+<span class="fc" id="L195">    	StringBuilder sb = new StringBuilder(1000);</span>
+
+<span class="fc" id="L197">        Element ce = m_document.getRootElement();</span>
+
+        //
+        //  Traverse through the entire tree of everything.
+        //
+
+<span class="fc" id="L203">        renderElement( ce, sb );</span>
+
+<span class="fc" id="L205">        return sb.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

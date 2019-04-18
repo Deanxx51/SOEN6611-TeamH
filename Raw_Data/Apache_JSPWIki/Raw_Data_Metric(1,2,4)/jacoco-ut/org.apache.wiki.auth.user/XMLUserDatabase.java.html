@@ -1,0 +1,821 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>XMLUserDatabase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.user</a> &gt; <span class="el_source">XMLUserDatabase.java</span></div><h1>XMLUserDatabase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.user;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Serializable;
+import java.security.Principal;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Map;
+import java.util.Properties;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.util.Serializer;
+import org.apache.wiki.util.TextUtil;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.w3c.dom.Text;
+import org.xml.sax.SAXException;
+
+/**
+ * &lt;p&gt;Manages {@link DefaultUserProfile} objects using XML files for persistence.
+ * Passwords are hashed using SHA1. User entries are simple &lt;code&gt;&amp;lt;user&amp;gt;&lt;/code&gt;
+ * elements under the root. User profile properties are attributes of the
+ * element. For example:&lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;
+ * &amp;lt;users&amp;gt;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;lt;user loginName=&quot;janne&quot; fullName=&quot;Janne Jalkanen&quot;&lt;br/&gt; 
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;wikiName=&quot;JanneJalkanen&quot; email=&quot;janne@ecyrd.com&quot;&lt;br/&gt;
+ * &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;password=&quot;{SHA}457b08e825da547c3b77fbc1ff906a1d00a7daee&quot;/&amp;gt;&lt;br/&gt;
+ * &amp;lt;/users&amp;gt;
+ * &lt;/code&gt;&lt;/blockquote&gt; 
+ * &lt;p&gt;In this example, the un-hashed password is &lt;code&gt;myP@5sw0rd&lt;/code&gt;. Passwords are hashed without salt.&lt;/p&gt;
+ * @since 2.3
+ */
+
+// FIXME: If the DB is shared across multiple systems, it's possible to lose accounts
+//        if two people add new accounts right after each other from different wikis.
+<span class="fc" id="L74">public class XMLUserDatabase extends AbstractUserDatabase {</span>
+
+    /**
+     * The jspwiki.properties property specifying the file system location of
+     * the user database.
+     */
+    public static final String  PROP_USERDATABASE = &quot;jspwiki.xmlUserDatabaseFile&quot;;
+    
+    private static final String DEFAULT_USERDATABASE = &quot;userdatabase.xml&quot;;
+
+    private static final String ATTRIBUTES_TAG    = &quot;attributes&quot;;
+    
+    private static final String CREATED           = &quot;created&quot;;
+    
+    private static final String EMAIL             = &quot;email&quot;;
+
+    private static final String FULL_NAME         = &quot;fullName&quot;;
+
+    private static final String LOGIN_NAME        = &quot;loginName&quot;;
+
+    private static final String LAST_MODIFIED     = &quot;lastModified&quot;;
+    
+    private static final String LOCK_EXPIRY       = &quot;lockExpiry&quot;;
+
+    private static final String PASSWORD          = &quot;password&quot;;
+
+    private static final String UID               = &quot;uid&quot;;
+
+    private static final String USER_TAG          = &quot;user&quot;;
+
+    private static final String WIKI_NAME         = &quot;wikiName&quot;;
+
+    private static final String DATE_FORMAT       = &quot;yyyy.MM.dd 'at' HH:mm:ss:SSS z&quot;;
+
+<span class="fc" id="L108">    private Document            c_dom             = null;</span>
+
+<span class="fc" id="L110">    private File                c_file            = null;</span>
+
+    /**
+     * Looks up and deletes the first {@link UserProfile} in the user database
+     * that matches a profile having a given login name. If the user database
+     * does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}.
+     * @param loginName the login name of the user profile that shall be deleted
+     */
+    public synchronized void deleteByLoginName( String loginName ) throws NoSuchPrincipalException, WikiSecurityException
+    {
+<span class="pc bpc" id="L121" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L123">            throw new WikiSecurityException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+            
+<span class="fc" id="L126">        NodeList users = c_dom.getDocumentElement().getElementsByTagName( USER_TAG );</span>
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L129">            Element user = (Element) users.item( i );</span>
+<span class="fc bfc" id="L130" title="All 2 branches covered.">            if ( user.getAttribute( LOGIN_NAME ).equals( loginName ) )</span>
+            {
+<span class="fc" id="L132">                c_dom.getDocumentElement().removeChild(user);</span>
+                
+                // Commit to disk
+<span class="fc" id="L135">                saveDOM();</span>
+<span class="fc" id="L136">                return;</span>
+            }
+        }
+<span class="nc" id="L139">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + loginName );</span>
+    }        
+
+    /**
+     * Looks up and returns the first {@link UserProfile}in the user database
+     * that matches a profile having a given e-mail address. If the user
+     * database does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}.
+     * @param index the e-mail address of the desired user profile
+     * @return the user profile
+     * @see org.apache.wiki.auth.user.UserDatabase#findByEmail(String)
+     */
+    public UserProfile findByEmail( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L153">        UserProfile profile = findByAttribute( EMAIL, index );</span>
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L156">            return profile;</span>
+        }
+<span class="fc" id="L158">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + index );</span>
+    }
+
+    /**
+     * Looks up and returns the first {@link UserProfile}in the user database
+     * that matches a profile having a given full name. If the user database
+     * does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}.
+     * @param index the fill name of the desired user profile
+     * @return the user profile
+     * @see org.apache.wiki.auth.user.UserDatabase#findByFullName(java.lang.String)
+     */
+    public UserProfile findByFullName( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L172">        UserProfile profile = findByAttribute( FULL_NAME, index );</span>
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L175">            return profile;</span>
+        }
+<span class="fc" id="L177">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + index );</span>
+    }
+
+    /**
+     * Looks up and returns the first {@link UserProfile}in the user database
+     * that matches a profile having a given login name. If the user database
+     * does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}.
+     * @param index the login name of the desired user profile
+     * @return the user profile
+     * @see org.apache.wiki.auth.user.UserDatabase#findByLoginName(java.lang.String)
+     */
+    public UserProfile findByLoginName( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L191">        UserProfile profile = findByAttribute( LOGIN_NAME, index );</span>
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L194">            return profile;</span>
+        }
+<span class="fc" id="L196">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + index );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public UserProfile findByUid( String uid ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L204">        UserProfile profile = findByAttribute( UID, uid );</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L207">            return profile;</span>
+        }
+<span class="fc" id="L209">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + uid );</span>
+    }
+
+    /**
+     * Looks up and returns the first {@link UserProfile}in the user database
+     * that matches a profile having a given wiki name. If the user database
+     * does not contain a user with a matching attribute, throws a
+     * {@link NoSuchPrincipalException}.
+     * @param index the wiki name of the desired user profile
+     * @return the user profile
+     * @see org.apache.wiki.auth.user.UserDatabase#findByWikiName(java.lang.String)
+     */
+    public UserProfile findByWikiName( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L223">        UserProfile profile = findByAttribute( WIKI_NAME, index );</span>
+<span class="fc bfc" id="L224" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L226">            return profile;</span>
+        }
+<span class="fc" id="L228">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + index );</span>
+    }
+
+    /**
+     * Returns all WikiNames that are stored in the UserDatabase
+     * as an array of WikiPrincipal objects. If the database does not
+     * contain any profiles, this method will return a zero-length
+     * array.
+     * @return the WikiNames
+     * @throws WikiSecurityException In case things fail.
+     */
+    public Principal[] getWikiNames() throws WikiSecurityException
+    {
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L243">            throw new IllegalStateException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+<span class="fc" id="L245">        SortedSet&lt;Principal&gt; principals = new TreeSet&lt;Principal&gt;();</span>
+<span class="fc" id="L246">        NodeList users = c_dom.getElementsByTagName( USER_TAG );</span>
+<span class="fc bfc" id="L247" title="All 2 branches covered.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L249">            Element user = (Element) users.item( i );</span>
+<span class="fc" id="L250">            String wikiName = user.getAttribute( WIKI_NAME );</span>
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">            if ( wikiName == null )</span>
+            {
+<span class="nc" id="L253">                log.warn( &quot;Detected null wiki name in XMLUserDataBase. Check your user database.&quot; );</span>
+            }
+            else
+            {
+<span class="fc" id="L257">                Principal principal = new WikiPrincipal( wikiName, WikiPrincipal.WIKI_NAME );</span>
+<span class="fc" id="L258">                principals.add( principal );</span>
+            }
+        }
+<span class="fc" id="L261">        return principals.toArray( new Principal[principals.size()] );</span>
+    }
+    
+    /**
+     * Initializes the user database based on values from a Properties object.
+     * The properties object must contain a file path to the XML database file
+     * whose key is {@link #PROP_USERDATABASE}.
+     * @see org.apache.wiki.auth.user.UserDatabase#initialize(org.apache.wiki.WikiEngine,
+     *      java.util.Properties)
+     * @throws NoRequiredPropertyException if the user database cannot be located, parsed, or opened
+     */
+    public void initialize( WikiEngine engine, Properties props ) throws NoRequiredPropertyException
+    {
+<span class="fc" id="L274">        File defaultFile = null;</span>
+<span class="pc bpc" id="L275" title="1 of 2 branches missed.">        if( engine.getRootPath() == null )</span>
+        {
+<span class="fc" id="L277">            log.warn( &quot;Cannot identify JSPWiki root path&quot;  );</span>
+<span class="fc" id="L278">            defaultFile = new File( &quot;WEB-INF/&quot; + DEFAULT_USERDATABASE ).getAbsoluteFile();</span>
+        }
+        else
+        {
+<span class="nc" id="L282">            defaultFile = new File( engine.getRootPath() + &quot;/WEB-INF/&quot; + DEFAULT_USERDATABASE );</span>
+        }
+
+        // Get database file location
+<span class="fc" id="L286">        String file = TextUtil.getStringProperty(props, PROP_USERDATABASE, defaultFile.getAbsolutePath());</span>
+<span class="pc bpc" id="L287" title="1 of 2 branches missed.">        if( file == null )</span>
+        {
+<span class="nc" id="L289">            log.warn( &quot;XML user database property &quot; + PROP_USERDATABASE + &quot; not found; trying &quot; + defaultFile  );</span>
+<span class="nc" id="L290">            c_file = defaultFile;</span>
+        }
+        else 
+        {
+<span class="fc" id="L294">            c_file = new File( file );</span>
+        }
+
+<span class="fc" id="L297">        log.info(&quot;XML user database at &quot;+c_file.getAbsolutePath());</span>
+        
+<span class="fc" id="L299">        buildDOM();</span>
+<span class="fc" id="L300">        sanitizeDOM();</span>
+<span class="fc" id="L301">    }</span>
+    
+    private void buildDOM()
+    {
+        // Read DOM
+<span class="fc" id="L306">        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();</span>
+<span class="fc" id="L307">        factory.setValidating( false );</span>
+<span class="fc" id="L308">        factory.setExpandEntityReferences( false );</span>
+<span class="fc" id="L309">        factory.setIgnoringComments( true );</span>
+<span class="fc" id="L310">        factory.setNamespaceAware( false );</span>
+        try
+        {
+<span class="fc" id="L313">            c_dom = factory.newDocumentBuilder().parse( c_file );</span>
+<span class="fc" id="L314">            log.debug( &quot;Database successfully initialized&quot; );</span>
+<span class="fc" id="L315">            c_lastModified = c_file.lastModified();</span>
+<span class="fc" id="L316">            c_lastCheck    = System.currentTimeMillis();</span>
+        }
+<span class="nc" id="L318">        catch( ParserConfigurationException e )</span>
+        {
+<span class="nc" id="L320">            log.error( &quot;Configuration error: &quot; + e.getMessage() );</span>
+        }
+<span class="nc" id="L322">        catch( SAXException e )</span>
+        {
+<span class="nc" id="L324">            log.error( &quot;SAX error: &quot; + e.getMessage() );</span>
+        }
+<span class="fc" id="L326">        catch( FileNotFoundException e )</span>
+        {
+<span class="fc" id="L328">            log.info(&quot;User database not found; creating from scratch...&quot;);</span>
+        }
+<span class="nc" id="L330">        catch( IOException e )</span>
+        {
+<span class="nc" id="L332">            log.error( &quot;IO error: &quot; + e.getMessage() );</span>
+<span class="pc" id="L333">        }</span>
+<span class="fc bfc" id="L334" title="All 2 branches covered.">        if ( c_dom == null )</span>
+        {
+            try
+            {
+                //
+                //  Create the DOM from scratch
+                //
+<span class="fc" id="L341">                c_dom = factory.newDocumentBuilder().newDocument();</span>
+<span class="fc" id="L342">                c_dom.appendChild( c_dom.createElement( &quot;users&quot;) );</span>
+            }
+<span class="nc" id="L344">            catch( ParserConfigurationException e )</span>
+            {
+<span class="nc" id="L346">                log.fatal( &quot;Could not create in-memory DOM&quot; );</span>
+<span class="fc" id="L347">            }</span>
+        }
+<span class="fc" id="L349">    }</span>
+    
+    private void saveDOM() throws WikiSecurityException
+    {
+<span class="pc bpc" id="L353" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L355">            log.fatal( &quot;User database doesn't exist in memory.&quot; );</span>
+        }
+
+<span class="fc" id="L358">        File newFile = new File( c_file.getAbsolutePath() + &quot;.new&quot; );</span>
+        try
+        {
+<span class="fc" id="L361">            BufferedWriter io = new BufferedWriter( new OutputStreamWriter ( </span>
+                    new FileOutputStream( newFile ), &quot;UTF-8&quot; ) );
+            
+            // Write the file header and document root
+<span class="fc" id="L365">            io.write(&quot;&lt;?xml version=\&quot;1.0\&quot; encoding=\&quot;UTF-8\&quot;?&gt;\n&quot;);</span>
+<span class="fc" id="L366">            io.write(&quot;&lt;users&gt;\n&quot;);</span>
+            
+            // Write each profile as a &lt;user&gt; node
+<span class="fc" id="L369">            Element root = c_dom.getDocumentElement();</span>
+<span class="fc" id="L370">            NodeList nodes = root.getElementsByTagName( USER_TAG );  </span>
+<span class="fc bfc" id="L371" title="All 2 branches covered.">            for( int i = 0; i &lt; nodes.getLength(); i++ )</span>
+            {
+<span class="fc" id="L373">                Element user = (Element)nodes.item( i );</span>
+<span class="fc" id="L374">                io.write( &quot;    &lt;&quot; + USER_TAG + &quot; &quot;);</span>
+<span class="fc" id="L375">                io.write( UID );</span>
+<span class="fc" id="L376">                io.write( &quot;=\&quot;&quot; + user.getAttribute( UID ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L377">                io.write( LOGIN_NAME );</span>
+<span class="fc" id="L378">                io.write( &quot;=\&quot;&quot; + user.getAttribute( LOGIN_NAME ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L379">                io.write( WIKI_NAME );</span>
+<span class="fc" id="L380">                io.write( &quot;=\&quot;&quot; + user.getAttribute( WIKI_NAME ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L381">                io.write( FULL_NAME );</span>
+<span class="fc" id="L382">                io.write( &quot;=\&quot;&quot; + user.getAttribute( FULL_NAME ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L383">                io.write( EMAIL );</span>
+<span class="fc" id="L384">                io.write( &quot;=\&quot;&quot; + user.getAttribute( EMAIL ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L385">                io.write( PASSWORD );</span>
+<span class="fc" id="L386">                io.write( &quot;=\&quot;&quot; + user.getAttribute( PASSWORD ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L387">                io.write( CREATED );</span>
+<span class="fc" id="L388">                io.write( &quot;=\&quot;&quot; + user.getAttribute( CREATED ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L389">                io.write( LAST_MODIFIED );</span>
+<span class="fc" id="L390">                io.write( &quot;=\&quot;&quot; + user.getAttribute( LAST_MODIFIED ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L391">                io.write( LOCK_EXPIRY );</span>
+<span class="fc" id="L392">                io.write( &quot;=\&quot;&quot; + user.getAttribute( LOCK_EXPIRY ) + &quot;\&quot; &quot; );</span>
+<span class="fc" id="L393">                io.write( &quot;&gt;&quot; );</span>
+<span class="fc" id="L394">                NodeList attributes = user.getElementsByTagName( ATTRIBUTES_TAG );</span>
+<span class="fc bfc" id="L395" title="All 2 branches covered.">                for ( int j = 0; j &lt; attributes.getLength(); j++ )</span>
+                {
+<span class="fc" id="L397">                    Element attribute = (Element)attributes.item( j );</span>
+<span class="fc" id="L398">                    String value = extractText( attribute );</span>
+<span class="fc" id="L399">                    io.write( &quot;\n        &lt;&quot; + ATTRIBUTES_TAG + &quot;&gt;&quot; );</span>
+<span class="fc" id="L400">                    io.write( value );</span>
+<span class="fc" id="L401">                    io.write( &quot;&lt;/&quot; + ATTRIBUTES_TAG + &quot;&gt;&quot; );</span>
+                }
+<span class="fc" id="L403">                io.write(&quot;\n    &lt;/&quot; +USER_TAG + &quot;&gt;\n&quot;);</span>
+            }
+<span class="fc" id="L405">            io.write(&quot;&lt;/users&gt;&quot;);</span>
+<span class="fc" id="L406">            io.close();</span>
+        }
+<span class="nc" id="L408">        catch ( IOException e )</span>
+        {
+<span class="nc" id="L410">            throw new WikiSecurityException( e.getLocalizedMessage(), e );</span>
+<span class="fc" id="L411">        }</span>
+
+        // Copy new file over old version
+<span class="fc" id="L414">        File backup = new File( c_file.getAbsolutePath() + &quot;.old&quot; );</span>
+<span class="fc bfc" id="L415" title="All 2 branches covered.">        if ( backup.exists() )</span>
+        {
+<span class="pc bpc" id="L417" title="1 of 2 branches missed.">            if ( !backup.delete() )</span>
+            {
+<span class="nc" id="L419">                log.error( &quot;Could not delete old user database backup: &quot; + backup );</span>
+            }
+        }
+<span class="pc bpc" id="L422" title="1 of 2 branches missed.">        if ( !c_file.renameTo( backup ) )</span>
+        {
+<span class="nc" id="L424">            log.error( &quot;Could not create user database backup: &quot; + backup );</span>
+        }
+<span class="pc bpc" id="L426" title="1 of 2 branches missed.">        if ( !newFile.renameTo( c_file ) )</span>
+        {
+<span class="nc" id="L428">            log.error( &quot;Could not save database: &quot; + backup + &quot; restoring backup.&quot; );</span>
+<span class="nc bnc" id="L429" title="All 2 branches missed.">            if ( !backup.renameTo( c_file ) )</span>
+            {
+<span class="nc" id="L431">                log.error( &quot;Restore failed. Check the file permissions.&quot; );</span>
+            }
+<span class="nc" id="L433">            log.error( &quot;Could not save database: &quot; + c_file + &quot;. Check the file permissions&quot; );</span>
+        }
+<span class="fc" id="L435">    }</span>
+    
+<span class="fc" id="L437">    private long c_lastCheck    = 0;</span>
+<span class="fc" id="L438">    private long c_lastModified = 0;</span>
+    
+    private void checkForRefresh()
+    {
+<span class="fc" id="L442">        long time = System.currentTimeMillis();</span>
+        
+<span class="fc bfc" id="L444" title="All 2 branches covered.">        if( time - c_lastCheck &gt; 60*1000L )</span>
+        {
+<span class="fc" id="L446">            long lastModified = c_file.lastModified();</span>
+            
+<span class="pc bpc" id="L448" title="1 of 2 branches missed.">            if( lastModified &gt; c_lastModified )</span>
+            {
+<span class="nc" id="L450">                buildDOM();</span>
+            }
+        }
+<span class="fc" id="L453">    }</span>
+
+    /**
+     * @see org.apache.wiki.auth.user.UserDatabase#rename(String, String)
+     */
+    public synchronized void rename(String loginName, String newName) throws NoSuchPrincipalException, DuplicateUserException, WikiSecurityException
+    {
+<span class="pc bpc" id="L460" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L462">            log.fatal( &quot;Could not rename profile '&quot; + loginName + &quot;'; database does not exist&quot; );</span>
+<span class="nc" id="L463">            throw new IllegalStateException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+<span class="fc" id="L465">        checkForRefresh();</span>
+        
+        // Get the existing user; if not found, throws NoSuchPrincipalException
+<span class="fc" id="L468">        UserProfile profile = findByLoginName( loginName );</span>
+        
+        // Get user with the proposed name; if found, it's a collision
+        try 
+        {
+<span class="fc" id="L473">            UserProfile otherProfile = findByLoginName( newName );</span>
+<span class="pc bpc" id="L474" title="1 of 2 branches missed.">            if ( otherProfile != null )</span>
+            {
+<span class="fc" id="L476">                throw new DuplicateUserException( &quot;security.error.cannot.rename&quot;, newName );</span>
+            }
+        }
+<span class="fc" id="L479">        catch ( NoSuchPrincipalException e )</span>
+        {
+            // Good! That means it's safe to save using the new name
+<span class="nc" id="L482">        }</span>
+        
+        // Find the user with the old login id attribute, and change it
+<span class="fc" id="L485">        NodeList users = c_dom.getElementsByTagName( USER_TAG );</span>
+<span class="pc bpc" id="L486" title="1 of 2 branches missed.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L488">            Element user = (Element) users.item( i );</span>
+<span class="fc bfc" id="L489" title="All 2 branches covered.">            if ( user.getAttribute( LOGIN_NAME ).equals( loginName ) )</span>
+            {
+<span class="fc" id="L491">            	DateFormat c_format = new SimpleDateFormat( DATE_FORMAT );</span>
+<span class="fc" id="L492">                Date modDate = new Date( System.currentTimeMillis() );</span>
+<span class="fc" id="L493">                setAttribute( user, LOGIN_NAME, newName );</span>
+<span class="fc" id="L494">                setAttribute( user, LAST_MODIFIED, c_format.format( modDate ) );</span>
+<span class="fc" id="L495">                profile.setLoginName( newName );</span>
+<span class="fc" id="L496">                profile.setLastModified( modDate );</span>
+<span class="fc" id="L497">                break;</span>
+            }
+        }
+        
+        // Commit to disk
+<span class="fc" id="L502">        saveDOM();</span>
+<span class="fc" id="L503">    }</span>
+    
+    /**
+     * Saves a {@link UserProfile}to the user database, overwriting the
+     * existing profile if it exists. The user name under which the profile
+     * should be saved is returned by the supplied profile's
+     * {@link UserProfile#getLoginName()}method.
+     * @param profile the user profile to save
+     * @throws WikiSecurityException if the profile cannot be saved
+     */
+    public synchronized void save( UserProfile profile ) throws WikiSecurityException
+    {
+<span class="pc bpc" id="L515" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L517">            log.fatal( &quot;Could not save profile &quot; + profile + &quot; database does not exist&quot; );</span>
+<span class="nc" id="L518">            throw new IllegalStateException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+        
+<span class="fc" id="L521">        checkForRefresh();</span>
+        
+<span class="fc" id="L523">        DateFormat c_format = new SimpleDateFormat( DATE_FORMAT );</span>
+<span class="fc" id="L524">        String index = profile.getLoginName();</span>
+<span class="fc" id="L525">        NodeList users = c_dom.getElementsByTagName( USER_TAG );</span>
+<span class="fc" id="L526">        Element user = null;</span>
+<span class="fc bfc" id="L527" title="All 2 branches covered.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L529">            Element currentUser = (Element) users.item( i );</span>
+<span class="fc bfc" id="L530" title="All 2 branches covered.">            if ( currentUser.getAttribute( LOGIN_NAME ).equals( index ) )</span>
+            {
+<span class="fc" id="L532">                user = currentUser;</span>
+<span class="fc" id="L533">                break;</span>
+            }
+        }
+        
+<span class="fc" id="L537">        boolean isNew = false;</span>
+        
+<span class="fc" id="L539">        Date modDate = new Date( System.currentTimeMillis() );</span>
+<span class="fc bfc" id="L540" title="All 2 branches covered.">        if( user == null )</span>
+        {
+            // Create new user node
+<span class="fc" id="L543">            profile.setCreated( modDate );</span>
+<span class="fc" id="L544">            log.info( &quot;Creating new user &quot; + index );</span>
+<span class="fc" id="L545">            user = c_dom.createElement( USER_TAG );</span>
+<span class="fc" id="L546">            c_dom.getDocumentElement().appendChild( user );</span>
+<span class="fc" id="L547">            setAttribute( user, CREATED, c_format.format( profile.getCreated() ) );</span>
+<span class="fc" id="L548">            isNew = true;</span>
+        }
+        else
+        {
+            // To update existing user node, delete old attributes first...
+<span class="fc" id="L553">            NodeList attributes = user.getElementsByTagName( ATTRIBUTES_TAG );</span>
+<span class="fc bfc" id="L554" title="All 2 branches covered.">            for ( int i = 0; i &lt; attributes.getLength(); i++ )</span>
+            {
+<span class="fc" id="L556">                user.removeChild( attributes.item( i ) );</span>
+            }
+        }
+        
+<span class="fc" id="L560">        setAttribute( user, UID, profile.getUid() );</span>
+<span class="fc" id="L561">        setAttribute( user, LAST_MODIFIED, c_format.format( modDate ) );</span>
+<span class="fc" id="L562">        setAttribute( user, LOGIN_NAME, profile.getLoginName() );</span>
+<span class="fc" id="L563">        setAttribute( user, FULL_NAME, profile.getFullname() );</span>
+<span class="fc" id="L564">        setAttribute( user, WIKI_NAME, profile.getWikiName() );</span>
+<span class="fc" id="L565">        setAttribute( user, EMAIL, profile.getEmail() );</span>
+<span class="fc" id="L566">        Date lockExpiry = profile.getLockExpiry();</span>
+<span class="pc bpc" id="L567" title="1 of 2 branches missed.">        setAttribute( user, LOCK_EXPIRY, lockExpiry == null ? &quot;&quot; : c_format.format( lockExpiry ) );</span>
+
+        // Hash and save the new password if it's different from old one
+<span class="fc" id="L570">        String newPassword = profile.getPassword();</span>
+<span class="pc bpc" id="L571" title="1 of 4 branches missed.">        if ( newPassword != null &amp;&amp; !newPassword.equals( &quot;&quot; ) )</span>
+        {
+<span class="fc" id="L573">            String oldPassword = user.getAttribute( PASSWORD );</span>
+<span class="fc bfc" id="L574" title="All 2 branches covered.">            if ( !oldPassword.equals( newPassword ) )</span>
+            {
+<span class="fc" id="L576">                setAttribute( user, PASSWORD, getHash( newPassword ) );</span>
+            }
+        }
+        
+        // Save the attributes as as Base64 string
+<span class="fc bfc" id="L581" title="All 2 branches covered.">        if ( profile.getAttributes().size() &gt; 0 )</span>
+        {
+            try
+            {
+<span class="fc" id="L585">                String encodedAttributes = Serializer.serializeToBase64( profile.getAttributes() );</span>
+<span class="fc" id="L586">                Element attributes = c_dom.createElement( ATTRIBUTES_TAG );</span>
+<span class="fc" id="L587">                user.appendChild( attributes );</span>
+<span class="fc" id="L588">                Text value = c_dom.createTextNode( encodedAttributes );</span>
+<span class="fc" id="L589">                attributes.appendChild( value );</span>
+            }
+<span class="nc" id="L591">            catch ( IOException e )</span>
+            {
+<span class="nc" id="L593">                throw new WikiSecurityException( &quot;Could not save user profile attribute. Reason: &quot; + e.getMessage(), e );</span>
+<span class="fc" id="L594">            }</span>
+        }
+
+        // Set the profile timestamps
+<span class="fc bfc" id="L598" title="All 2 branches covered.">        if ( isNew )</span>
+        {
+<span class="fc" id="L600">            profile.setCreated( modDate );</span>
+        }
+<span class="fc" id="L602">        profile.setLastModified( modDate );</span>
+        
+        // Commit to disk
+<span class="fc" id="L605">        saveDOM();</span>
+<span class="fc" id="L606">    }</span>
+
+    /**
+     * Private method that returns the first {@link UserProfile}matching a
+     * &amp;lt;user&amp;gt; element's supplied attribute. This method will also
+     * set the UID if it has not yet been set.
+     * @param matchAttribute
+     * @param index
+     * @return the profile, or &lt;code&gt;null&lt;/code&gt; if not found
+     */
+    private UserProfile findByAttribute( String matchAttribute, String index )
+    {
+<span class="pc bpc" id="L618" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L620">            throw new IllegalStateException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+        
+<span class="fc" id="L623">        checkForRefresh();</span>
+        
+<span class="fc" id="L625">        NodeList users = c_dom.getElementsByTagName( USER_TAG );</span>
+        
+<span class="pc bpc" id="L627" title="1 of 2 branches missed.">        if( users == null ) return null;</span>
+
+        // check if we have to do a case insensitive compare
+<span class="fc" id="L630">        boolean caseSensitiveCompare = true;</span>
+<span class="fc bfc" id="L631" title="All 2 branches covered.">        if (matchAttribute.equals(EMAIL))</span>
+        {
+<span class="fc" id="L633">            caseSensitiveCompare = false;</span>
+        }
+
+<span class="fc bfc" id="L636" title="All 2 branches covered.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L638">            Element user = (Element) users.item( i );</span>
+<span class="fc" id="L639">            String userAttribute = user.getAttribute( matchAttribute );</span>
+<span class="fc bfc" id="L640" title="All 2 branches covered.">            if (!caseSensitiveCompare)</span>
+            {
+<span class="fc" id="L642">                userAttribute = StringUtils.lowerCase(userAttribute);</span>
+<span class="fc" id="L643">                index = StringUtils.lowerCase(index);</span>
+            }
+<span class="fc bfc" id="L645" title="All 2 branches covered.">            if ( userAttribute.equals( index ) )</span>
+            {
+<span class="fc" id="L647">                UserProfile profile = newProfile();</span>
+                
+                // Parse basic attributes
+<span class="fc" id="L650">                profile.setUid( user.getAttribute( UID ) );</span>
+<span class="pc bpc" id="L651" title="2 of 4 branches missed.">                if ( profile.getUid() == null || profile.getUid().length() == 0 )</span>
+                {
+<span class="nc" id="L653">                    profile.setUid( generateUid( this ) );</span>
+                }
+<span class="fc" id="L655">                profile.setLoginName( user.getAttribute( LOGIN_NAME ) );</span>
+<span class="fc" id="L656">                profile.setFullname( user.getAttribute( FULL_NAME ) );</span>
+<span class="fc" id="L657">                profile.setPassword( user.getAttribute( PASSWORD ) );</span>
+<span class="fc" id="L658">                profile.setEmail( user.getAttribute( EMAIL ) );</span>
+                
+                // Get created/modified timestamps
+<span class="fc" id="L661">                String created = user.getAttribute( CREATED );</span>
+<span class="fc" id="L662">                String modified = user.getAttribute( LAST_MODIFIED );</span>
+<span class="fc" id="L663">                profile.setCreated( parseDate( profile, created ) );                  </span>
+<span class="fc" id="L664">                profile.setLastModified( parseDate( profile, modified ) );                  </span>
+                
+                // Is the profile locked?
+<span class="fc" id="L667">                String lockExpiry = user.getAttribute( LOCK_EXPIRY );</span>
+<span class="pc bpc" id="L668" title="2 of 4 branches missed.">                if ( lockExpiry == null || lockExpiry.length() == 0 )</span>
+                {
+<span class="fc" id="L670">                    profile.setLockExpiry( null );</span>
+                }
+                else
+                {
+<span class="nc" id="L674">                    profile.setLockExpiry( new Date( Long.parseLong( lockExpiry ) ) );</span>
+                }
+                
+                // Extract all of the user's attributes (should only be one attributes tag, but you never know!)
+<span class="fc" id="L678">                NodeList attributes = user.getElementsByTagName( ATTRIBUTES_TAG );</span>
+<span class="fc bfc" id="L679" title="All 2 branches covered.">                for ( int j = 0; j &lt; attributes.getLength(); j++ )</span>
+                {
+<span class="fc" id="L681">                    Element attribute = (Element)attributes.item( j );</span>
+<span class="fc" id="L682">                    String serializedMap = extractText( attribute );</span>
+                    try
+                    {
+<span class="fc" id="L685">                        Map&lt;String,? extends Serializable&gt; map = Serializer.deserializeFromBase64( serializedMap );</span>
+<span class="fc" id="L686">                        profile.getAttributes().putAll( map );</span>
+                    }
+<span class="nc" id="L688">                    catch ( IOException e )</span>
+                    {
+<span class="nc" id="L690">                        log.error( &quot;Could not parse user profile attributes!&quot;, e );</span>
+<span class="fc" id="L691">                    }</span>
+                }
+
+<span class="fc" id="L694">                return profile;</span>
+            }
+        }
+<span class="fc" id="L697">        return null;</span>
+    }
+
+    /**
+     * Extracts all of the text nodes that are immediate children of an Element.
+     * @param element the base element
+     * @return the text nodes that are immediate children of the base element, concatenated together
+     */
+    private String extractText( Element element )
+    {
+<span class="fc" id="L707">        String text = &quot;&quot;;</span>
+<span class="pc bpc" id="L708" title="1 of 2 branches missed.">        if ( element.getChildNodes().getLength() &gt; 0 )</span>
+        {
+<span class="fc" id="L710">            NodeList children = element.getChildNodes();</span>
+<span class="fc bfc" id="L711" title="All 2 branches covered.">            for ( int k = 0; k &lt; children.getLength(); k++ )</span>
+            {
+<span class="fc" id="L713">                Node child = children.item( k );</span>
+<span class="pc bpc" id="L714" title="1 of 2 branches missed.">                if ( child.getNodeType() == Node.TEXT_NODE )</span>
+                {
+<span class="fc" id="L716">                    text = text + ((Text)child).getData();</span>
+                }
+            }
+        }
+<span class="fc" id="L720">        return text;</span>
+    }
+
+    /**
+     *  Tries to parse a date using the default format - then, for backwards
+     *  compatibility reasons, tries the platform default.
+     *  
+     *  @param profile
+     *  @param date
+     *  @return A parsed date, or null, if both parse attempts fail.
+     */
+    private Date parseDate( UserProfile profile, String date )
+    {
+        try
+        {
+<span class="fc" id="L735">        	DateFormat c_format = new SimpleDateFormat( DATE_FORMAT );</span>
+<span class="fc" id="L736">            return c_format.parse( date );</span>
+        }
+<span class="nc" id="L738">        catch( ParseException e )</span>
+        {
+            try
+            {
+<span class="nc" id="L742">                return DateFormat.getDateTimeInstance().parse( date );</span>
+            }
+<span class="nc" id="L744">            catch ( ParseException e2)</span>
+            {
+<span class="nc" id="L746">                log.warn(&quot;Could not parse 'created' or 'lastModified' &quot;</span>
+                    + &quot;attribute for &quot;
+<span class="nc" id="L748">                    + &quot; profile '&quot; + profile.getLoginName() + &quot;'.&quot;</span>
+                    + &quot; It may have been tampered with.&quot; );
+            }            
+        }
+<span class="nc" id="L752">        return null;</span>
+    }
+    
+    /**
+     * After loading the DOM, this method sanity-checks the dates in the DOM and makes
+     * sure they are formatted properly. This is sort-of hacky, but it should work.
+     */
+    private void sanitizeDOM()
+    {
+<span class="pc bpc" id="L761" title="1 of 2 branches missed.">        if ( c_dom == null )</span>
+        {
+<span class="nc" id="L763">            throw new IllegalStateException( &quot;FATAL: database does not exist&quot; );</span>
+        }
+        
+<span class="fc" id="L766">        NodeList users = c_dom.getElementsByTagName( USER_TAG );</span>
+<span class="fc bfc" id="L767" title="All 2 branches covered.">        for( int i = 0; i &lt; users.getLength(); i++ )</span>
+        {
+<span class="fc" id="L769">            Element user = (Element) users.item( i );</span>
+            
+            // Sanitize UID (and generate a new one if one does not exist)
+<span class="fc" id="L772">            String uid = user.getAttribute( UID ).trim();</span>
+<span class="pc bpc" id="L773" title="2 of 6 branches missed.">            if ( uid == null || uid.length() == 0 || &quot;-1&quot;.equals( uid ) )</span>
+            {
+<span class="fc" id="L775">                uid = String.valueOf( generateUid( this ) );</span>
+<span class="fc" id="L776">                user.setAttribute( UID, uid );</span>
+            }
+            
+            // Sanitize dates
+<span class="fc" id="L780">            String loginName = user.getAttribute( LOGIN_NAME );</span>
+<span class="fc" id="L781">            String created = user.getAttribute( CREATED );</span>
+<span class="fc" id="L782">            String modified = user.getAttribute( LAST_MODIFIED );</span>
+<span class="fc" id="L783">            DateFormat c_format = new SimpleDateFormat( DATE_FORMAT );</span>
+            try
+            {
+<span class="fc" id="L786">                created = c_format.format( c_format.parse( created ) );</span>
+<span class="fc" id="L787">                modified = c_format.format( c_format.parse( modified ) );</span>
+<span class="fc" id="L788">                user.setAttribute( CREATED,  created );</span>
+<span class="fc" id="L789">                user.setAttribute( LAST_MODIFIED,  modified );</span>
+            }
+<span class="nc" id="L791">            catch( ParseException e )</span>
+            {
+                try
+                {
+<span class="nc" id="L795">                    created = c_format.format( DateFormat.getDateTimeInstance().parse( created ) );</span>
+<span class="nc" id="L796">                    modified = c_format.format( DateFormat.getDateTimeInstance().parse( modified ) );</span>
+<span class="nc" id="L797">                    user.setAttribute( CREATED,  created );</span>
+<span class="nc" id="L798">                    user.setAttribute( LAST_MODIFIED,  modified );</span>
+                }
+<span class="nc" id="L800">                catch ( ParseException e2 )</span>
+                {
+<span class="nc" id="L802">                    log.warn( &quot;Could not parse 'created' or 'lastModified' attribute for profile '&quot; + loginName + &quot;'.&quot;</span>
+                            + &quot; It may have been tampered with.&quot; );
+<span class="nc" id="L804">                }            </span>
+<span class="fc" id="L805">            }</span>
+        }
+<span class="fc" id="L807">    }</span>
+    
+    /**
+     * Private method that sets an attribute value for a supplied DOM element.
+     * @param element the element whose attribute is to be set
+     * @param attribute the name of the attribute to set
+     * @param value the desired attribute value
+     */
+    private void setAttribute( Element element, String attribute, String value ) {
+<span class="fc bfc" id="L816" title="All 2 branches covered.">        if( value != null ) {</span>
+<span class="fc" id="L817">            element.setAttribute( attribute, value );</span>
+        }
+<span class="fc" id="L819">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

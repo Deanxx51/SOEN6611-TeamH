@@ -1,0 +1,380 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>RenderingManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.render</a> &gt; <span class="el_source">RenderingManager.java</span></div><h1>RenderingManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.render;
+
+import java.io.IOException;
+import java.io.StringReader;
+import java.lang.reflect.Constructor;
+import java.util.Collection;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventUtils;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.modules.InternalModule;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.parser.JSPWikiMarkupParser;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.parser.WikiDocument;
+import org.apache.wiki.providers.WikiPageProvider;
+import org.apache.wiki.util.ClassUtil;
+
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
+
+/**
+ *  This class provides a facade towards the differing rendering routines.  You should
+ *  use the routines in this manager instead of the ones in WikiEngine, if you don't
+ *  want the different side effects to occur - such as WikiFilters.
+ *  &lt;p&gt;
+ *  This class also manages a rendering cache, i.e. documents are stored between calls.
+ *  You may control the cache by tweaking the ehcache.xml file.
+ *  &lt;p&gt;
+ *
+ *  @since  2.4
+ */
+<span class="fc" id="L59">public class RenderingManager implements WikiEventListener, InternalModule</span>
+{
+<span class="fc" id="L61">    private static Logger log = Logger.getLogger( RenderingManager.class );</span>
+
+<span class="fc" id="L63">    private int        m_cacheExpiryPeriod = 24*60*60; // This can be relatively long</span>
+
+    private WikiEngine m_engine;
+
+<span class="fc" id="L67">    private boolean m_useCache = true;</span>
+
+<span class="fc" id="L69">    private CacheManager m_cacheManager = CacheManager.getInstance();</span>
+
+    /** The capacity of the caches, if you want something else, tweak ehcache.xml. */
+    private static final int    DEFAULT_CACHESIZE     = 1000;
+    private static final String VERSION_DELIMITER     = &quot;::&quot;;
+    private static final String PROP_PARSER           = &quot;jspwiki.renderingManager.markupParser&quot;;
+    private static final String PROP_RENDERER         = &quot;jspwiki.renderingManager.renderer&quot;;
+    private static final String PROP_WYSIWYG_RENDERER = &quot;jspwiki.renderingManager.renderer.wysiwyg&quot;;
+
+    /** The name of the default renderer. */
+<span class="fc" id="L79">    public static final String DEFAULT_PARSER = JSPWikiMarkupParser.class.getName();</span>
+
+    /** The name of the default renderer. */
+<span class="fc" id="L82">    public  static final String DEFAULT_RENDERER  = XHTMLRenderer.class.getName();</span>
+
+    /** The name of the default WYSIWYG renderer. */
+<span class="fc" id="L85">    public  static final String DEFAULT_WYSIWYG_RENDERER  = WysiwygEditingRenderer.class.getName();</span>
+
+    /** Stores the WikiDocuments that have been cached. */
+    private Cache m_documentCache;
+
+    /** Name of the regular page cache. */
+    public static final String DOCUMENTCACHE_NAME = &quot;jspwiki.renderingCache&quot;;
+
+    private Constructor&lt; ? &gt; m_rendererConstructor;
+    private Constructor&lt; ? &gt; m_rendererWysiwygConstructor;
+<span class="fc" id="L95">    private String m_markupParserClass = DEFAULT_PARSER;</span>
+
+    /**
+     *  Name of the WikiContext variable which is set to Boolean.TRUE or Boolean.FALSE
+     *  depending on whether WYSIWYG is currently in effect.
+     */
+    public static final String WYSIWYG_EDITOR_MODE = &quot;WYSIWYG_EDITOR_MODE&quot;;
+
+    /**
+     *  Variable name which tells whether plugins should be executed or not.  Value can be either
+     *  {@code Boolean.TRUE} or {@code Boolean.FALSE}. While not set it's value is {@code null}
+     */
+    public static final String VAR_EXECUTE_PLUGINS = &quot;_PluginContent.execute&quot;;
+
+    /**
+     *  Initializes the RenderingManager.
+     *  Checks for cache size settings, initializes the document cache.
+     *  Looks for alternative WikiRenderers, initializes one, or the default
+     *  XHTMLRenderer, for use.
+     *
+     *  @param engine A WikiEngine instance.
+     *  @param properties A list of properties to get parameters from.
+     *  @throws WikiException If the manager could not be initialized.
+     */
+    public void initialize( WikiEngine engine, Properties properties )
+        throws WikiException
+    {
+<span class="fc" id="L122">        m_engine = engine;</span>
+
+<span class="fc" id="L124">        m_markupParserClass = properties.getProperty( PROP_PARSER, DEFAULT_PARSER );</span>
+<span class="pc bpc" id="L125" title="1 of 2 branches missed.">        if( !ClassUtil.assignable( m_markupParserClass, MarkupParser.class.getName() ) ) {</span>
+<span class="nc" id="L126">        	log.warn( m_markupParserClass + &quot; does not subclass &quot; + MarkupParser.class.getName() + &quot; reverting to default markup parser.&quot; );</span>
+<span class="nc" id="L127">        	m_markupParserClass = DEFAULT_PARSER;</span>
+        }
+<span class="fc" id="L129">        log.info( &quot;Using &quot; + m_markupParserClass + &quot; as markup parser.&quot; );</span>
+
+<span class="fc" id="L131">        m_useCache = &quot;true&quot;.equals(properties.getProperty(PageManager.PROP_USECACHE));</span>
+
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        if (m_useCache) {</span>
+<span class="fc" id="L134">            String documentCacheName = engine.getApplicationName() + &quot;.&quot; + DOCUMENTCACHE_NAME;</span>
+
+<span class="fc bfc" id="L136" title="All 2 branches covered.">            if (m_cacheManager.cacheExists(documentCacheName)) {</span>
+<span class="fc" id="L137">                m_documentCache = m_cacheManager.getCache(documentCacheName);</span>
+            } else {
+<span class="fc" id="L139">                log.info(&quot;cache with name &quot; + documentCacheName + &quot; not found in ehcache.xml, creating it with defaults.&quot;);</span>
+<span class="fc" id="L140">                m_documentCache = new Cache(documentCacheName, DEFAULT_CACHESIZE, false, false, m_cacheExpiryPeriod, m_cacheExpiryPeriod);</span>
+<span class="fc" id="L141">                m_cacheManager.addCache(m_documentCache);</span>
+            }
+        }
+
+<span class="fc" id="L145">        final String renderImplName = properties.getProperty( PROP_RENDERER, DEFAULT_RENDERER );</span>
+<span class="fc" id="L146">        final String renderWysiwygImplName = properties.getProperty( PROP_WYSIWYG_RENDERER, DEFAULT_WYSIWYG_RENDERER );</span>
+
+<span class="fc" id="L148">        final Class&lt; ? &gt;[] rendererParams = { WikiContext.class, WikiDocument.class };</span>
+<span class="fc" id="L149">        m_rendererConstructor = initRenderer( renderImplName, rendererParams );</span>
+<span class="fc" id="L150">        m_rendererWysiwygConstructor = initRenderer( renderWysiwygImplName, rendererParams );</span>
+
+<span class="fc" id="L152">        log.info( &quot;Rendering content with &quot; + renderImplName + &quot;.&quot; );</span>
+
+<span class="fc" id="L154">        WikiEventUtils.addWikiEventListener(m_engine, WikiPageEvent.POST_SAVE_BEGIN, this);</span>
+<span class="fc" id="L155">    }</span>
+
+    private Constructor&lt; ? &gt; initRenderer( final String renderImplName, final Class&lt; ? &gt;[] rendererParams ) throws WikiException {
+<span class="fc" id="L158">        Constructor&lt; ? &gt; c = null;</span>
+        try {
+<span class="fc" id="L160">            final Class&lt; ? &gt; clazz = Class.forName( renderImplName );</span>
+<span class="fc" id="L161">            c = clazz.getConstructor( rendererParams );</span>
+<span class="nc" id="L162">        } catch( final ClassNotFoundException e ) {</span>
+<span class="nc" id="L163">            log.error( &quot;Unable to find WikiRenderer implementation &quot; + renderImplName );</span>
+<span class="nc" id="L164">        } catch( final SecurityException e ) {</span>
+<span class="nc" id="L165">            log.error( &quot;Unable to access the WikiRenderer(WikiContext,WikiDocument) constructor for &quot;  + renderImplName );</span>
+<span class="nc" id="L166">        } catch( final NoSuchMethodException e ) {</span>
+<span class="nc" id="L167">            log.error( &quot;Unable to locate the WikiRenderer(WikiContext,WikiDocument) constructor for &quot;  + renderImplName );</span>
+<span class="pc" id="L168">        }</span>
+<span class="pc bpc" id="L169" title="1 of 2 branches missed.">        if( c == null ) {</span>
+<span class="nc" id="L170">            throw new WikiException( &quot;Failed to get WikiRenderer '&quot; + renderImplName + &quot;'.&quot; );</span>
+        }
+<span class="fc" id="L172">        return c;</span>
+    }
+
+    /**
+     *  Returns the wiki Parser
+     *  @param pagedata the page data
+     *  @return A MarkupParser instance.
+     */
+    public MarkupParser getParser( WikiContext context, String pagedata ) {
+    	try {
+<span class="fc" id="L182">			return ClassUtil.getMappedObject( m_markupParserClass, context, new StringReader( pagedata ) );</span>
+<span class="nc" id="L183">		} catch( ReflectiveOperationException | IllegalArgumentException e ) {</span>
+<span class="nc" id="L184">			log.error( &quot;unable to get an instance of &quot; + m_markupParserClass + &quot; (&quot; + e.getMessage() + &quot;), returning default markup parser.&quot;, e );</span>
+<span class="nc" id="L185">			return new JSPWikiMarkupParser( context, new StringReader( pagedata ) );</span>
+		}
+    }
+
+    /**
+     *  Returns a cached document, if one is found.
+     *
+     * @param context the wiki context
+     * @param pagedata the page data
+     * @return the rendered wiki document
+     * @throws IOException If rendering cannot be accomplished
+     */
+    // FIXME: The cache management policy is not very good: deleted/changed pages should be detected better.
+    protected WikiDocument getRenderedDocument( WikiContext context, String pagedata ) throws IOException {
+<span class="fc" id="L199">        String pageid = context.getRealPage().getName() + VERSION_DELIMITER +</span>
+<span class="fc" id="L200">                        context.getRealPage().getVersion() + VERSION_DELIMITER +</span>
+<span class="fc" id="L201">                        context.getVariable( RenderingManager.VAR_EXECUTE_PLUGINS );</span>
+
+<span class="fc bfc" id="L203" title="All 2 branches covered.">        if( useCache( context ) ) {</span>
+<span class="fc" id="L204">            Element element = m_documentCache.get( pageid );</span>
+<span class="fc bfc" id="L205" title="All 2 branches covered.">            if ( element != null ) {</span>
+<span class="fc" id="L206">                WikiDocument doc = (WikiDocument) element.getObjectValue();</span>
+
+                //
+                //  This check is needed in case the different filters have actually changed the page data.
+                //  FIXME: Figure out a faster method
+<span class="fc bfc" id="L211" title="All 2 branches covered.">                if( pagedata.equals( doc.getPageData() ) ) {</span>
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">                    if( log.isDebugEnabled() ) {</span>
+<span class="nc" id="L213">                        log.debug( &quot;Using cached HTML for page &quot; + pageid );</span>
+                    }
+<span class="fc" id="L215">                    return doc;</span>
+                }
+<span class="pc bpc" id="L217" title="1 of 2 branches missed.">            } else if( log.isDebugEnabled() ) {</span>
+<span class="nc" id="L218">                log.debug( &quot;Re-rendering and storing &quot; + pageid );</span>
+            }
+        }
+
+        //  Refresh the data content
+        //
+        try {
+<span class="fc" id="L225">            MarkupParser parser = getParser( context, pagedata );</span>
+<span class="fc" id="L226">            WikiDocument doc = parser.parse();</span>
+<span class="fc" id="L227">            doc.setPageData( pagedata );</span>
+<span class="fc bfc" id="L228" title="All 2 branches covered.">            if( useCache( context ) ) {</span>
+<span class="fc" id="L229">                m_documentCache.put( new Element( pageid, doc ) );</span>
+            }
+<span class="fc" id="L231">            return doc;</span>
+<span class="nc" id="L232">        } catch( IOException ex ) {</span>
+<span class="nc" id="L233">            log.error( &quot;Unable to parse&quot;, ex );</span>
+        }
+
+<span class="nc" id="L236">        return null;</span>
+    }
+
+    boolean useCache( WikiContext context ) {
+<span class="fc bfc" id="L240" title="All 4 branches covered.">        return m_useCache &amp;&amp; WikiContext.VIEW.equals( context.getRequestContext() );</span>
+    }
+
+    /**
+     *  Simply renders a WikiDocument to a String.  This version does not get the document
+     *  from the cache - in fact, it does not cache the document at all.  This is
+     *  very useful, if you have something that you want to render outside the caching
+     *  routines.  Because the cache is based on full pages, and the cache keys are
+     *  based on names, use this routine if you're rendering anything for yourself.
+     *
+     *  @param context The WikiContext to render in
+     *  @param doc A proper WikiDocument
+     *  @return Rendered HTML.
+     *  @throws IOException If the WikiDocument is poorly formed.
+     */
+    public String getHTML( WikiContext context, WikiDocument doc ) throws IOException
+    {
+<span class="fc" id="L257">        final Boolean wysiwygVariable = ( Boolean )context.getVariable( WYSIWYG_EDITOR_MODE );</span>
+        final boolean wysiwygEditorMode;
+<span class="pc bpc" id="L259" title="1 of 2 branches missed.">        if( wysiwygVariable != null ) {</span>
+<span class="nc" id="L260">            wysiwygEditorMode = wysiwygVariable.booleanValue();</span>
+        } else {
+<span class="fc" id="L262">            wysiwygEditorMode = false;</span>
+        }
+        WikiRenderer rend;
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        if( wysiwygEditorMode ) {</span>
+<span class="nc" id="L266">            rend = getWysiwygRenderer( context, doc );</span>
+        } else {
+<span class="fc" id="L268">            rend = getRenderer( context, doc );</span>
+        }
+
+<span class="fc" id="L271">        return rend.getString();</span>
+    }
+
+    /**
+     * Returns a WikiRenderer instance, initialized with the given
+     * context and doc. The object is an XHTMLRenderer, unless overridden
+     * in jspwiki.properties with PROP_RENDERER.
+     *
+     * @param context The WikiContext
+     * @param doc The document to render
+     * @return A WikiRenderer for this document, or null, if no such renderer could be instantiated.
+     */
+    public WikiRenderer getRenderer( WikiContext context, WikiDocument doc ) {
+<span class="fc" id="L284">        final Object[] params = { context, doc };</span>
+<span class="fc" id="L285">        return getRenderer( params, m_rendererConstructor );</span>
+    }
+
+    /**
+     * Returns a WikiRenderer instance meant for WYSIWYG editing, initialized with the given
+     * context and doc. The object is an WysiwygEditingRenderer, unless overridden
+     * in jspwiki.properties with PROP_WYSIWYG_RENDERER.
+     *
+     * @param context The WikiContext
+     * @param doc The document to render
+     * @return A WikiRenderer instance meant for WYSIWYG editing, for this document, or null, if
+     *         no such renderer could be instantiated.
+     */
+    public WikiRenderer getWysiwygRenderer( WikiContext context, WikiDocument doc ) {
+<span class="nc" id="L299">        final Object[] params = { context, doc };</span>
+<span class="nc" id="L300">        return getRenderer( params, m_rendererWysiwygConstructor );</span>
+    }
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    private &lt; T extends WikiRenderer &gt; T getRenderer( Object[] params, Constructor&lt;?&gt; rendererConstructor ) {
+<span class="fc" id="L305">        T rval = null;</span>
+
+        try {
+<span class="fc" id="L308">            rval = (T)rendererConstructor.newInstance( params );</span>
+<span class="nc" id="L309">        } catch( final Exception e ) {</span>
+<span class="nc" id="L310">            log.error( &quot;Unable to create WikiRenderer&quot;, e );</span>
+<span class="fc" id="L311">        }</span>
+<span class="fc" id="L312">        return rval;</span>
+    }
+
+    /**
+     *   Convenience method for rendering, using the default parser and renderer.  Note that
+     *   you can't use this method to do any arbitrary rendering, as the pagedata MUST
+     *   be the data from the that the WikiContext refers to - this method caches the HTML
+     *   internally, and will return the cached version.  If the pagedata is different
+     *   from what was cached, will re-render and store the pagedata into the internal cache.
+     *
+     *   @param context the wiki context
+     *   @param pagedata the page data
+     *   @return XHTML data.
+     */
+    public String getHTML( WikiContext context, String pagedata )
+    {
+        try
+        {
+<span class="fc" id="L330">            WikiDocument doc = getRenderedDocument( context, pagedata );</span>
+
+<span class="fc" id="L332">            return getHTML( context, doc );</span>
+        }
+<span class="nc" id="L334">        catch( IOException e )</span>
+        {
+<span class="nc" id="L336">            log.error(&quot;Unable to parse&quot;,e);</span>
+        }
+
+<span class="nc" id="L339">        return null;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * &lt;p&gt;Flushes the document cache in response to a POST_SAVE_BEGIN event.
+     *
+     * @see org.apache.wiki.event.WikiEventListener#actionPerformed(org.apache.wiki.event.WikiEvent)
+     */
+    @Override
+    public void actionPerformed( WikiEvent event ) {
+<span class="fc" id="L351">        log.debug( &quot;event received: &quot; + event.toString() );</span>
+<span class="fc bfc" id="L352" title="All 2 branches covered.">        if( m_useCache ) {</span>
+<span class="pc bpc" id="L353" title="1 of 4 branches missed.">            if( ( event instanceof WikiPageEvent ) &amp;&amp; ( event.getType() == WikiPageEvent.POST_SAVE_BEGIN ) ) {</span>
+<span class="pc bpc" id="L354" title="1 of 2 branches missed.">                if( m_documentCache != null ) {</span>
+<span class="fc" id="L355">                    String pageName = ( ( WikiPageEvent ) event ).getPageName();</span>
+<span class="fc" id="L356">                    m_documentCache.remove( pageName );</span>
+<span class="fc" id="L357">                    Collection&lt; String &gt; referringPages = m_engine.getReferenceManager().findReferrers( pageName );</span>
+
+                    //
+                    //  Flush also those pages that refer to this page (if an nonexistent page
+                    //  appears, we need to flush the HTML that refers to the now-existent page)
+                    //
+<span class="fc bfc" id="L363" title="All 2 branches covered.">                    if( referringPages != null ) {</span>
+<span class="fc bfc" id="L364" title="All 2 branches covered.">                        for( String page : referringPages ) {</span>
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">                            if( log.isDebugEnabled() ) {</span>
+<span class="nc" id="L366">                                log.debug( &quot;Flushing latest version of &quot; + page );</span>
+                            }
+                            // as there is a new version of the page expire both plugin and pluginless versions of the old page
+<span class="fc" id="L369">                            m_documentCache.remove( page + VERSION_DELIMITER + WikiPageProvider.LATEST_VERSION  + VERSION_DELIMITER + Boolean.FALSE );</span>
+<span class="fc" id="L370">                            m_documentCache.remove( page + VERSION_DELIMITER + WikiPageProvider.LATEST_VERSION  + VERSION_DELIMITER + Boolean.TRUE );</span>
+<span class="fc" id="L371">                            m_documentCache.remove( page + VERSION_DELIMITER + WikiPageProvider.LATEST_VERSION  + VERSION_DELIMITER + null );</span>
+<span class="fc" id="L372">                        }</span>
+                    }
+                }
+            }
+        }
+<span class="fc" id="L377">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

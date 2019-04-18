@@ -1,0 +1,698 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>JDBCGroupDatabase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.authorize</a> &gt; <span class="el_source">JDBCGroupDatabase.java</span></div><h1>JDBCGroupDatabase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.authorize;
+
+import java.security.Principal;
+import java.sql.*;
+import java.util.*;
+import java.util.Date;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import javax.naming.NamingException;
+import javax.sql.DataSource;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+
+/**
+ * &lt;p&gt;
+ * Implementation of GroupDatabase that persists {@link Group} objects to a JDBC
+ * DataSource, as might typically be provided by a web container. This
+ * implementation looks up the JDBC DataSource using JNDI. The JNDI name of the
+ * datasource, backing table and mapped columns used by this class can be
+ * overridden by adding settings in &lt;code&gt;jspwiki.properties&lt;/code&gt;.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Configurable properties are these:
+ * &lt;/p&gt;
+ * &lt;table&gt;
+ * &lt;tr&gt; &lt;thead&gt;
+ * &lt;th&gt;Property&lt;/th&gt;
+ * &lt;th&gt;Default&lt;/th&gt;
+ * &lt;th&gt;Definition&lt;/th&gt;
+ * &lt;thead&gt; &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.datasource&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;jdbc/GroupDatabase&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The JNDI name of the DataSource&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.table&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;groups&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The table that stores the groups&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.membertable&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;group_members&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The table that stores the names of group members&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.created&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;created&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the group's creation timestamp&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.creator&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;creator&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the group creator's name&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.name&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;name&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the group's name&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.member&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;member&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the group member's name&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.modified&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;modified&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the group's last-modified timestamp&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;tr&gt;
+ * &lt;td&gt;&lt;code&gt;jspwiki.groupdatabase.modifier&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;&lt;code&gt;modifier&lt;/code&gt;&lt;/td&gt;
+ * &lt;td&gt;The column containing the name of the user who last modified the group&lt;/td&gt;
+ * &lt;/tr&gt;
+ * &lt;/table&gt;
+ * &lt;p&gt;
+ * This class is typically used in conjunction with a web container's JNDI
+ * resource factory. For example, Tomcat versions 4 and higher provide a basic
+ * JNDI factory for registering DataSources. To give JSPWiki access to the JNDI
+ * resource named by &lt;code&gt;jdbc/GroupDatabase&lt;/code&gt;, you would declare the
+ * datasource resource similar to this:
+ * &lt;/p&gt;
+ * &lt;blockquote&gt;&lt;code&gt;&amp;lt;Context ...&amp;gt;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;...&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;lt;Resource name=&quot;jdbc/GroupDatabase&quot; auth=&quot;Container&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;type=&quot;javax.sql.DataSource&quot; username=&quot;dbusername&quot; password=&quot;dbpassword&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;driverClassName=&quot;org.hsql.jdbcDriver&quot; url=&quot;jdbc:HypersonicSQL:database&quot;&lt;br/&gt;
+ *  &amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;maxActive=&quot;8&quot; maxIdle=&quot;4&quot;/&amp;gt;&lt;br/&gt;
+ *  &amp;nbsp;...&lt;br/&gt;
+ * &amp;lt;/Context&amp;gt;&lt;/code&gt;&lt;/blockquote&gt;
+ * &lt;p&gt;
+ * JDBC driver JARs should be added to Tomcat's &lt;code&gt;common/lib&lt;/code&gt;
+ * directory. For more Tomcat 5.5 JNDI configuration examples, see &lt;a
+ * href=&quot;http://tomcat.apache.org/tomcat-5.5-doc/jndi-resources-howto.html&quot;&gt;
+ * http://tomcat.apache.org/tomcat-5.5-doc/jndi-resources-howto.html&lt;/a&gt;.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * JDBCGroupDatabase commits changes as transactions if the back-end database
+ * supports them. If the database supports transactions, group changes are saved
+ * to permanent storage only when the {@link #commit()} method is called. If the
+ * database does &lt;em&gt;not&lt;/em&gt; support transactions, then changes are made
+ * immediately (during the {@link #save(Group, Principal)} method), and the
+ * {@linkplain #commit()} method no-ops. Thus, callers should always call the
+ * {@linkplain #commit()} method after saving a profile to guarantee that
+ * changes are applied.
+ * &lt;/p&gt;
+ * 
+ * @since 2.3
+ */
+<span class="fc" id="L135">public class JDBCGroupDatabase implements GroupDatabase {</span>
+	
+    /** Default column name that stores the JNDI name of the DataSource. */
+    public static final String DEFAULT_GROUPDB_DATASOURCE = &quot;jdbc/GroupDatabase&quot;;
+
+    /** Default table name for the table that stores groups. */
+    public static final String DEFAULT_GROUPDB_TABLE = &quot;groups&quot;;
+
+    /** Default column name that stores the names of group members. */
+    public static final String DEFAULT_GROUPDB_MEMBER_TABLE = &quot;group_members&quot;;
+
+    /** Default column name that stores the the group creation timestamps. */
+    public static final String DEFAULT_GROUPDB_CREATED = &quot;created&quot;;
+
+    /** Default column name that stores group creator names. */
+    public static final String DEFAULT_GROUPDB_CREATOR = &quot;creator&quot;;
+
+    /** Default column name that stores the group names. */
+    public static final String DEFAULT_GROUPDB_NAME = &quot;name&quot;;
+
+    /** Default column name that stores group member names. */
+    public static final String DEFAULT_GROUPDB_MEMBER = &quot;member&quot;;
+
+    /** Default column name that stores group last-modified timestamps. */
+    public static final String DEFAULT_GROUPDB_MODIFIED = &quot;modified&quot;;
+
+    /** Default column name that stores names of users who last modified groups. */
+    public static final String DEFAULT_GROUPDB_MODIFIER = &quot;modifier&quot;;
+
+    /** The JNDI name of the DataSource. */
+    public static final String PROP_GROUPDB_DATASOURCE = &quot;jspwiki.groupdatabase.datasource&quot;;
+
+    /** The table that stores the groups. */
+    public static final String PROP_GROUPDB_TABLE = &quot;jspwiki.groupdatabase.table&quot;;
+
+    /** The table that stores the names of group members. */
+    public static final String PROP_GROUPDB_MEMBER_TABLE = &quot;jspwiki.groupdatabase.membertable&quot;;
+
+    /** The column containing the group's creation timestamp. */
+    public static final String PROP_GROUPDB_CREATED = &quot;jspwiki.groupdatabase.created&quot;;
+
+    /** The column containing the group creator's name. */
+    public static final String PROP_GROUPDB_CREATOR = &quot;jspwiki.groupdatabase.creator&quot;;
+
+    /** The column containing the group's name. */
+    public static final String PROP_GROUPDB_NAME = &quot;jspwiki.groupdatabase.name&quot;;
+
+    /** The column containing the group member's name. */
+    public static final String PROP_GROUPDB_MEMBER = &quot;jspwiki.groupdatabase.member&quot;;
+
+    /** The column containing the group's last-modified timestamp. */
+    public static final String PROP_GROUPDB_MODIFIED = &quot;jspwiki.groupdatabase.modified&quot;;
+
+    /** The column containing the name of the user who last modified the group. */
+    public static final String PROP_GROUPDB_MODIFIER = &quot;jspwiki.groupdatabase.modifier&quot;;
+
+<span class="fc" id="L191">    protected static final Logger log = Logger.getLogger( JDBCGroupDatabase.class );</span>
+
+<span class="fc" id="L193">    private DataSource m_ds = null;</span>
+
+<span class="fc" id="L195">    private String m_created = null;</span>
+
+<span class="fc" id="L197">    private String m_creator = null;</span>
+
+<span class="fc" id="L199">    private String m_name = null;</span>
+
+<span class="fc" id="L201">    private String m_member = null;</span>
+
+<span class="fc" id="L203">    private String m_modified = null;</span>
+
+<span class="fc" id="L205">    private String m_modifier = null;</span>
+
+<span class="fc" id="L207">    private String m_findAll = null;</span>
+
+<span class="fc" id="L209">    private String m_findGroup = null;</span>
+
+<span class="fc" id="L211">    private String m_findMembers = null;</span>
+
+<span class="fc" id="L213">    private String m_insertGroup = null;</span>
+
+<span class="fc" id="L215">    private String m_insertGroupMembers = null;</span>
+
+<span class="fc" id="L217">    private String m_updateGroup = null;</span>
+
+<span class="fc" id="L219">    private String m_deleteGroup = null;</span>
+
+<span class="fc" id="L221">    private String m_deleteGroupMembers = null;</span>
+
+<span class="fc" id="L223">    private boolean m_supportsCommits = false;</span>
+
+<span class="fc" id="L225">    private WikiEngine m_engine = null;</span>
+
+    /**
+     * No-op method that in previous versions of JSPWiki was intended to
+     * atomically commit changes to the user database. Now, the
+     * {@link #save(Group, Principal)} and {@link #delete(Group)} methods are
+     * atomic themselves.
+     * 
+     * @throws WikiSecurityException never...
+     * @deprecated there is no need to call this method because the save and
+     *             delete methods contain their own commit logic
+     */
+    @Deprecated
+    public void commit() throws WikiSecurityException
+    {
+<span class="nc" id="L240">    }</span>
+
+    /**
+     * Looks up and deletes a {@link Group} from the group database. If the
+     * group database does not contain the supplied Group. this method throws a
+     * {@link NoSuchPrincipalException}. The method commits the results of the
+     * delete to persistent storage.
+     * 
+     * @param group the group to remove
+     * @throws WikiSecurityException if the database does not contain the
+     *             supplied group (thrown as {@link NoSuchPrincipalException})
+     *             or if the commit did not succeed
+     */
+    public void delete( Group group ) throws WikiSecurityException
+    {
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">        if( !exists( group ) )</span>
+        {
+<span class="nc" id="L257">            throw new NoSuchPrincipalException( &quot;Not in database: &quot; + group.getName() );</span>
+        }
+
+<span class="fc" id="L260">        String groupName = group.getName();</span>
+<span class="fc" id="L261">        Connection conn = null;</span>
+<span class="fc" id="L262">        PreparedStatement ps = null;</span>
+        try
+        {
+            // Open the database connection
+<span class="fc" id="L266">            conn = m_ds.getConnection();</span>
+<span class="pc bpc" id="L267" title="1 of 2 branches missed.">            if( m_supportsCommits )</span>
+            {
+<span class="fc" id="L269">                conn.setAutoCommit( false );</span>
+            }
+
+<span class="fc" id="L272">            ps = conn.prepareStatement( m_deleteGroup );</span>
+<span class="fc" id="L273">            ps.setString( 1, groupName );</span>
+<span class="fc" id="L274">            ps.execute();</span>
+<span class="fc" id="L275">            ps.close();</span>
+
+<span class="fc" id="L277">            ps = conn.prepareStatement( m_deleteGroupMembers );</span>
+<span class="fc" id="L278">            ps.setString( 1, groupName );</span>
+<span class="fc" id="L279">            ps.execute();</span>
+
+            // Commit and close connection
+<span class="pc bpc" id="L282" title="1 of 2 branches missed.">            if( m_supportsCommits )</span>
+            {
+<span class="fc" id="L284">                conn.commit();</span>
+            }
+        }
+<span class="nc" id="L287">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L289">        	closeQuietly( conn, ps, null );</span>
+<span class="nc" id="L290">            throw new WikiSecurityException( &quot;Could not delete group &quot; + groupName + &quot;: &quot; + e.getMessage(), e );</span>
+        }
+        finally
+        {
+<span class="fc" id="L294">            closeQuietly( conn, ps, null );</span>
+        }
+<span class="fc" id="L296">    }</span>
+
+    /**
+     * Returns all wiki groups that are stored in the GroupDatabase as an array
+     * of Group objects. If the database does not contain any groups, this
+     * method will return a zero-length array. This method causes back-end
+     * storage to load the entire set of group; thus, it should be called
+     * infrequently (e.g., at initialization time).
+     * 
+     * @return the wiki groups
+     * @throws WikiSecurityException if the groups cannot be returned by the
+     *             back-end
+     */
+    public Group[] groups() throws WikiSecurityException
+    {
+<span class="fc" id="L311">        Set&lt;Group&gt; groups = new HashSet&lt;Group&gt;();</span>
+<span class="fc" id="L312">        Connection conn = null;</span>
+<span class="fc" id="L313">        PreparedStatement ps = null;</span>
+<span class="fc" id="L314">        ResultSet rs = null;</span>
+        try
+        {
+            // Open the database connection
+<span class="fc" id="L318">            conn = m_ds.getConnection();</span>
+
+<span class="fc" id="L320">            ps = conn.prepareStatement( m_findAll );</span>
+<span class="fc" id="L321">            rs = ps.executeQuery();</span>
+<span class="fc bfc" id="L322" title="All 2 branches covered.">            while ( rs.next() )</span>
+            {
+<span class="fc" id="L324">                String groupName = rs.getString( m_name );</span>
+<span class="pc bpc" id="L325" title="1 of 2 branches missed.">                if( groupName == null )</span>
+                {
+<span class="nc" id="L327">                    log.warn( &quot;Detected null group name in JDBCGroupDataBase. Check your group database.&quot; );</span>
+                }
+                else
+                {
+<span class="fc" id="L331">                    Group group = new Group( groupName, m_engine.getApplicationName() );</span>
+<span class="fc" id="L332">                    group.setCreated( rs.getTimestamp( m_created ) );</span>
+<span class="fc" id="L333">                    group.setCreator( rs.getString( m_creator ) );</span>
+<span class="fc" id="L334">                    group.setLastModified( rs.getTimestamp( m_modified ) );</span>
+<span class="fc" id="L335">                    group.setModifier( rs.getString( m_modifier ) );</span>
+<span class="fc" id="L336">                    populateGroup( group );</span>
+<span class="fc" id="L337">                    groups.add( group );</span>
+                }
+<span class="fc" id="L339">            }</span>
+        }
+<span class="nc" id="L341">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L343">        	closeQuietly( conn, ps, rs );</span>
+<span class="nc" id="L344">            throw new WikiSecurityException( e.getMessage(), e );</span>
+        }
+        finally
+        {
+<span class="fc" id="L348">            closeQuietly( conn, ps, rs );</span>
+        }
+
+<span class="fc" id="L351">        return groups.toArray( new Group[groups.size()] );</span>
+    }
+
+    /**
+     * Saves a Group to the group database. Note that this method &lt;em&gt;must&lt;/em&gt;
+     * fail, and throw an &lt;code&gt;IllegalArgumentException&lt;/code&gt;, if the
+     * proposed group is the same name as one of the built-in Roles: e.g.,
+     * Admin, Authenticated, etc. The database is responsible for setting
+     * create/modify timestamps, upon a successful save, to the Group. The
+     * method commits the results of the delete to persistent storage.
+     * 
+     * @param group the Group to save
+     * @param modifier the user who saved the Group
+     * @throws WikiSecurityException if the Group could not be saved
+     *             successfully
+     */
+    public void save( Group group, Principal modifier ) throws WikiSecurityException
+    {
+<span class="pc bpc" id="L369" title="2 of 4 branches missed.">        if( group == null || modifier == null )</span>
+        {
+<span class="nc" id="L371">            throw new IllegalArgumentException( &quot;Group or modifier cannot be null.&quot; );</span>
+        }
+
+<span class="fc" id="L374">        boolean exists = exists( group );</span>
+<span class="fc" id="L375">        Connection conn = null;</span>
+<span class="fc" id="L376">        PreparedStatement ps = null;</span>
+        try
+        {
+            // Open the database connection
+<span class="fc" id="L380">            conn = m_ds.getConnection();</span>
+<span class="pc bpc" id="L381" title="1 of 2 branches missed.">            if( m_supportsCommits )</span>
+            {
+<span class="fc" id="L383">                conn.setAutoCommit( false );</span>
+            }
+            
+<span class="fc" id="L386">            Timestamp ts = new Timestamp( System.currentTimeMillis() );</span>
+<span class="fc" id="L387">            Date modDate = new Date( ts.getTime() );</span>
+<span class="fc bfc" id="L388" title="All 2 branches covered.">            if( !exists )</span>
+            {
+                // Group is new: insert new group record
+<span class="fc" id="L391">                ps = conn.prepareStatement( m_insertGroup );</span>
+<span class="fc" id="L392">                ps.setString( 1, group.getName() );</span>
+<span class="fc" id="L393">                ps.setTimestamp( 2, ts );</span>
+<span class="fc" id="L394">                ps.setString( 3, modifier.getName() );</span>
+<span class="fc" id="L395">                ps.setTimestamp( 4, ts );</span>
+<span class="fc" id="L396">                ps.setString( 5, modifier.getName() );</span>
+<span class="fc" id="L397">                ps.execute();</span>
+
+                // Set the group creation time
+<span class="fc" id="L400">                group.setCreated( modDate );</span>
+<span class="fc" id="L401">                group.setCreator( modifier.getName() );</span>
+<span class="fc" id="L402">                ps.close();</span>
+            }
+            else
+            {
+                // Modify existing group record
+<span class="fc" id="L407">                ps = conn.prepareStatement( m_updateGroup );</span>
+<span class="fc" id="L408">                ps.setTimestamp( 1, ts );</span>
+<span class="fc" id="L409">                ps.setString( 2, modifier.getName() );</span>
+<span class="fc" id="L410">                ps.setString( 3, group.getName() );</span>
+<span class="fc" id="L411">                ps.execute();</span>
+<span class="fc" id="L412">                ps.close();</span>
+            }
+            // Set the group modified time
+<span class="fc" id="L415">            group.setLastModified( modDate );</span>
+<span class="fc" id="L416">            group.setModifier( modifier.getName() );</span>
+
+            // Now, update the group member list
+
+            // First, delete all existing member records
+<span class="fc" id="L421">            ps = conn.prepareStatement( m_deleteGroupMembers );</span>
+<span class="fc" id="L422">            ps.setString( 1, group.getName() );</span>
+<span class="fc" id="L423">            ps.execute();</span>
+<span class="fc" id="L424">            ps.close();</span>
+
+            // Insert group member records
+<span class="fc" id="L427">            ps = conn.prepareStatement( m_insertGroupMembers );</span>
+<span class="fc" id="L428">            Principal[] members = group.members();</span>
+<span class="fc bfc" id="L429" title="All 2 branches covered.">            for( int i = 0; i &lt; members.length; i++ )</span>
+            {
+<span class="fc" id="L431">                Principal member = members[i];</span>
+<span class="fc" id="L432">                ps.setString( 1, group.getName() );</span>
+<span class="fc" id="L433">                ps.setString( 2, member.getName() );</span>
+<span class="fc" id="L434">                ps.execute();</span>
+            }
+
+            // Commit and close connection
+<span class="pc bpc" id="L438" title="1 of 2 branches missed.">            if( m_supportsCommits )</span>
+            {
+<span class="fc" id="L440">                conn.commit();</span>
+            }
+        }
+<span class="nc" id="L443">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L445">        	closeQuietly(conn, ps, null );</span>
+<span class="nc" id="L446">            throw new WikiSecurityException( e.getMessage(), e );</span>
+        }
+        finally
+        {
+<span class="fc" id="L450">            closeQuietly(conn, ps, null );</span>
+        }
+<span class="fc" id="L452">    }</span>
+
+    /**
+     * Initializes the group database based on values from a Properties object.
+     * 
+     * @param engine the wiki engine
+     * @param props the properties used to initialize the group database
+     * @throws WikiSecurityException if the database could not be initialized
+     *             successfully
+     * @throws NoRequiredPropertyException if a required property is not present
+     */
+    public void initialize( WikiEngine engine, Properties props ) throws NoRequiredPropertyException, WikiSecurityException
+    {
+        String table;
+        String memberTable;
+
+<span class="fc" id="L468">        m_engine = engine;</span>
+
+<span class="fc" id="L470">        String jndiName = props.getProperty( PROP_GROUPDB_DATASOURCE, DEFAULT_GROUPDB_DATASOURCE );</span>
+        try
+        {
+<span class="fc" id="L473">            Context initCtx = new InitialContext();</span>
+<span class="fc" id="L474">            Context ctx = (Context) initCtx.lookup( &quot;java:comp/env&quot; );</span>
+<span class="fc" id="L475">            m_ds = (DataSource) ctx.lookup( jndiName );</span>
+
+            // Prepare the SQL selectors
+<span class="fc" id="L478">            table = props.getProperty( PROP_GROUPDB_TABLE, DEFAULT_GROUPDB_TABLE );</span>
+<span class="fc" id="L479">            memberTable = props.getProperty( PROP_GROUPDB_MEMBER_TABLE, DEFAULT_GROUPDB_MEMBER_TABLE );</span>
+<span class="fc" id="L480">            m_name = props.getProperty( PROP_GROUPDB_NAME, DEFAULT_GROUPDB_NAME );</span>
+<span class="fc" id="L481">            m_created = props.getProperty( PROP_GROUPDB_CREATED, DEFAULT_GROUPDB_CREATED );</span>
+<span class="fc" id="L482">            m_creator = props.getProperty( PROP_GROUPDB_CREATOR, DEFAULT_GROUPDB_CREATOR );</span>
+<span class="fc" id="L483">            m_modifier = props.getProperty( PROP_GROUPDB_MODIFIER, DEFAULT_GROUPDB_MODIFIER );</span>
+<span class="fc" id="L484">            m_modified = props.getProperty( PROP_GROUPDB_MODIFIED, DEFAULT_GROUPDB_MODIFIED );</span>
+<span class="fc" id="L485">            m_member = props.getProperty( PROP_GROUPDB_MEMBER, DEFAULT_GROUPDB_MEMBER );</span>
+
+<span class="fc" id="L487">            m_findAll = &quot;SELECT DISTINCT * FROM &quot; + table;</span>
+<span class="fc" id="L488">            m_findGroup = &quot;SELECT DISTINCT * FROM &quot; + table + &quot; WHERE &quot; + m_name + &quot;=?&quot;;</span>
+<span class="fc" id="L489">            m_findMembers = &quot;SELECT * FROM &quot; + memberTable + &quot; WHERE &quot; + m_name + &quot;=?&quot;;</span>
+
+            // Prepare the group insert/update SQL
+<span class="fc" id="L492">            m_insertGroup = &quot;INSERT INTO &quot; + table + &quot; (&quot; + m_name + &quot;,&quot; + m_modified + &quot;,&quot; + m_modifier + &quot;,&quot; + m_created + &quot;,&quot;</span>
+                            + m_creator + &quot;) VALUES (?,?,?,?,?)&quot;;
+<span class="fc" id="L494">            m_updateGroup = &quot;UPDATE &quot; + table + &quot; SET &quot; + m_modified + &quot;=?,&quot; + m_modifier + &quot;=? WHERE &quot; + m_name + &quot;=?&quot;;</span>
+
+            // Prepare the group member insert SQL
+<span class="fc" id="L497">            m_insertGroupMembers = &quot;INSERT INTO &quot; + memberTable + &quot; (&quot; + m_name + &quot;,&quot; + m_member + &quot;) VALUES (?,?)&quot;;</span>
+
+            // Prepare the group delete SQL
+<span class="fc" id="L500">            m_deleteGroup = &quot;DELETE FROM &quot; + table + &quot; WHERE &quot; + m_name + &quot;=?&quot;;</span>
+<span class="fc" id="L501">            m_deleteGroupMembers = &quot;DELETE FROM &quot; + memberTable + &quot; WHERE &quot; + m_name + &quot;=?&quot;;</span>
+        }
+<span class="nc" id="L503">        catch( NamingException e )</span>
+        {
+<span class="nc" id="L505">            log.error( &quot;JDBCGroupDatabase initialization error: &quot; + e );</span>
+<span class="nc" id="L506">            throw new NoRequiredPropertyException( PROP_GROUPDB_DATASOURCE, &quot;JDBCGroupDatabase initialization error: &quot; + e);</span>
+<span class="fc" id="L507">        }</span>
+
+        // Test connection by doing a quickie select
+<span class="fc" id="L510">        Connection conn = null;</span>
+<span class="fc" id="L511">        PreparedStatement ps = null;</span>
+        try
+        {
+<span class="fc" id="L514">            conn = m_ds.getConnection();</span>
+<span class="fc" id="L515">            ps = conn.prepareStatement( m_findAll );</span>
+<span class="fc" id="L516">            ps.executeQuery();</span>
+<span class="fc" id="L517">            ps.close();</span>
+        }
+<span class="nc" id="L519">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L521">        	closeQuietly( conn, ps, null );</span>
+<span class="nc" id="L522">            log.error( &quot;DB connectivity error: &quot; + e.getMessage() );</span>
+<span class="nc" id="L523">            throw new WikiSecurityException(&quot;DB connectivity error: &quot; + e.getMessage(), e );</span>
+        }
+        finally
+        {
+<span class="fc" id="L527">            closeQuietly( conn, ps, null );</span>
+        }
+<span class="fc" id="L529">        log.info( &quot;JDBCGroupDatabase initialized from JNDI DataSource: &quot; + jndiName );</span>
+
+        // Determine if the datasource supports commits
+        try
+        {
+<span class="fc" id="L534">            conn = m_ds.getConnection();</span>
+<span class="fc" id="L535">            DatabaseMetaData dmd = conn.getMetaData();</span>
+<span class="pc bpc" id="L536" title="1 of 2 branches missed.">            if( dmd.supportsTransactions() )</span>
+            {
+<span class="fc" id="L538">                m_supportsCommits = true;</span>
+<span class="fc" id="L539">                conn.setAutoCommit( false );</span>
+<span class="fc" id="L540">                log.info( &quot;JDBCGroupDatabase supports transactions. Good; we will use them.&quot; );</span>
+            }
+        }
+<span class="nc" id="L543">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L545">        	closeQuietly( conn, null, null );</span>
+<span class="nc" id="L546">            log.warn( &quot;JDBCGroupDatabase warning: user database doesn't seem to support transactions. Reason: &quot; + e);</span>
+        }
+        finally
+        {
+<span class="fc" id="L550">            closeQuietly( conn, null, null );</span>
+        }
+<span class="fc" id="L552">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the Group exists in back-end storage.
+     * 
+     * @param group the Group to look for
+     * @return the result of the search
+     */
+    private boolean exists( Group group )
+    {
+<span class="fc" id="L562">        String index = group.getName();</span>
+        try
+        {
+<span class="fc" id="L565">            findGroup( index );</span>
+<span class="fc" id="L566">            return true;</span>
+        }
+<span class="fc" id="L568">        catch( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L570">            return false;</span>
+        }
+    }
+
+    /**
+     * Loads and returns a Group from the back-end database matching a supplied
+     * name.
+     * 
+     * @param index the name of the Group to find
+     * @return the populated Group
+     * @throws NoSuchPrincipalException if the Group cannot be found
+     * @throws SQLException if the database query returns an error
+     */
+    private Group findGroup( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L585">        Group group = null;</span>
+<span class="fc" id="L586">        boolean found = false;</span>
+<span class="fc" id="L587">        boolean unique = true;</span>
+<span class="fc" id="L588">        ResultSet rs = null;</span>
+<span class="fc" id="L589">    	PreparedStatement ps = null;</span>
+<span class="fc" id="L590">        Connection conn = null;</span>
+        try
+        {
+            // Open the database connection
+<span class="fc" id="L594">            conn = m_ds.getConnection();</span>
+
+<span class="fc" id="L596">            ps = conn.prepareStatement( m_findGroup );</span>
+<span class="fc" id="L597">            ps.setString( 1, index );</span>
+<span class="fc" id="L598">            rs = ps.executeQuery();</span>
+<span class="fc bfc" id="L599" title="All 2 branches covered.">            while ( rs.next() )</span>
+            {
+<span class="pc bpc" id="L601" title="1 of 2 branches missed.">                if( group != null )</span>
+                {
+<span class="nc" id="L603">                    unique = false;</span>
+<span class="nc" id="L604">                    break;</span>
+                }
+<span class="fc" id="L606">                group = new Group( index, m_engine.getApplicationName() );</span>
+<span class="fc" id="L607">                group.setCreated( rs.getTimestamp( m_created ) );</span>
+<span class="fc" id="L608">                group.setCreator( rs.getString( m_creator ) );</span>
+<span class="fc" id="L609">                group.setLastModified( rs.getTimestamp( m_modified ) );</span>
+<span class="fc" id="L610">                group.setModifier( rs.getString( m_modifier ) );</span>
+<span class="fc" id="L611">                populateGroup( group );</span>
+<span class="fc" id="L612">                found = true;</span>
+            }
+        }
+<span class="nc" id="L615">        catch( SQLException e )</span>
+        {
+<span class="nc" id="L617">        	closeQuietly( conn, ps, rs );</span>
+<span class="nc" id="L618">            throw new NoSuchPrincipalException( e.getMessage() );</span>
+        }
+        finally
+        {
+<span class="fc" id="L622">            closeQuietly( conn, ps, rs );</span>
+        }
+
+<span class="fc bfc" id="L625" title="All 2 branches covered.">        if( !found )</span>
+        {
+<span class="fc" id="L627">            throw new NoSuchPrincipalException( &quot;Could not find group in database!&quot; );</span>
+        }
+<span class="pc bpc" id="L629" title="1 of 2 branches missed.">        if( !unique )</span>
+        {
+<span class="nc" id="L631">            throw new NoSuchPrincipalException( &quot;More than one group in database!&quot; );</span>
+        }
+<span class="fc" id="L633">        return group;</span>
+    }
+
+    /**
+     * Fills a Group with members.
+     * 
+     * @param group the group to populate
+     * @return the populated Group
+     */
+    private Group populateGroup( Group group )
+    {
+<span class="fc" id="L644">    	ResultSet rs = null;</span>
+<span class="fc" id="L645">    	PreparedStatement ps = null;</span>
+<span class="fc" id="L646">        Connection conn = null;</span>
+        try
+        {
+            // Open the database connection
+<span class="fc" id="L650">            conn = m_ds.getConnection();</span>
+
+<span class="fc" id="L652">            ps = conn.prepareStatement( m_findMembers );</span>
+<span class="fc" id="L653">            ps.setString( 1, group.getName() );</span>
+<span class="fc" id="L654">            rs = ps.executeQuery();</span>
+<span class="fc bfc" id="L655" title="All 2 branches covered.">            while ( rs.next() )</span>
+            {
+<span class="fc" id="L657">                String memberName = rs.getString( m_member );</span>
+<span class="pc bpc" id="L658" title="1 of 2 branches missed.">                if( memberName != null )</span>
+                {
+<span class="fc" id="L660">                    WikiPrincipal principal = new WikiPrincipal( memberName, WikiPrincipal.UNSPECIFIED );</span>
+<span class="fc" id="L661">                    group.add( principal );</span>
+                }
+<span class="fc" id="L663">            }</span>
+        }
+<span class="nc" id="L665">        catch( SQLException e )</span>
+        {
+            // I guess that means there aren't any principals...
+        }
+        finally
+        {
+<span class="fc" id="L671">            closeQuietly( conn, ps, rs );</span>
+        }
+<span class="fc" id="L673">        return group;</span>
+    }
+    
+    void closeQuietly( Connection conn, PreparedStatement ps, ResultSet rs ) {
+<span class="pc bpc" id="L677" title="1 of 2 branches missed.">    	if( conn != null ) {</span>
+    		try {
+<span class="fc" id="L679">    		    conn.close();</span>
+<span class="nc" id="L680">    		} catch( Exception e ) {</span>
+<span class="fc" id="L681">    		}</span>
+    	}
+<span class="fc bfc" id="L683" title="All 2 branches covered.">		if( ps != null )  {</span>
+			try {
+<span class="fc" id="L685">			    ps.close();</span>
+<span class="nc" id="L686">			} catch( Exception e ) {</span>
+<span class="fc" id="L687">			}</span>
+		}
+<span class="fc bfc" id="L689" title="All 2 branches covered.">		if( rs != null )  {</span>
+			try {
+<span class="fc" id="L691">			    rs.close();</span>
+<span class="nc" id="L692">			} catch( Exception e ) {</span>
+<span class="fc" id="L693">			}</span>
+		}
+<span class="fc" id="L695">	}</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

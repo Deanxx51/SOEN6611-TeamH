@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ShortURLConstructor.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.url</a> &gt; <span class="el_source">ShortURLConstructor.java</span></div><h1>ShortURLConstructor.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.url;
+
+import java.io.UnsupportedEncodingException;
+import java.util.Properties;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  Provides a way to do short URLs of the form /wiki/PageName.
+ *
+ *
+ *  @since 2.2
+ */
+<span class="fc" id="L40">public class ShortURLConstructor</span>
+    extends DefaultURLConstructor
+{
+    private static final String DEFAULT_PREFIX = &quot;wiki/&quot;;
+
+<span class="fc" id="L45">    static Logger log = Logger.getLogger( ShortURLConstructor.class );</span>
+    
+    /**
+     *  Contains the path part after the JSPWiki base URL
+     */
+<span class="fc" id="L50">    protected String m_urlPrefix = &quot;&quot;;</span>
+    
+    /**
+     *  This corresponds to your WikiServlet path.  By default, it is assumed to
+     *  be &quot;wiki/&quot;, but you can set it to whatever you like - including an empty
+     *  name.
+     */
+    public static final String PROP_PREFIX = &quot;jspwiki.shortURLConstructor.prefix&quot;;
+    
+    /** {@inheritDoc} */
+    public void initialize( WikiEngine engine, 
+                            Properties properties )
+    {
+<span class="fc" id="L63">        super.initialize( engine, properties );</span>
+        
+<span class="fc" id="L65">        m_urlPrefix = TextUtil.getStringProperty( properties, PROP_PREFIX, null );</span>
+        
+<span class="fc bfc" id="L67" title="All 2 branches covered.">        if( m_urlPrefix == null )</span>
+        {
+<span class="fc" id="L69">            m_urlPrefix = DEFAULT_PREFIX;</span>
+        }
+
+<span class="fc" id="L72">        log.info(&quot;Short URL prefix path=&quot;+m_urlPrefix+&quot; (You can use &quot;+PROP_PREFIX+&quot; to override this)&quot;);</span>
+<span class="fc" id="L73">    }</span>
+
+    /**
+     *  Constructs the actual URL based on the context.
+     */
+    private String makeURL( String context,
+                            String name,
+                            boolean absolute )
+    {
+<span class="fc" id="L82">        String viewurl = &quot;%p&quot;+m_urlPrefix+&quot;%n&quot;;</span>
+
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        if( absolute ) </span>
+<span class="fc" id="L85">            viewurl = &quot;%u&quot;+m_urlPrefix+&quot;%n&quot;;</span>
+
+<span class="fc bfc" id="L87" title="All 2 branches covered.">        if( context.equals(WikiContext.VIEW) )</span>
+        {
+<span class="pc bpc" id="L89" title="1 of 2 branches missed.">            if( name == null ) return doReplacement(&quot;%u&quot;,&quot;&quot;,absolute);</span>
+<span class="fc" id="L90">            return doReplacement( viewurl, name, absolute );</span>
+        }
+<span class="pc bpc" id="L92" title="1 of 2 branches missed.">        else if( context.equals(WikiContext.PREVIEW) )</span>
+        {
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if( name == null ) return doReplacement(&quot;%u&quot;,&quot;&quot;,absolute);</span>
+<span class="nc" id="L95">            return doReplacement( viewurl+&quot;?do=Preview&quot;, name, absolute);</span>
+        }
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        else if( context.equals(WikiContext.EDIT) )</span>
+        {
+<span class="fc" id="L99">            return doReplacement( viewurl+&quot;?do=Edit&quot;, name, absolute );</span>
+        }
+<span class="fc bfc" id="L101" title="All 2 branches covered.">        else if( context.equals(WikiContext.ATTACH) )</span>
+        {
+<span class="fc" id="L103">            return doReplacement( &quot;%uattach/%n&quot;, name, absolute );</span>
+        }
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">        else if( context.equals(WikiContext.INFO) )</span>
+        {
+<span class="nc" id="L107">            return doReplacement( viewurl+&quot;?do=PageInfo&quot;, name, absolute );</span>
+        }
+<span class="pc bpc" id="L109" title="1 of 2 branches missed.">        else if( context.equals(WikiContext.DIFF) )</span>
+        {
+<span class="nc" id="L111">            return doReplacement( viewurl+&quot;?do=Diff&quot;, name, absolute );</span>
+        }
+<span class="pc bpc" id="L113" title="1 of 2 branches missed.">        else if( context.equals(WikiContext.NONE) )</span>
+        {
+<span class="fc" id="L115">            return doReplacement( &quot;%u%n&quot;, name, absolute );</span>
+        }
+<span class="nc bnc" id="L117" title="All 2 branches missed.">        else if( context.equals(WikiContext.UPLOAD) )</span>
+        {
+<span class="nc" id="L119">            return doReplacement( viewurl+&quot;?do=Upload&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L121" title="All 2 branches missed.">        else if( context.equals(WikiContext.COMMENT) )</span>
+        {
+<span class="nc" id="L123">            return doReplacement( viewurl+&quot;?do=Comment&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        else if( context.equals(WikiContext.LOGIN) )</span>
+        {
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            String loginUrl = absolute ? &quot;%uLogin.jsp?redirect=%n&quot; : &quot;%pLogin.jsp?redirect=%n&quot;;</span>
+<span class="nc" id="L128">            return doReplacement( loginUrl, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L130" title="All 2 branches missed.">        else if( context.equals(WikiContext.DELETE) )</span>
+        {
+<span class="nc" id="L132">            return doReplacement( viewurl+&quot;?do=Delete&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L134" title="All 2 branches missed.">        else if( context.equals(WikiContext.CONFLICT) )</span>
+        {
+<span class="nc" id="L136">            return doReplacement( viewurl+&quot;?do=PageModified&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        else if( context.equals(WikiContext.PREFS) )</span>
+        {
+<span class="nc" id="L140">            return doReplacement( viewurl+&quot;?do=UserPreferences&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L142" title="All 2 branches missed.">        else if( context.equals(WikiContext.FIND) )</span>
+        {
+<span class="nc" id="L144">            return doReplacement( viewurl+&quot;?do=Search&quot;, name, absolute ); </span>
+        }
+<span class="nc bnc" id="L146" title="All 2 branches missed.">        else if( context.equals(WikiContext.ERROR) )</span>
+        {
+<span class="nc" id="L148">            return doReplacement( &quot;%uError.jsp&quot;, name, absolute );</span>
+        }
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        else if( context.equals(WikiContext.CREATE_GROUP) )</span>
+        {
+<span class="nc" id="L152">            return doReplacement( viewurl+&quot;?do=NewGroup&quot;, name, absolute );</span>
+        }
+<span class="nc bnc" id="L154" title="All 2 branches missed.">        else if( context.equals(WikiContext.DELETE_GROUP) )</span>
+        {
+<span class="nc" id="L156">            return doReplacement( viewurl+&quot;?do=DeleteGroup&quot;, name, absolute );</span>
+        }        
+<span class="nc bnc" id="L158" title="All 2 branches missed.">        else if( context.equals(WikiContext.EDIT_GROUP) )</span>
+        {
+<span class="nc" id="L160">            return doReplacement( viewurl+&quot;?do=EditGroup&quot;, name, absolute );</span>
+        }
+<span class="nc bnc" id="L162" title="All 2 branches missed.">        else if( context.equals(WikiContext.VIEW_GROUP) )</span>
+        {
+<span class="nc" id="L164">            return doReplacement( viewurl+&quot;?do=Group&amp;group=%n&quot;, name, absolute );</span>
+        }
+        
+<span class="nc" id="L167">        throw new InternalWikiException(&quot;Requested unsupported context &quot;+context);</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String makeURL( String context,
+                           String name,
+                           boolean absolute,
+                           String parameters )
+    {
+<span class="pc bpc" id="L178" title="1 of 4 branches missed.">        if( parameters != null &amp;&amp; parameters.length() &gt; 0 )</span>
+        {            
+<span class="pc bpc" id="L180" title="2 of 4 branches missed.">            if( context.equals(WikiContext.ATTACH) || context.equals(WikiContext.VIEW) )</span>
+            {
+<span class="nc" id="L182">                parameters = &quot;?&quot;+parameters;</span>
+            }
+<span class="pc bpc" id="L184" title="1 of 2 branches missed.">            else if( context.equals(WikiContext.NONE) )</span>
+            {
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">                parameters = (name.indexOf('?') != -1 ) ? &quot;&amp;amp;&quot; : &quot;?&quot; + parameters;</span>
+            }
+            else
+            {
+<span class="nc" id="L190">                parameters = &quot;&amp;amp;&quot;+parameters;</span>
+            }
+        }
+        else
+        {
+<span class="fc" id="L195">            parameters = &quot;&quot;;</span>
+        }
+<span class="fc" id="L197">        return makeURL( context, name, absolute )+parameters;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public String parsePage( String context,
+                             HttpServletRequest request,
+                             String encoding )
+        throws UnsupportedEncodingException
+    {
+<span class="nc" id="L208">        String pagereq = request.getParameter( &quot;page&quot; );</span>
+
+<span class="nc bnc" id="L210" title="All 2 branches missed.">        if( pagereq == null )</span>
+        {
+<span class="nc" id="L212">            pagereq = parsePageFromURL( request, encoding );</span>
+        }
+
+<span class="nc" id="L215">        return pagereq;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String getForwardPage( HttpServletRequest req )
+    {
+<span class="nc" id="L223">        String jspPage = req.getParameter( &quot;do&quot; );</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">        if( jspPage == null ) jspPage = &quot;Wiki&quot;;</span>
+    
+<span class="nc" id="L226">        return jspPage+&quot;.jsp&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

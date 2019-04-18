@@ -1,0 +1,294 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserProfileTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">UserProfileTag.java</span></div><h1>UserProfileTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.ResourceBundle;
+
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.AuthenticationManager;
+import org.apache.wiki.auth.GroupPrincipal;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.authorize.Role;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * &lt;p&gt;
+ * Returns user profile attributes, or empty strings if the user has not been
+ * validated. This tag has a single attribute, &quot;property.&quot;
+ * The &lt;code&gt;property&lt;/code&gt; attribute may contain one of the following
+ * case-insensitive values:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;code&gt;created&lt;/code&gt; - creation date&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;email&lt;/code&gt; - user's e-mail address&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;fullname&lt;/code&gt; - user's full name&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;groups&lt;/code&gt; - a sorted list of the groups a user belongs to&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;loginname&lt;/code&gt; - user's login name. If the current user does not have
+ * a profile, the user's login principal (such as one provided by a container
+ * login module, user cookie, or anonyous IP address), will supply the login
+ * name property&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;roles&lt;/code&gt; - a sorted list of the roles a user possesses&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;wikiname&lt;/code&gt; - user's wiki name&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;modified&lt;/code&gt; - last modification date&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;exists&lt;/code&gt; - evaluates the body of the tag if user's profile exists
+ * in the user database
+ * &lt;li&gt;&lt;code&gt;new&lt;/code&gt; - evaluates the body of the tag if user's profile does not
+ * exist in the user database
+ * &lt;li&gt;&lt;code&gt;canChangeLoginName&lt;/code&gt; - always true if custom auth used; also true for container auth
+ * and current UserDatabase.isSharedWithContainer() is true.&lt;/li&gt;
+ * &lt;li&gt;&lt;code&gt;canChangePassword&lt;/code&gt; - always true if custom auth used; also true for container auth
+ * and current UserDatabase.isSharedWithContainer() is true.&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;In addition, the values &lt;code&gt;exists&lt;/code&gt;, &lt;code&gt;new&lt;/code&gt;, &lt;code&gt;canChangeLoginName&lt;/code&gt;
+ * and &lt;code&gt;canChangeLoginName&lt;/code&gt; can also be prefixed with &lt;code&gt;!&lt;/code&gt; to indicate the
+ * negative condition (for example, &lt;code&gt;!exists&lt;/code&gt;).&lt;/p&gt;
+ * @since 2.3
+ */
+<span class="nc" id="L75">public class UserProfileTag extends WikiTagBase</span>
+{
+    private static final long serialVersionUID = 3258410625431582003L;
+
+    public  static final String BLANK = &quot;(not set)&quot;;
+
+    private static final String CREATED   = &quot;created&quot;;
+
+    private static final String EMAIL     = &quot;email&quot;;
+
+    private static final String EXISTS    = &quot;exists&quot;;
+
+    private static final String NOT_EXISTS= &quot;!exists&quot;;
+
+    private static final String FULLNAME  = &quot;fullname&quot;;
+
+    private static final String GROUPS    = &quot;groups&quot;;
+
+    private static final String LOGINNAME = &quot;loginname&quot;;
+
+    private static final String MODIFIED  = &quot;modified&quot;;
+
+    private static final String NEW       = &quot;new&quot;;
+
+    private static final String NOT_NEW   = &quot;!new&quot;;
+
+    private static final String ROLES     = &quot;roles&quot;;
+
+    private static final String WIKINAME  = &quot;wikiname&quot;;
+
+    private static final String CHANGE_LOGIN_NAME     = &quot;canchangeloginname&quot;;
+
+    private static final String NOT_CHANGE_LOGIN_NAME = &quot;!canchangeloginname&quot;;
+
+    private static final String CHANGE_PASSWORD       = &quot;canchangepassword&quot;;
+
+    private static final String NOT_CHANGE_PASSWORD   = &quot;!canchangepassword&quot;;
+
+    private String             m_prop;
+
+    public void initTag()
+    {
+<span class="nc" id="L117">        super.initTag();</span>
+<span class="nc" id="L118">        m_prop = null;</span>
+<span class="nc" id="L119">    }</span>
+
+    public final int doWikiStartTag() throws IOException, WikiSecurityException
+    {
+<span class="nc" id="L123">        UserManager manager = m_wikiContext.getEngine().getUserManager();</span>
+<span class="nc" id="L124">        UserProfile profile = manager.getUserProfile( m_wikiContext.getWikiSession() );</span>
+<span class="nc" id="L125">        String result = null;</span>
+
+<span class="nc bnc" id="L127" title="All 4 branches missed.">        if ( EXISTS.equals( m_prop ) || NOT_NEW.equals( m_prop ) )</span>
+        {
+<span class="nc bnc" id="L129" title="All 2 branches missed.">            return profile.isNew() ? SKIP_BODY : EVAL_BODY_INCLUDE;</span>
+        }
+<span class="nc bnc" id="L131" title="All 4 branches missed.">        else if ( NEW.equals( m_prop ) || NOT_EXISTS.equals( m_prop ) )</span>
+        {
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            return profile.isNew() ? EVAL_BODY_INCLUDE : SKIP_BODY;</span>
+        }
+
+<span class="nc bnc" id="L136" title="All 4 branches missed.">        else if ( CREATED.equals( m_prop ) &amp;&amp; profile.getCreated() != null )</span>
+        {
+<span class="nc" id="L138">            result = profile.getCreated().toString();</span>
+        }
+<span class="nc bnc" id="L140" title="All 2 branches missed.">        else if ( EMAIL.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L142">            result = profile.getEmail();</span>
+        }
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        else if ( FULLNAME.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L146">            result = profile.getFullname();</span>
+        }
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        else if ( GROUPS.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L150">            result = printGroups( m_wikiContext );</span>
+        }
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        else if ( LOGINNAME.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L154">            result = profile.getLoginName();</span>
+        }
+<span class="nc bnc" id="L156" title="All 4 branches missed.">        else if ( MODIFIED.equals( m_prop ) &amp;&amp; profile.getLastModified() != null )</span>
+        {
+<span class="nc" id="L158">            result = profile.getLastModified().toString();</span>
+        }
+<span class="nc bnc" id="L160" title="All 2 branches missed.">        else if ( ROLES.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L162">            result = printRoles( m_wikiContext );</span>
+        }
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        else if ( WIKINAME.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L166">            result = profile.getWikiName();</span>
+
+<span class="nc bnc" id="L168" title="All 2 branches missed.">            if( result == null )</span>
+            {
+                //
+                //  Default back to the declared user name
+                //
+<span class="nc" id="L173">                WikiEngine engine = this.m_wikiContext.getEngine();</span>
+<span class="nc" id="L174">                WikiSession wikiSession = WikiSession.getWikiSession( engine, (HttpServletRequest)pageContext.getRequest() );</span>
+<span class="nc" id="L175">                Principal user = wikiSession.getUserPrincipal();</span>
+
+<span class="nc bnc" id="L177" title="All 2 branches missed.">                if( user != null )</span>
+                {
+<span class="nc" id="L179">                    result = user.getName();</span>
+                }
+<span class="nc" id="L181">            }</span>
+        }
+<span class="nc bnc" id="L183" title="All 4 branches missed.">        else if ( CHANGE_PASSWORD.equals( m_prop ) || CHANGE_LOGIN_NAME.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L185">            AuthenticationManager authMgr = m_wikiContext.getEngine().getAuthenticationManager();</span>
+<span class="nc bnc" id="L186" title="All 2 branches missed.">            if ( !authMgr.isContainerAuthenticated() )</span>
+            {
+<span class="nc" id="L188">                return EVAL_BODY_INCLUDE;</span>
+            }
+<span class="nc" id="L190">        }</span>
+<span class="nc bnc" id="L191" title="All 4 branches missed.">        else if ( NOT_CHANGE_PASSWORD.equals( m_prop ) || NOT_CHANGE_LOGIN_NAME.equals( m_prop ) )</span>
+        {
+<span class="nc" id="L193">            AuthenticationManager authMgr = m_wikiContext.getEngine().getAuthenticationManager();</span>
+<span class="nc bnc" id="L194" title="All 2 branches missed.">            if ( authMgr.isContainerAuthenticated() )</span>
+            {
+<span class="nc" id="L196">                return EVAL_BODY_INCLUDE;</span>
+            }
+        }
+
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if ( result != null )</span>
+        {
+<span class="nc" id="L202">            pageContext.getOut().print( TextUtil.replaceEntities(result) );</span>
+        }
+<span class="nc" id="L204">        return SKIP_BODY;</span>
+    }
+
+    public void setProperty( String property )
+    {
+<span class="nc" id="L209">        m_prop = property.toLowerCase().trim();</span>
+<span class="nc" id="L210">    }</span>
+
+    /**
+     * Returns a sorted list of the {@link org.apache.wiki.auth.authorize.Group} objects a user possesses
+     * in his or her WikiSession. The result is computed by consulting
+     * {@link org.apache.wiki.WikiSession#getRoles()}
+     * and extracting those that are of type Group.
+     * @return the list of groups, sorted by name
+     */
+    public static String printGroups( WikiContext context )
+    {
+<span class="nc" id="L221">        Principal[] roles = context.getWikiSession().getRoles();</span>
+<span class="nc" id="L222">        List&lt;String&gt; tempRoles = new ArrayList&lt;String&gt;();</span>
+<span class="nc" id="L223">        ResourceBundle rb = Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE );</span>
+        
+<span class="nc bnc" id="L225" title="All 2 branches missed.">        for ( Principal role : roles )</span>
+        {
+<span class="nc bnc" id="L227" title="All 2 branches missed.">            if( role instanceof GroupPrincipal )</span>
+            {
+<span class="nc" id="L229">                tempRoles.add( role.getName() );</span>
+            }
+        }
+<span class="nc bnc" id="L232" title="All 2 branches missed.">        if ( tempRoles.size() == 0 )</span>
+        {
+<span class="nc" id="L234">            return rb.getString(&quot;userprofile.nogroups&quot;);</span>
+        }
+
+<span class="nc" id="L237">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for ( int i = 0; i &lt; tempRoles.size(); i++ )</span>
+        {
+<span class="nc" id="L240">            String name = tempRoles.get( i );</span>
+
+<span class="nc" id="L242">            sb.append( name );</span>
+<span class="nc bnc" id="L243" title="All 2 branches missed.">            if ( i &lt; ( tempRoles.size() - 1 ) )</span>
+            {
+<span class="nc" id="L245">                sb.append(',');</span>
+<span class="nc" id="L246">                sb.append(' ');</span>
+            }
+
+        }
+<span class="nc" id="L250">        return sb.toString();</span>
+    }
+
+    /**
+     * Returns a sorted list of the {@link org.apache.wiki.auth.authorize.Role} objects a user possesses
+     * in his or her WikiSession. The result is computed by consulting
+     * {@link org.apache.wiki.WikiSession#getRoles()}
+     * and extracting those that are of type Role.
+     * @return the list of roles, sorted by name
+     */
+    public static String printRoles( WikiContext context )
+    {
+<span class="nc" id="L262">        Principal[] roles = context.getWikiSession().getRoles();</span>
+<span class="nc" id="L263">        List&lt;String&gt; tempRoles = new ArrayList&lt;String&gt;();</span>
+<span class="nc" id="L264">        ResourceBundle rb = Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE );</span>
+        
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        for ( Principal role : roles )</span>
+        {
+<span class="nc bnc" id="L268" title="All 2 branches missed.">            if ( role instanceof Role )</span>
+            {
+<span class="nc" id="L270">                tempRoles.add( role.getName() );</span>
+            }
+        }
+<span class="nc bnc" id="L273" title="All 2 branches missed.">        if ( tempRoles.size() == 0 )</span>
+        {
+<span class="nc" id="L275">            return rb.getString( &quot;userprofile.noroles&quot; );</span>
+        }
+
+<span class="nc" id="L278">        StringBuilder sb = new StringBuilder();</span>
+<span class="nc bnc" id="L279" title="All 2 branches missed.">        for ( int i = 0; i &lt; tempRoles.size(); i++ )</span>
+        {
+<span class="nc" id="L281">            String name = tempRoles.get( i );</span>
+
+<span class="nc" id="L283">            sb.append( name );</span>
+<span class="nc bnc" id="L284" title="All 2 branches missed.">            if ( i &lt; ( tempRoles.size() - 1 ) )</span>
+            {
+<span class="nc" id="L286">                sb.append(',');</span>
+<span class="nc" id="L287">                sb.append(' ');</span>
+            }
+
+        }
+<span class="nc" id="L291">        return sb.toString();</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

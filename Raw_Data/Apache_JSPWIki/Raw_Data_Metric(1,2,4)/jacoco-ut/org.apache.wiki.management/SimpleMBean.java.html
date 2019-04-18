@@ -1,0 +1,389 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SimpleMBean.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.management</a> &gt; <span class="el_source">SimpleMBean.java</span></div><h1>SimpleMBean.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.management;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Iterator;
+
+import javax.management.Attribute;
+import javax.management.AttributeList;
+import javax.management.AttributeNotFoundException;
+import javax.management.DynamicMBean;
+import javax.management.IntrospectionException;
+import javax.management.InvalidAttributeValueException;
+import javax.management.MBeanAttributeInfo;
+import javax.management.MBeanConstructorInfo;
+import javax.management.MBeanException;
+import javax.management.MBeanInfo;
+import javax.management.MBeanNotificationInfo;
+import javax.management.MBeanOperationInfo;
+import javax.management.NotCompliantMBeanException;
+import javax.management.ReflectionException;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+
+/**
+ *  A simple MBean which does not require an interface class unlike
+ *  the StandardMBean class.  The methods are exposed through a method
+ *  call, which in turn then calls the methods using the Reflection API.
+ *  &lt;p&gt;
+ *  This class is similar to the javax.management.StandardMBean, but it does
+ *  require the API interface to be declared, so it's simpler.  It's not as
+ *  powerful, but it does not require you to declare two classes (and keep
+ *  them in sync).
+ *
+ *  @since  2.6
+ */
+// FIXME: This class should really use Annotations instead of a method call.
+// FIXME: Exception handling is not probably according to spec...
+public abstract class SimpleMBean implements DynamicMBean {
+
+<span class="fc" id="L59">	private static final Logger LOG = Logger.getLogger( SimpleMBean.class );</span>
+    protected MBeanInfo m_beanInfo;
+
+    private static Method findGetterSetter( Class&lt;?&gt; clazz, String name, Class&lt;?&gt; parm )
+    {
+        try
+        { 
+<span class="fc" id="L66">            Class&lt;?&gt;[] params = { parm };</span>
+<span class="fc" id="L67">            Class&lt;?&gt;[] emptyparms = {};</span>
+
+<span class="fc bfc" id="L69" title="All 2 branches covered.">            Method m = clazz.getDeclaredMethod( name, parm != null ? params : emptyparms );</span>
+
+<span class="fc" id="L71">            return m;</span>
+        }
+<span class="fc" id="L73">        catch( Exception e )</span>
+        {
+            // There's nothing to do, really - we just return a null.
+        }
+
+<span class="fc" id="L78">        return null;</span>
+    }
+
+    /**
+     *  Create a new SimpleMBean
+     *
+     *  @throws NotCompliantMBeanException if an error occurs registering the MBean.
+     */
+    protected SimpleMBean() throws NotCompliantMBeanException
+<span class="fc" id="L87">    {</span>
+        //
+        //  Create attributes
+        //
+<span class="fc" id="L91">        String[] attlist = getAttributeNames();</span>
+<span class="fc" id="L92">        MBeanAttributeInfo[] attributes = null;</span>
+
+<span class="pc bpc" id="L94" title="1 of 2 branches missed.">        if( attlist != null )</span>
+        {
+<span class="fc" id="L96">            attributes = new MBeanAttributeInfo[attlist.length];</span>
+
+<span class="fc bfc" id="L98" title="All 2 branches covered.">            for( int i = 0; i &lt; attlist.length; i++ )</span>
+            {
+<span class="fc" id="L100">                String name = attlist[i];</span>
+<span class="fc" id="L101">                name = StringUtils.capitalize( name );</span>
+<span class="fc" id="L102">                Method getter = findGetterSetter( getClass(), &quot;get&quot;+name, null );</span>
+
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">                if( getter == null ) getter = findGetterSetter( getClass(), &quot;is&quot;+name, null );</span>
+
+<span class="fc" id="L106">                Method setter = null;</span>
+
+<span class="pc bpc" id="L108" title="1 of 2 branches missed.">                if( getter != null )</span>
+                {
+<span class="fc" id="L110">                    setter = findGetterSetter( getClass(), &quot;set&quot;+name, getter.getReturnType() );</span>
+                }
+
+                //
+                //  Check, if there's a description available
+                //
+<span class="fc" id="L116">                Method descriptor = findGetterSetter( getClass(), &quot;get&quot;+name+&quot;Description&quot;, null );</span>
+<span class="fc" id="L117">                String description = &quot;&quot;;</span>
+
+<span class="fc bfc" id="L119" title="All 2 branches covered.">                if( descriptor != null )</span>
+                {
+                    try
+                    {
+<span class="fc" id="L123">                        description = (String) descriptor.invoke( this, (Object[])null );</span>
+                    }
+<span class="nc" id="L125">                    catch( Exception e )</span>
+                    {
+<span class="nc" id="L127">                        description=&quot;Exception: &quot;+e.getMessage();</span>
+<span class="fc" id="L128">                    }</span>
+                }
+
+                MBeanAttributeInfo info;
+                try
+                {
+<span class="fc" id="L134">                    info = new MBeanAttributeInfo( attlist[i], description, getter, setter );</span>
+                }
+<span class="nc" id="L136">                catch (IntrospectionException e)</span>
+                {
+<span class="nc" id="L138">                    throw new NotCompliantMBeanException( e.getMessage() );</span>
+<span class="fc" id="L139">                }</span>
+
+<span class="fc" id="L141">                attributes[i] = info;</span>
+            }
+        }
+
+        //
+        //  Create operations.
+        //
+<span class="fc" id="L148">        String[] oplist = getMethodNames();</span>
+<span class="fc" id="L149">        MBeanOperationInfo[] operations = new MBeanOperationInfo[oplist.length];</span>
+
+<span class="fc" id="L151">        Method[] methods = getClass().getMethods();</span>
+
+<span class="fc bfc" id="L153" title="All 2 branches covered.">        for( int i = 0; i &lt; oplist.length; i++ )</span>
+        {
+<span class="fc" id="L155">            Method method = null;</span>
+
+<span class="fc bfc" id="L157" title="All 2 branches covered.">            for( int m = 0; m &lt; methods.length; m++ )</span>
+            {
+<span class="fc bfc" id="L159" title="All 2 branches covered.">                if( methods[m].getName().equals( oplist[i] ) )</span>
+                {
+<span class="fc" id="L161">                    method = methods[m];</span>
+                }
+            }
+
+<span class="pc bpc" id="L165" title="1 of 2 branches missed.">            if( method == null )</span>
+            {
+<span class="nc" id="L167">                throw new NotCompliantMBeanException(&quot;Class declares method &quot;+oplist[i]+&quot;, yet does not implement it!&quot;);</span>
+            }
+
+<span class="fc" id="L170">            MBeanOperationInfo info = new MBeanOperationInfo( method.getName(), method );</span>
+
+<span class="fc" id="L172">            operations[i] = info;</span>
+        }
+
+        //
+        //  Create the actual BeanInfo instance.
+        //
+<span class="fc" id="L178">        MBeanConstructorInfo[] constructors = null;</span>
+<span class="fc" id="L179">        MBeanNotificationInfo[] notifications = null;</span>
+
+<span class="fc" id="L181">        m_beanInfo = new MBeanInfo( getClass().getName(),</span>
+<span class="fc" id="L182">                                    getDescription(),</span>
+                                    attributes,
+                                    constructors,
+                                    operations,
+                                    notifications );
+<span class="fc" id="L187">    }</span>
+
+    /**
+     *  Customization hook: Override this to get a description for your MBean.  By default,
+     *  this is an empty string.
+     *
+     *  @return A description for the MBean.
+     */
+    protected String getDescription()
+    {
+<span class="fc" id="L197">        return &quot;&quot;;</span>
+    }
+
+    /**
+     *  Gets an attribute using reflection from the MBean.
+     *
+     *  @param name Name of the attribute to find.
+     *  @return The value returned by the corresponding getXXX() call
+     *  @throws AttributeNotFoundException If there is not such attribute
+     *  @throws MBeanException
+     *  @throws ReflectionException
+     */
+    @Override
+    public Object getAttribute(String name)
+        throws AttributeNotFoundException, MBeanException, ReflectionException
+    {
+        Method m;
+<span class="nc" id="L214">        Object res = null;</span>
+        try {
+<span class="nc" id="L216">            String mname = &quot;get&quot;+StringUtils.capitalize( name );</span>
+<span class="nc" id="L217">            m = findGetterSetter( getClass(), mname, null );</span>
+
+<span class="nc bnc" id="L219" title="All 2 branches missed.">            if( m == null ) throw new AttributeNotFoundException( name );</span>
+<span class="nc" id="L220">            res = m.invoke( this, (Object[])null );</span>
+<span class="nc" id="L221">        } catch (SecurityException | IllegalArgumentException | IllegalAccessException | InvocationTargetException e) {</span>
+<span class="nc" id="L222">        	LOG.error( e.getMessage(), e );</span>
+<span class="nc" id="L223">        }</span>
+
+<span class="nc" id="L225">        return res;</span>
+    }
+
+    /**
+     *  Gets multiple attributes at the same time.
+     *
+     *  @param arg0 The attribute names to get
+     *  @return A list of attributes
+     */
+    @Override
+    public AttributeList getAttributes(String[] arg0) {
+<span class="nc" id="L236">        AttributeList list = new AttributeList();</span>
+
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        for( int i = 0; i &lt; arg0.length; i++ ) {</span>
+            try {
+<span class="nc" id="L240">                list.add( new Attribute(arg0[i], getAttribute(arg0[i])) );</span>
+<span class="nc" id="L241">            } catch (AttributeNotFoundException | MBeanException | ReflectionException e) {</span>
+<span class="nc" id="L242">                LOG.error( e.getMessage(), e );</span>
+<span class="nc" id="L243">            }</span>
+        }
+
+<span class="nc" id="L246">        return list;</span>
+    }
+
+    /**
+     *  Return the MBeanInfo structure.
+     *
+     *  @return the MBeanInfo
+     */
+    @Override
+    public MBeanInfo getMBeanInfo()
+    {
+<span class="fc" id="L257">        return m_beanInfo;</span>
+    }
+
+    /**
+     *  Invokes a particular method.
+     *
+     *  @param arg0 Method name
+     *  @param arg1 A list of arguments for the invocation
+     */
+    @Override
+    public Object invoke(String arg0, Object[] arg1, String[] arg2)
+        throws MBeanException, ReflectionException
+    {
+<span class="nc" id="L270">        Method[] methods = getClass().getMethods();</span>
+
+<span class="nc bnc" id="L272" title="All 2 branches missed.">        for( int i = 0; i &lt; methods.length; i++ )</span>
+        {
+<span class="nc bnc" id="L274" title="All 2 branches missed.">            if( methods[i].getName().equals(arg0) )</span>
+            {
+                try
+                {
+<span class="nc" id="L278">                    return methods[i].invoke( this, arg1 );</span>
+                }
+<span class="nc" id="L280">                catch (IllegalArgumentException e)</span>
+                {
+<span class="nc" id="L282">                    throw new ReflectionException( e, &quot;Wrong arguments&quot; );</span>
+                }
+<span class="nc" id="L284">                catch (IllegalAccessException e)</span>
+                {
+<span class="nc" id="L286">                    throw new ReflectionException( e, &quot;No access&quot; );</span>
+                }
+<span class="nc" id="L288">                catch (InvocationTargetException e)</span>
+                {
+<span class="nc" id="L290">                    throw new ReflectionException( e, &quot;Wrong target&quot; );</span>
+                }
+            }
+        }
+
+<span class="nc" id="L295">        throw new ReflectionException(null, &quot;There is no such method &quot;+arg0); </span>
+    }
+
+    @Override
+    public void setAttribute(Attribute attr)
+        throws AttributeNotFoundException,
+               InvalidAttributeValueException,
+               MBeanException,
+               ReflectionException
+    {
+        Method m;
+
+<span class="nc" id="L307">        String mname = &quot;set&quot;+StringUtils.capitalize( attr.getName() );</span>
+<span class="nc" id="L308">        m = findGetterSetter( getClass(), mname, attr.getValue().getClass() );</span>
+
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        if( m == null ) throw new AttributeNotFoundException( attr.getName() );</span>
+
+<span class="nc" id="L312">        Object[] args = { attr.getValue() };</span>
+
+        try
+        {
+<span class="nc" id="L316">            m.invoke( this, args );</span>
+        }
+<span class="nc" id="L318">        catch (IllegalArgumentException e)</span>
+        {
+<span class="nc" id="L320">            throw new InvalidAttributeValueException( &quot;Faulty argument: &quot;+e.getMessage() );</span>
+        }
+<span class="nc" id="L322">        catch (IllegalAccessException e)</span>
+        {
+<span class="nc" id="L324">            throw new ReflectionException( e, &quot;Cannot access attribute &quot;+e.getMessage() );</span>
+        }
+<span class="nc" id="L326">        catch (InvocationTargetException e)</span>
+        {
+<span class="nc" id="L328">            throw new ReflectionException( e, &quot;Cannot invoke attribute &quot;+e.getMessage() );</span>
+<span class="nc" id="L329">        }</span>
+<span class="nc" id="L330">    }</span>
+
+    @Override
+    public AttributeList setAttributes(AttributeList arg0)
+    {
+<span class="nc" id="L335">        AttributeList result = new AttributeList();</span>
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        for( Iterator&lt; Object &gt; i = arg0.iterator(); i.hasNext(); )</span>
+        {
+<span class="nc" id="L338">            Attribute attr = (Attribute)i.next();</span>
+
+            //
+            //  Attempt to set the attribute.  If it succeeds (no exception),
+            //  then we just add it to the list of successfull sets.
+            //
+            try {
+<span class="nc" id="L345">                setAttribute( attr );</span>
+<span class="nc" id="L346">                result.add( attr );</span>
+<span class="nc" id="L347">            } catch (AttributeNotFoundException | InvalidAttributeValueException | MBeanException | ReflectionException e ) {</span>
+<span class="nc" id="L348">                LOG.error( e.getMessage(), e );</span>
+<span class="nc" id="L349">            }</span>
+<span class="nc" id="L350">        }</span>
+
+<span class="nc" id="L352">        return result;</span>
+    }
+    /**
+     *  This method must return a list of attributes which are
+     *  exposed by the SimpleMBean.  If there's a getXXX() method
+     *  available, it'll be exposed as a getter, and if there's a
+     *  setXXX() method available, it'll be exposed as a setter.
+     *  For example:
+     *  &lt;pre&gt;
+     *     public void setFoo( String foo ) ...
+     *     public String getFoo() ...
+     *
+     *     public String[] getAttributeNames()
+     *     {
+     *         String[] attrs = { &quot;foo&quot; };
+     *
+     *         return attrs;
+     *     }
+     *  &lt;/pre&gt;
+     *  Also, methods starting with &quot;is&quot; are also recognized as getters
+     *  (e.g. &lt;code&gt;public boolean isFoo()&lt;/code&gt;.)
+     *
+     *  @return An array of attribute names that can be get and optionally set.
+     */
+    public abstract String[] getAttributeNames();
+
+    /**
+     *  This method must return a list of operations which
+     *  are to be exposed by the SimpleMBean.  Note that using overloaded
+     *  method names is not supported - only one will be exposed as a JMX method
+     *  at random.
+     *
+     *  @return An array of method names that should be exposed as
+     *          JMX operations.
+     */
+    public abstract String[] getMethodNames();
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

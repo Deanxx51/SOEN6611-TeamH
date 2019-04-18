@@ -1,0 +1,961 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>VersioningFileProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.providers</a> &gt; <span class="el_source">VersioningFileProvider.java</span></div><h1>VersioningFileProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.providers;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.util.FileUtil;
+
+/**
+ *  Provides a simple directory based repository for Wiki pages.
+ *  Pages are held in a directory structure:
+ *  &lt;PRE&gt;
+ *    Main.txt
+ *    Foobar.txt
+ *    OLD/
+ *       Main/
+ *          1.txt
+ *          2.txt
+ *          page.properties
+ *       Foobar/
+ *          page.properties
+ *  &lt;/PRE&gt;
+ *
+ *  In this case, &quot;Main&quot; has three versions, and &quot;Foobar&quot; just one version.
+ *  &lt;P&gt;
+ *  The properties file contains the necessary metainformation (such as author)
+ *  information of the page.  DO NOT MESS WITH IT!
+ *
+ *  &lt;P&gt;
+ *  All files have &quot;.txt&quot; appended to make life easier for those
+ *  who insist on using Windows or other software which makes assumptions
+ *  on the files contents based on its name.
+ *
+ */
+<span class="fc" id="L72">public class VersioningFileProvider</span>
+    extends AbstractFileProvider
+{
+<span class="fc" id="L75">    private static final Logger     log = Logger.getLogger(VersioningFileProvider.class);</span>
+
+    /** Name of the directory where the old versions are stored. */
+    public static final String      PAGEDIR      = &quot;OLD&quot;;
+
+    /** Name of the property file which stores the metadata. */
+    public static final String      PROPERTYFILE = &quot;page.properties&quot;;
+
+    private CachedProperties        m_cachedProperties;
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties properties )
+        throws NoRequiredPropertyException,
+               IOException
+    {
+<span class="fc" id="L93">        super.initialize( engine, properties );</span>
+        // some additional sanity checks :
+<span class="fc" id="L95">        File oldpages = new File(getPageDirectory(), PAGEDIR);</span>
+<span class="pc bpc" id="L96" title="1 of 2 branches missed.">        if (!oldpages.exists())</span>
+        {
+<span class="pc bpc" id="L98" title="1 of 2 branches missed.">            if (!oldpages.mkdirs())</span>
+            {
+<span class="nc" id="L100">                throw new IOException(&quot;Failed to create page version directory &quot; + oldpages.getAbsolutePath());</span>
+            }
+        }
+        else
+        {
+<span class="nc bnc" id="L105" title="All 2 branches missed.">            if (!oldpages.isDirectory())</span>
+            {
+<span class="nc" id="L107">                throw new IOException(&quot;Page version directory is not a directory: &quot; + oldpages.getAbsolutePath());</span>
+            }
+<span class="nc bnc" id="L109" title="All 2 branches missed.">            if (!oldpages.canWrite())</span>
+            {
+<span class="nc" id="L111">                throw new IOException(&quot;Page version directory is not writable: &quot; + oldpages.getAbsolutePath());</span>
+            }
+        }
+<span class="fc" id="L114">        log.info(&quot;Using directory &quot; + oldpages.getAbsolutePath() + &quot; for storing old versions of pages&quot;);</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     *  Returns the directory where the old versions of the pages
+     *  are being kept.
+     */
+    private File findOldPageDir( String page )
+    {
+<span class="pc bpc" id="L123" title="1 of 2 branches missed.">        if( page == null )</span>
+        {
+<span class="nc" id="L125">            throw new InternalWikiException(&quot;Page may NOT be null in the provider!&quot;);</span>
+        }
+
+<span class="fc" id="L128">        File oldpages = new File( getPageDirectory(), PAGEDIR );</span>
+
+<span class="fc" id="L130">        return new File( oldpages, mangleName(page) );</span>
+    }
+
+    /**
+     *  Goes through the repository and decides which version is
+     *  the newest one in that directory.
+     *
+     *  @return Latest version number in the repository, or -1, if
+     *          there is no page in the repository.
+     */
+
+    // FIXME: This is relatively slow.
+    /*
+    private int findLatestVersion( String page )
+    {
+        File pageDir = findOldPageDir( page );
+
+        String[] pages = pageDir.list( new WikiFileFilter() );
+
+        if( pages == null )
+        {
+            return -1; // No such thing found.
+        }
+
+        int version = -1;
+
+        for( int i = 0; i &lt; pages.length; i++ )
+        {
+            int cutpoint = pages[i].indexOf( '.' );
+            if( cutpoint &gt; 0 )
+            {
+                String pageNum = pages[i].substring( 0, cutpoint );
+
+                try
+                {
+                    int res = Integer.parseInt( pageNum );
+
+                    if( res &gt; version )
+                    {
+                        version = res;
+                    }
+                }
+                catch( NumberFormatException e ) {} // It's okay to skip these.
+            }
+        }
+
+        return version;
+    }
+*/
+    private int findLatestVersion( String page )
+    {
+<span class="fc" id="L181">        int version = -1;</span>
+
+        try
+        {
+<span class="fc" id="L185">            Properties props = getPageProperties( page );</span>
+
+<span class="fc bfc" id="L187" title="All 2 branches covered.">            for( Iterator&lt;Object&gt; i = props.keySet().iterator(); i.hasNext(); )</span>
+            {
+<span class="fc" id="L189">                String key = (String)i.next();</span>
+
+<span class="fc bfc" id="L191" title="All 2 branches covered.">                if( key.endsWith(&quot;.author&quot;) )</span>
+                {
+<span class="fc" id="L193">                    int cutpoint = key.indexOf('.');</span>
+<span class="pc bpc" id="L194" title="1 of 2 branches missed.">                    if( cutpoint &gt; 0 )</span>
+                    {
+<span class="fc" id="L196">                        String pageNum = key.substring(0,cutpoint);</span>
+
+                        try
+                        {
+<span class="fc" id="L200">                            int res = Integer.parseInt( pageNum );</span>
+
+<span class="fc bfc" id="L202" title="All 2 branches covered.">                            if( res &gt; version )</span>
+                            {
+<span class="fc" id="L204">                                version = res;</span>
+                            }
+                        }
+<span class="pc" id="L207">                        catch( NumberFormatException e ) {} // It's okay to skip these.</span>
+                    }
+                }
+<span class="fc" id="L210">            }</span>
+        }
+<span class="nc" id="L212">        catch( IOException e )</span>
+        {
+<span class="nc" id="L214">            log.error(&quot;Unable to figure out latest version - dying...&quot;,e);</span>
+<span class="fc" id="L215">        }</span>
+
+<span class="fc" id="L217">        return version;</span>
+    }
+
+    /**
+     *  Reads page properties from the file system.
+     */
+    private Properties getPageProperties( String page )
+        throws IOException
+    {
+<span class="fc" id="L226">        File propertyFile = new File( findOldPageDir(page), PROPERTYFILE );</span>
+
+<span class="fc bfc" id="L228" title="All 2 branches covered.">        if( propertyFile.exists() )</span>
+        {
+<span class="fc" id="L230">            long lastModified = propertyFile.lastModified();</span>
+
+            //
+            //   The profiler showed that when calling the history of a page the propertyfile
+            //   was read just as much times as there were versions of that file. The loading
+            //   of a propertyfile is a cpu-intensive job. So now hold on to the last propertyfile
+            //   read because the next method will with a high probability ask for the same propertyfile.
+            //   The time it took to show a historypage with 267 versions dropped with 300%.
+            //
+
+<span class="fc" id="L240">            CachedProperties cp = m_cachedProperties;</span>
+
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">            if( cp != null</span>
+<span class="pc bpc" id="L243" title="2 of 4 branches missed.">                &amp;&amp; cp.m_page.equals(page)</span>
+                &amp;&amp; cp.m_lastModified == lastModified)
+            {
+<span class="fc" id="L246">                return cp.m_props;</span>
+            }
+
+<span class="nc" id="L249">            InputStream in = null;</span>
+
+            try
+            {
+<span class="nc" id="L253">                in = new BufferedInputStream(new FileInputStream( propertyFile ));</span>
+
+<span class="nc" id="L255">                Properties props = new Properties();</span>
+
+<span class="nc" id="L257">                props.load(in);</span>
+
+<span class="nc" id="L259">                cp = new CachedProperties( page, props, lastModified );</span>
+<span class="nc" id="L260">                m_cachedProperties = cp; // Atomic</span>
+
+<span class="nc" id="L262">                return props;</span>
+            }
+            finally
+            {
+<span class="nc" id="L266">            	IOUtils.closeQuietly( in );</span>
+            }
+        }
+
+<span class="fc" id="L270">        return new Properties(); // Returns an empty object</span>
+    }
+
+    /**
+     *  Writes the page properties back to the file system.
+     *  Note that it WILL overwrite any previous properties.
+     */
+    private void putPageProperties( String page, Properties properties )
+        throws IOException
+    {
+<span class="fc" id="L280">        File propertyFile = new File( findOldPageDir(page), PROPERTYFILE );</span>
+<span class="fc" id="L281">        OutputStream out = null;</span>
+
+        try
+        {
+<span class="fc" id="L285">            out = new FileOutputStream( propertyFile );</span>
+
+<span class="fc" id="L287">            properties.store( out, &quot; JSPWiki page properties for &quot;+page+&quot;. DO NOT MODIFY!&quot; );</span>
+        }
+        finally
+        {
+<span class="fc" id="L291">        	IOUtils.closeQuietly( out );</span>
+        }
+
+        // The profiler showed the probability was very high that when
+        // calling for the history of a page the propertyfile would be
+        // read as much times as there were versions of that file.
+        // It is statistically likely the propertyfile will be examined
+        // many times before it is updated.
+<span class="fc" id="L299">        CachedProperties cp =</span>
+<span class="fc" id="L300">                new CachedProperties( page, properties, propertyFile.lastModified() );</span>
+<span class="fc" id="L301">        m_cachedProperties = cp; // Atomic</span>
+<span class="fc" id="L302">    }</span>
+
+    /**
+     *  Figures out the real version number of the page and also checks
+     *  for its existence.
+     *
+     *  @throws NoSuchVersionException if there is no such version.
+     */
+    private int realVersion( String page, int requestedVersion )
+        throws NoSuchVersionException,
+               ProviderException
+    {
+        //
+        //  Quickly check for the most common case.
+        //
+<span class="fc bfc" id="L317" title="All 2 branches covered.">        if( requestedVersion == WikiProvider.LATEST_VERSION )</span>
+        {
+<span class="fc" id="L319">            return -1;</span>
+        }
+
+<span class="fc" id="L322">        int latest = findLatestVersion(page);</span>
+
+<span class="fc bfc" id="L324" title="All 6 branches covered.">        if( requestedVersion == latest ||</span>
+            (requestedVersion == 1 &amp;&amp; latest == -1 ) )
+        {
+<span class="fc" id="L327">            return -1;</span>
+        }
+<span class="pc bpc" id="L329" title="2 of 4 branches missed.">        else if( requestedVersion &lt;= 0 || requestedVersion &gt; latest )</span>
+        {
+<span class="nc" id="L331">            throw new NoSuchVersionException(&quot;Requested version &quot;+requestedVersion+&quot;, but latest is &quot;+latest );</span>
+        }
+
+<span class="fc" id="L334">        return requestedVersion;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public synchronized String getPageText( String page, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L344">        File dir = findOldPageDir( page );</span>
+
+<span class="fc" id="L346">        version = realVersion( page, version );</span>
+<span class="fc bfc" id="L347" title="All 2 branches covered.">        if( version == -1 )</span>
+        {
+            // We can let the FileSystemProvider take care
+            // of these requests.
+<span class="fc" id="L351">            return super.getPageText( page, WikiPageProvider.LATEST_VERSION );</span>
+        }
+
+<span class="fc" id="L354">        File pageFile = new File( dir, &quot;&quot;+version+FILE_EXT );</span>
+
+<span class="fc bfc" id="L356" title="All 2 branches covered.">        if( !pageFile.exists() )</span>
+<span class="fc" id="L357">            throw new NoSuchVersionException(&quot;Version &quot;+version+&quot;does not exist.&quot;);</span>
+
+<span class="fc" id="L359">        return readFile( pageFile );</span>
+    }
+
+
+    // FIXME: Should this really be here?
+    private String readFile( File pagedata )
+        throws ProviderException
+    {
+<span class="fc" id="L367">        String      result = null;</span>
+<span class="fc" id="L368">        InputStream in     = null;</span>
+
+<span class="pc bpc" id="L370" title="1 of 2 branches missed.">        if( pagedata.exists() )</span>
+        {
+<span class="pc bpc" id="L372" title="1 of 2 branches missed.">            if( pagedata.canRead() )</span>
+            {
+                try
+                {
+<span class="fc" id="L376">                    in = new FileInputStream( pagedata );</span>
+<span class="fc" id="L377">                    result = FileUtil.readContents( in, m_encoding );</span>
+                }
+<span class="nc" id="L379">                catch( IOException e )</span>
+                {
+<span class="nc" id="L381">                    log.error(&quot;Failed to read&quot;, e);</span>
+<span class="nc" id="L382">                    throw new ProviderException(&quot;I/O error: &quot;+e.getMessage());</span>
+                }
+                finally
+                {
+<span class="fc" id="L386">                	IOUtils.closeQuietly( in );</span>
+                }
+            }
+            else
+            {
+<span class="nc" id="L391">                log.warn(&quot;Failed to read page from '&quot;+pagedata.getAbsolutePath()+&quot;', possibly a permissions problem&quot;);</span>
+<span class="nc" id="L392">                throw new ProviderException(&quot;I cannot read the requested page.&quot;);</span>
+            }
+        }
+        else
+        {
+            // This is okay.
+            // FIXME: is it?
+<span class="nc" id="L399">            log.info(&quot;New page&quot;);</span>
+        }
+
+<span class="fc" id="L402">        return result;</span>
+    }
+
+    // FIXME: This method has no rollback whatsoever.
+
+    /*
+      This is how the page directory should look like:
+
+         version    pagedir       olddir
+          none       empty         empty
+           1         Main.txt (1)  empty
+           2         Main.txt (2)  1.txt
+           3         Main.txt (3)  1.txt, 2.txt
+    */
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public synchronized void putPageText( WikiPage page, String text )
+        throws ProviderException
+    {
+        //
+        //  This is a bit complicated.  We'll first need to
+        //  copy the old file to be the newest file.
+        //
+
+<span class="fc" id="L428">        File pageDir = findOldPageDir( page.getName() );</span>
+
+<span class="fc bfc" id="L430" title="All 2 branches covered.">        if( !pageDir.exists() )</span>
+        {
+<span class="fc" id="L432">            pageDir.mkdirs();</span>
+        }
+
+<span class="fc" id="L435">        int  latest  = findLatestVersion( page.getName() );</span>
+
+        try
+        {
+            //
+            // Copy old data to safety, if one exists.
+            //
+
+<span class="fc" id="L443">            File oldFile = findPage( page.getName() );</span>
+
+            // Figure out which version should the old page be?
+            // Numbers should always start at 1.
+            // &quot;most recent&quot; = -1 ==&gt; 1
+            // &quot;first&quot;       = 1  ==&gt; 2
+
+<span class="fc bfc" id="L450" title="All 2 branches covered.">            int versionNumber = (latest &gt; 0) ? latest : 1;</span>
+<span class="fc bfc" id="L451" title="All 2 branches covered.">            boolean firstUpdate = (versionNumber == 1);</span>
+
+<span class="pc bpc" id="L453" title="1 of 4 branches missed.">            if( oldFile != null &amp;&amp; oldFile.exists() )</span>
+            {
+<span class="fc" id="L455">                InputStream in = null;</span>
+<span class="fc" id="L456">                OutputStream out = null;</span>
+
+                try
+                {
+<span class="fc" id="L460">                    in = new BufferedInputStream( new FileInputStream( oldFile ) );</span>
+<span class="fc" id="L461">                    File pageFile = new File( pageDir, Integer.toString( versionNumber )+FILE_EXT );</span>
+<span class="fc" id="L462">                    out = new BufferedOutputStream( new FileOutputStream( pageFile ) );</span>
+
+<span class="fc" id="L464">                    FileUtil.copyContents( in, out );</span>
+
+                    //
+                    // We need also to set the date, since we rely on this.
+                    //
+<span class="fc" id="L469">                    pageFile.setLastModified( oldFile.lastModified() );</span>
+
+                    //
+                    // Kludge to make the property code to work properly.
+                    //
+<span class="fc" id="L474">                    versionNumber++;</span>
+                }
+                finally
+                {
+<span class="fc" id="L478">                	IOUtils.closeQuietly( out );</span>
+<span class="fc" id="L479">                	IOUtils.closeQuietly( in );</span>
+                }
+            }
+
+            //
+            //  Let superclass handler writing data to a new version.
+            //
+
+<span class="fc" id="L487">            super.putPageText( page, text );</span>
+
+            //
+            //  Finally, write page version data.
+            //
+
+            // FIXME: No rollback available.
+<span class="fc" id="L494">            Properties props = getPageProperties( page.getName() );</span>
+
+<span class="fc" id="L496">            String authorFirst = null;</span>
+            // if the following file exists, we are NOT migrating from FileSystemProvider
+<span class="fc" id="L498">            File pagePropFile = new File(getPageDirectory() + File.separator + PAGEDIR + File.separator + mangleName(page.getName()) + File.separator + &quot;page&quot; + FileSystemProvider.PROP_EXT);</span>
+<span class="fc bfc" id="L499" title="All 4 branches covered.">            if ( firstUpdate &amp;&amp; ! pagePropFile.exists())</span>
+            {
+                // we might not yet have a versioned author because the
+                // old page was last maintained by FileSystemProvider
+<span class="fc" id="L503">                Properties props2 = getHeritagePageProperties( page.getName() );</span>
+
+                // remember the simulated original author (or something)
+                // in the new properties
+<span class="fc" id="L507">                authorFirst = props2.getProperty( &quot;1.author&quot;, &quot;unknown&quot; );</span>
+<span class="fc" id="L508">                props.setProperty( &quot;1.author&quot;, authorFirst );</span>
+            }
+
+<span class="fc" id="L511">            String newAuthor = page.getAuthor();</span>
+<span class="pc bpc" id="L512" title="1 of 2 branches missed.">            if ( newAuthor == null )</span>
+            {
+<span class="nc bnc" id="L514" title="All 2 branches missed.">                newAuthor = ( authorFirst != null ) ? authorFirst : &quot;unknown&quot;;</span>
+            }
+<span class="fc" id="L516">            page.setAuthor(newAuthor);</span>
+<span class="fc" id="L517">            props.setProperty( versionNumber + &quot;.author&quot;, newAuthor );</span>
+
+<span class="fc" id="L519">            String changeNote = (String) page.getAttribute(WikiPage.CHANGENOTE);</span>
+<span class="fc bfc" id="L520" title="All 2 branches covered.">            if( changeNote != null )</span>
+            {
+<span class="fc" id="L522">                props.setProperty( versionNumber+&quot;.changenote&quot;, changeNote );</span>
+            }
+
+            // Get additional custom properties from page and add to props
+<span class="fc" id="L526">            getCustomProperties(page, props);</span>
+
+<span class="fc" id="L528">            putPageProperties( page.getName(), props );</span>
+        }
+<span class="nc" id="L530">        catch( IOException e )</span>
+        {
+<span class="nc" id="L532">            log.error( &quot;Saving failed&quot;, e );</span>
+<span class="nc" id="L533">            throw new ProviderException(&quot;Could not save page text: &quot;+e.getMessage());</span>
+<span class="fc" id="L534">        }</span>
+<span class="fc" id="L535">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public WikiPage getPageInfo( String page, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L544">        int latest = findLatestVersion(page);</span>
+        int realVersion;
+
+<span class="fc" id="L547">        WikiPage p = null;</span>
+
+<span class="pc bpc" id="L549" title="1 of 8 branches missed.">        if( version == WikiPageProvider.LATEST_VERSION ||</span>
+            version == latest ||
+            (version == 1 &amp;&amp; latest == -1) )
+        {
+            //
+            // Yes, we need to talk to the top level directory
+            // to get this version.
+            //
+            // I am listening to Press Play On Tape's guitar version of
+            // the good old C64 &quot;Wizardry&quot; -tune at this moment.
+            // Oh, the memories...
+            //
+<span class="fc bfc" id="L561" title="All 2 branches covered.">            realVersion = (latest &gt;= 0) ? latest : 1;</span>
+
+<span class="fc" id="L563">            p = super.getPageInfo( page, WikiPageProvider.LATEST_VERSION );</span>
+
+<span class="fc bfc" id="L565" title="All 2 branches covered.">            if( p != null )</span>
+            {
+<span class="fc" id="L567">                p.setVersion( realVersion );</span>
+            }
+        }
+        else
+        {
+            //
+            //  The file is not the most recent, so we'll need to
+            //  find it from the deep trenches of the &quot;OLD&quot; directory
+            //  structure.
+            //
+<span class="fc" id="L577">            realVersion = version;</span>
+<span class="fc" id="L578">            File dir = findOldPageDir( page );</span>
+
+<span class="pc bpc" id="L580" title="2 of 4 branches missed.">            if( !dir.exists() || !dir.isDirectory() )</span>
+            {
+<span class="nc" id="L582">                return null;</span>
+            }
+
+<span class="fc" id="L585">            File file = new File( dir, version+FILE_EXT );</span>
+
+<span class="fc bfc" id="L587" title="All 2 branches covered.">            if( file.exists() )</span>
+            {
+<span class="fc" id="L589">                p = new WikiPage( m_engine, page );</span>
+
+<span class="fc" id="L591">                p.setLastModified( new Date(file.lastModified()) );</span>
+<span class="fc" id="L592">                p.setVersion( version );</span>
+            }
+        }
+
+        //
+        //  Get author and other metadata information
+        //  (Modification date has already been set.)
+        //
+<span class="fc bfc" id="L600" title="All 2 branches covered.">        if( p != null )</span>
+        {
+            try
+            {
+<span class="fc" id="L604">                Properties props = getPageProperties( page );</span>
+<span class="fc" id="L605">                String author = props.getProperty( realVersion+&quot;.author&quot; );</span>
+<span class="fc bfc" id="L606" title="All 2 branches covered.">                if ( author == null )</span>
+                {
+                    // we might not have a versioned author because the
+                    // old page was last maintained by FileSystemProvider
+<span class="fc" id="L610">                    Properties props2 = getHeritagePageProperties( page );</span>
+<span class="fc" id="L611">                    author = props2.getProperty( WikiPage.AUTHOR );</span>
+                }
+<span class="fc bfc" id="L613" title="All 2 branches covered.">                if ( author != null )</span>
+                {
+<span class="fc" id="L615">                    p.setAuthor( author );</span>
+                }
+
+<span class="fc" id="L618">                String changenote = props.getProperty( realVersion+&quot;.changenote&quot; );</span>
+<span class="fc bfc" id="L619" title="All 2 branches covered.">                if( changenote != null ) p.setAttribute( WikiPage.CHANGENOTE, changenote );</span>
+
+                // Set the props values to the page attributes
+<span class="fc" id="L622">                setCustomProperties(p, props);</span>
+            }
+<span class="nc" id="L624">            catch( IOException e )</span>
+            {
+<span class="nc" id="L626">                log.error( &quot;Cannot get author for page&quot;+page+&quot;: &quot;, e );</span>
+<span class="fc" id="L627">            }</span>
+        }
+
+<span class="fc" id="L630">        return p;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public boolean pageExists( String pageName, int version )
+    {
+<span class="nc bnc" id="L639" title="All 4 branches missed.">        if (version == WikiPageProvider.LATEST_VERSION || version == findLatestVersion( pageName ) ) {</span>
+<span class="nc" id="L640">            return pageExists(pageName);</span>
+        }
+
+<span class="nc" id="L643">        File dir = findOldPageDir( pageName );</span>
+
+<span class="nc bnc" id="L645" title="All 4 branches missed.">        if( !dir.exists() || !dir.isDirectory() )</span>
+        {
+<span class="nc" id="L647">            return false;</span>
+        }
+
+<span class="nc" id="L650">        File file = new File( dir, version+FILE_EXT );</span>
+
+<span class="nc" id="L652">        return file.exists();</span>
+
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+     // FIXME: Does not get user information.
+    @Override
+    public List&lt; WikiPage &gt; getVersionHistory( String page ) throws ProviderException {
+<span class="fc" id="L662">        ArrayList&lt;WikiPage&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L663">        int latest = findLatestVersion( page );</span>
+
+        // list.add( getPageInfo(page,WikiPageProvider.LATEST_VERSION) );
+
+<span class="fc bfc" id="L667" title="All 2 branches covered.">        for( int i = latest; i &gt; 0; i-- )</span>
+        {
+<span class="fc" id="L669">            WikiPage info = getPageInfo( page, i );</span>
+
+<span class="fc bfc" id="L671" title="All 2 branches covered.">            if( info != null )</span>
+            {
+<span class="fc" id="L673">                list.add( info );</span>
+            }
+        }
+
+<span class="fc" id="L677">        return list;</span>
+    }
+
+    /*
+     * Support for migration of simple properties created by the
+     * FileSystemProvider when coming under Versioning management.
+     * Simulate an initial version.
+     */
+    private Properties getHeritagePageProperties( String page )
+        throws IOException
+    {
+<span class="fc" id="L688">        File propertyFile = new File( getPageDirectory(),</span>
+<span class="fc" id="L689">                        mangleName(page) + FileSystemProvider.PROP_EXT );</span>
+<span class="fc bfc" id="L690" title="All 2 branches covered.">        if ( propertyFile.exists() )</span>
+        {
+<span class="fc" id="L692">            long lastModified = propertyFile.lastModified();</span>
+
+<span class="fc" id="L694">            CachedProperties cp = m_cachedProperties;</span>
+<span class="fc bfc" id="L695" title="All 2 branches covered.">            if ( cp != null</span>
+<span class="pc bpc" id="L696" title="2 of 4 branches missed.">                &amp;&amp; cp.m_page.equals(page)</span>
+                &amp;&amp; cp.m_lastModified == lastModified )
+            {
+<span class="fc" id="L699">                return cp.m_props;</span>
+            }
+
+<span class="fc" id="L702">            InputStream in = null;</span>
+            try
+            {
+<span class="fc" id="L705">                in = new BufferedInputStream(</span>
+                            new FileInputStream( propertyFile ));
+
+<span class="fc" id="L708">                Properties props = new Properties();</span>
+<span class="fc" id="L709">                props.load(in);</span>
+
+<span class="fc" id="L711">                String originalAuthor = props.getProperty(WikiPage.AUTHOR);</span>
+<span class="pc bpc" id="L712" title="1 of 2 branches missed.">                if ( originalAuthor.length() &gt; 0 )</span>
+                {
+                    // simulate original author as if already versioned
+                    // but put non-versioned property in special cache too
+<span class="fc" id="L716">                    props.setProperty( &quot;1.author&quot;, originalAuthor );</span>
+
+                    // The profiler showed the probability was very high
+                    // that when calling for the history of a page the
+                    // propertyfile would be read as much times as there were
+                    // versions of that file. It is statistically likely the
+                    // propertyfile will be examined many times before it is updated.
+<span class="fc" id="L723">                    cp = new CachedProperties( page, props, propertyFile.lastModified() );</span>
+<span class="fc" id="L724">                    m_cachedProperties = cp; // Atomic</span>
+                }
+
+<span class="fc" id="L727">                return props;</span>
+            }
+            finally
+            {
+<span class="fc" id="L731">                IOUtils.closeQuietly( in );</span>
+            }
+        }
+
+<span class="fc" id="L735">        return new Properties(); // Returns an empty object</span>
+    }
+
+    /**
+     *  Removes the relevant page directory under &quot;OLD&quot; -directory as well,
+     *  but does not remove any extra subdirectories from it.  It will only
+     *  touch those files that it thinks to be WikiPages.
+     *
+     *  @param page {@inheritDoc}
+     *  @throws {@inheritDoc}
+     */
+    // FIXME: Should log errors.
+    @Override
+    public void deletePage( String page )
+        throws ProviderException
+    {
+<span class="fc" id="L751">        super.deletePage( page );</span>
+
+<span class="fc" id="L753">        File dir = findOldPageDir( page );</span>
+
+<span class="pc bpc" id="L755" title="2 of 4 branches missed.">        if( dir.exists() &amp;&amp; dir.isDirectory() )</span>
+        {
+<span class="fc" id="L757">            File[] files = dir.listFiles( new WikiFileFilter() );</span>
+
+<span class="fc bfc" id="L759" title="All 2 branches covered.">            for( int i = 0; i &lt; files.length; i++ )</span>
+            {
+<span class="fc" id="L761">                files[i].delete();</span>
+            }
+
+<span class="fc" id="L764">            File propfile = new File( dir, PROPERTYFILE );</span>
+
+<span class="pc bpc" id="L766" title="1 of 2 branches missed.">            if( propfile.exists() )</span>
+            {
+<span class="fc" id="L768">                propfile.delete();</span>
+            }
+
+<span class="fc" id="L771">            dir.delete();</span>
+        }
+<span class="fc" id="L773">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     *
+     *  Deleting versions has never really worked,
+     *  JSPWiki assumes that version histories are &quot;not gappy&quot;.
+     *  Using deleteVersion() is definitely not recommended.
+     *
+     */
+    @Override
+    public void deleteVersion( String page, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L787">        File dir = findOldPageDir( page );</span>
+
+<span class="fc" id="L789">        int latest = findLatestVersion( page );</span>
+
+<span class="pc bpc" id="L791" title="2 of 8 branches missed.">        if( version == WikiPageProvider.LATEST_VERSION ||</span>
+            version == latest ||
+            (version == 1 &amp;&amp; latest == -1) )
+        {
+            //
+            //  Delete the properties
+            //
+            try
+            {
+<span class="fc" id="L800">                Properties props = getPageProperties( page );</span>
+<span class="pc bpc" id="L801" title="1 of 2 branches missed.">                props.remove( ((latest &gt; 0) ? latest : 1)+&quot;.author&quot; );</span>
+<span class="fc" id="L802">                putPageProperties( page, props );</span>
+            }
+<span class="nc" id="L804">            catch( IOException e )</span>
+            {
+<span class="nc" id="L806">                log.error(&quot;Unable to modify page properties&quot;,e);</span>
+<span class="nc" id="L807">                throw new ProviderException(&quot;Could not modify page properties: &quot; + e.getMessage());</span>
+<span class="fc" id="L808">            }</span>
+
+            // We can let the FileSystemProvider take care
+            // of the actual deletion
+<span class="fc" id="L812">            super.deleteVersion( page, WikiPageProvider.LATEST_VERSION );</span>
+
+            //
+            //  Copy the old file to the new location
+            //
+<span class="fc" id="L817">            latest = findLatestVersion( page );</span>
+
+<span class="fc" id="L819">            File pageDir = findOldPageDir( page );</span>
+<span class="fc" id="L820">            File previousFile = new File( pageDir, Integer.toString(latest)+FILE_EXT );</span>
+
+<span class="fc" id="L822">            InputStream in = null;</span>
+<span class="fc" id="L823">            OutputStream out = null;</span>
+
+            try
+            {
+<span class="pc bpc" id="L827" title="1 of 2 branches missed.">                if( previousFile.exists() )</span>
+                {
+<span class="fc" id="L829">                    in = new BufferedInputStream( new FileInputStream( previousFile ) );</span>
+<span class="fc" id="L830">                    File pageFile = findPage(page);</span>
+<span class="fc" id="L831">                    out = new BufferedOutputStream( new FileOutputStream( pageFile ) );</span>
+
+<span class="fc" id="L833">                    FileUtil.copyContents( in, out );</span>
+
+                    //
+                    // We need also to set the date, since we rely on this.
+                    //
+<span class="fc" id="L838">                    pageFile.setLastModified( previousFile.lastModified() );</span>
+                }
+            }
+<span class="nc" id="L841">            catch( IOException e )</span>
+            {
+<span class="nc" id="L843">                log.fatal(&quot;Something wrong with the page directory - you may have just lost data!&quot;,e);</span>
+            }
+            finally
+            {
+<span class="fc" id="L847">            	IOUtils.closeQuietly( in );</span>
+<span class="fc" id="L848">            	IOUtils.closeQuietly( out );</span>
+            }
+
+<span class="fc" id="L851">            return;</span>
+        }
+
+<span class="fc" id="L854">        File pageFile = new File( dir, &quot;&quot;+version+FILE_EXT );</span>
+
+<span class="pc bpc" id="L856" title="1 of 2 branches missed.">        if( pageFile.exists() )</span>
+        {
+<span class="pc bpc" id="L858" title="1 of 2 branches missed.">            if( !pageFile.delete() )</span>
+            {
+<span class="nc" id="L860">                log.error(&quot;Unable to delete page.&quot;);</span>
+            }
+        }
+        else
+        {
+<span class="nc" id="L865">            throw new NoSuchVersionException(&quot;Page &quot;+page+&quot;, version=&quot;+version);</span>
+        }
+<span class="fc" id="L867">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    // FIXME: This is kinda slow, we should need to do this only once.
+    @Override
+    public Collection&lt; WikiPage &gt; getAllPages() throws ProviderException
+    {
+<span class="fc" id="L876">        Collection&lt; WikiPage &gt; pages = super.getAllPages();</span>
+<span class="fc" id="L877">        Collection&lt; WikiPage &gt; returnedPages = new ArrayList&lt;&gt;();</span>
+
+<span class="pc bpc" id="L879" title="1 of 2 branches missed.">        for( Iterator&lt; WikiPage &gt; i = pages.iterator(); i.hasNext(); )</span>
+        {
+<span class="nc" id="L881">            WikiPage page = i.next();</span>
+
+<span class="nc" id="L883">            WikiPage info = getPageInfo( page.getName(), WikiProvider.LATEST_VERSION );</span>
+
+<span class="nc" id="L885">            returnedPages.add( info );</span>
+<span class="nc" id="L886">        }</span>
+
+<span class="fc" id="L888">        return returnedPages;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String getProviderInfo()
+    {
+<span class="nc" id="L897">        return &quot;&quot;;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void movePage( String from,
+                          String to )
+        throws ProviderException
+    {
+        // Move the file itself
+<span class="nc" id="L909">        File fromFile = findPage( from );</span>
+<span class="nc" id="L910">        File toFile = findPage( to );</span>
+
+<span class="nc" id="L912">        fromFile.renameTo( toFile );</span>
+
+        // Move any old versions
+<span class="nc" id="L915">        File fromOldDir = findOldPageDir( from );</span>
+<span class="nc" id="L916">        File toOldDir = findOldPageDir( to );</span>
+
+<span class="nc" id="L918">        fromOldDir.renameTo( toOldDir );</span>
+<span class="nc" id="L919">    }</span>
+
+    /*
+     * The profiler showed that when calling the history of a page, the
+     * propertyfile was read just as many times as there were versions
+     * of that file. The loading of a propertyfile is a cpu-intensive job.
+     * This Class holds onto the last propertyfile read, because the
+     * probability is high that the next call will with ask for the same
+     * propertyfile. The time it took to show a historypage with 267
+     * versions dropped by 300%. Although each propertyfile in a history
+     * could be cached, there is likely to be little performance gain over
+     * simply keeping the last one requested.
+     */
+    private static class CachedProperties
+    {
+        String m_page;
+        Properties m_props;
+        long m_lastModified;
+
+        /*
+         * Because a Constructor is inherently synchronised, there is
+         * no need to synchronise the arguments.
+         *
+         * @param engine WikiEngine instance
+         * @param props  Properties to use for initialization
+         */
+        public CachedProperties(String pageName, Properties props,
+<span class="fc" id="L946">                                long lastModified) {</span>
+<span class="pc bpc" id="L947" title="1 of 2 branches missed.">            if ( pageName == null )</span>
+            {
+<span class="nc" id="L949">                throw new NullPointerException ( &quot;pageName must not be null!&quot; );</span>
+            }
+<span class="fc" id="L951">            this.m_page = pageName;</span>
+<span class="pc bpc" id="L952" title="1 of 2 branches missed.">            if ( props == null )</span>
+            {
+<span class="nc" id="L954">                throw new NullPointerException ( &quot;properties must not be null!&quot; );</span>
+            }
+<span class="fc" id="L956">            m_props = props;</span>
+<span class="fc" id="L957">            this.m_lastModified = lastModified;</span>
+<span class="fc" id="L958">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

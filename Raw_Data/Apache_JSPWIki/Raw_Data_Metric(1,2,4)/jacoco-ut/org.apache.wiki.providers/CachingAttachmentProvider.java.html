@@ -1,0 +1,398 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CachingAttachmentProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.providers</a> &gt; <span class="el_source">CachingAttachmentProvider.java</span></div><h1>CachingAttachmentProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.providers;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.attachment.AttachmentManager;
+import org.apache.wiki.search.QueryItem;
+import org.apache.wiki.util.ClassUtil;
+
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
+/**
+ *  Provides a caching attachment provider.  This class rests on top of a
+ *  real provider class and provides a cache to speed things up.  Only the
+ *  Attachment objects are cached; the actual attachment contents are
+ *  fetched always from the provider.
+ *
+ *  @since 2.1.64.
+ */
+
+//        EntryRefreshPolicy for that.
+<span class="fc" id="L55">public class CachingAttachmentProvider</span>
+    implements WikiAttachmentProvider
+{
+<span class="fc" id="L58">    private static final Logger log = Logger.getLogger(CachingAttachmentProvider.class);</span>
+
+    private WikiAttachmentProvider m_provider;
+
+<span class="fc" id="L62">    private CacheManager m_cacheManager = CacheManager.getInstance();</span>
+
+    /** Default cache capacity for now. */
+    public static final int m_capacity = 1000;
+
+    /**
+     *  The cache contains Collection objects which contain Attachment objects.
+     *  The key is the parent wiki page name (String).
+     */
+    private Cache m_cache;
+    /** Name of the attachment cache. */
+    public static final String ATTCOLLCACHE_NAME = &quot;jspwiki.attachmentCollectionsCache&quot;;
+
+    /**
+     * This cache contains Attachment objects and is keyed by attachment name.
+     * This provides for quickly giving recently changed attachments (for the RecentChanges plugin)
+     */
+    private Cache m_attCache;
+    /** Name of the attachment cache. */
+    public static final String ATTCACHE_NAME = &quot;jspwiki.attachmentsCache&quot;;
+
+<span class="fc" id="L83">    private long m_cacheMisses = 0;</span>
+<span class="fc" id="L84">    private long m_cacheHits = 0;</span>
+
+    /** The extension to append to directory names to denote an attachment directory. */
+    public static final String DIR_EXTENSION   = &quot;-att&quot;;
+
+    /** Property that supplies the directory used to store attachments. */
+    public static final String PROP_STORAGEDIR = &quot;jspwiki.basicAttachmentProvider.storageDir&quot;;
+
+<span class="fc" id="L92">    private boolean m_gotall = false;</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties properties )
+        throws NoRequiredPropertyException,
+               IOException
+    {
+<span class="fc" id="L102">        log.info(&quot;Initing CachingAttachmentProvider&quot;);</span>
+
+<span class="fc" id="L104">        String attCollCacheName = engine.getApplicationName() + &quot;.&quot; + ATTCOLLCACHE_NAME;</span>
+<span class="fc bfc" id="L105" title="All 2 branches covered.">        if (m_cacheManager.cacheExists(attCollCacheName)) {</span>
+<span class="fc" id="L106">            m_cache = m_cacheManager.getCache(attCollCacheName);</span>
+        } else {
+<span class="fc" id="L108">            m_cache = new Cache(attCollCacheName, m_capacity, false, false, 0, 0);</span>
+<span class="fc" id="L109">            m_cacheManager.addCache(m_cache);</span>
+        }
+
+        //
+        // cache for the individual Attachment objects, attachment name is key, the Attachment object is the cached object
+        //
+<span class="fc" id="L115">        String attCacheName = engine.getApplicationName() + &quot;.&quot; + ATTCACHE_NAME;</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        if (m_cacheManager.cacheExists(attCacheName)) {</span>
+<span class="fc" id="L117">            m_attCache = m_cacheManager.getCache(attCacheName);</span>
+        } else {
+<span class="fc" id="L119">            m_attCache = new Cache(attCacheName, m_capacity, false, false, 0, 0);</span>
+<span class="fc" id="L120">            m_cacheManager.addCache(m_attCache);</span>
+        }
+        //
+        //  Find and initialize real provider.
+        //
+<span class="fc" id="L125">        String classname = engine.getRequiredProperty( properties, AttachmentManager.PROP_PROVIDER );</span>
+
+        try
+        {
+<span class="fc" id="L129">            Class&lt;?&gt; providerclass = ClassUtil.findClass( &quot;org.apache.wiki.providers&quot;, classname);</span>
+
+<span class="fc" id="L131">            m_provider = (WikiAttachmentProvider)providerclass.newInstance();</span>
+
+<span class="fc" id="L133">            log.debug(&quot;Initializing real provider class &quot;+m_provider);</span>
+<span class="fc" id="L134">            m_provider.initialize( engine, properties );</span>
+        }
+<span class="nc" id="L136">        catch( ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L138">            log.error(&quot;Unable to locate provider class &quot;+classname,e);</span>
+<span class="nc" id="L139">            throw new IllegalArgumentException(&quot;no provider class&quot;, e);</span>
+        }
+<span class="nc" id="L141">        catch( InstantiationException e )</span>
+        {
+<span class="nc" id="L143">            log.error(&quot;Unable to create provider class &quot;+classname,e);</span>
+<span class="nc" id="L144">            throw new IllegalArgumentException(&quot;faulty provider class&quot;, e);</span>
+        }
+<span class="nc" id="L146">        catch( IllegalAccessException e )</span>
+        {
+<span class="nc" id="L148">            log.error(&quot;Illegal access to provider class &quot;+classname,e);</span>
+<span class="nc" id="L149">            throw new IllegalArgumentException(&quot;illegal provider class&quot;, e);</span>
+<span class="fc" id="L150">        }</span>
+
+<span class="fc" id="L152">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void putAttachmentData( Attachment att, InputStream data )
+        throws ProviderException, IOException {
+<span class="fc" id="L160">        m_provider.putAttachmentData( att, data );</span>
+
+<span class="fc" id="L162">        m_cache.remove(att.getParentName());</span>
+<span class="fc" id="L163">        att.setLastModified(new Date());</span>
+<span class="fc" id="L164">        m_attCache.put(new Element(att.getName(), att));</span>
+<span class="fc" id="L165">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public InputStream getAttachmentData( Attachment att )
+        throws ProviderException, IOException {
+<span class="fc" id="L173">        return m_provider.getAttachmentData( att );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List&lt; Attachment &gt; listAttachments(WikiPage page) throws ProviderException {
+<span class="fc" id="L181">        log.debug(&quot;Listing attachments for &quot; + page);</span>
+<span class="fc" id="L182">        Element element = m_cache.get(page.getName());</span>
+
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        if (element != null) {</span>
+            @SuppressWarnings(&quot;unchecked&quot;) 
+<span class="fc" id="L186">            List&lt; Attachment &gt; c = ( List&lt; Attachment &gt; )element.getObjectValue();</span>
+<span class="fc" id="L187">            log.debug(&quot;LIST from cache, &quot; + page.getName() + &quot;, size=&quot; + c.size());</span>
+<span class="fc" id="L188">            return cloneCollection(c);</span>
+        }
+
+<span class="fc" id="L191">        log.debug(&quot;list NOT in cache, &quot; + page.getName());</span>
+
+<span class="fc" id="L193">        return refresh(page);</span>
+    }
+
+    private &lt;T&gt; List&lt;T&gt; cloneCollection( Collection&lt;T&gt; c )
+    {
+<span class="fc" id="L198">        ArrayList&lt;T&gt; list = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L200">        list.addAll( c );</span>
+
+<span class="fc" id="L202">        return list;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; Attachment &gt; findAttachments( QueryItem[] query )
+    {
+<span class="nc" id="L211">        return m_provider.findAttachments( query );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List&lt;Attachment&gt; listAllChanged(Date timestamp) throws ProviderException {
+<span class="fc" id="L219">        List&lt; Attachment &gt; all = null;</span>
+        //
+        // we do a one-time build up of the cache, after this the cache is updated for every attachment add/delete
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        if (m_gotall == false) {</span>
+<span class="fc" id="L223">            all = m_provider.listAllChanged(timestamp);</span>
+
+            // Put all pages in the cache :
+
+<span class="fc" id="L227">            synchronized (this) {</span>
+<span class="fc bfc" id="L228" title="All 2 branches covered.">                for (Iterator&lt; Attachment &gt; i = all.iterator(); i.hasNext(); ) {</span>
+<span class="fc" id="L229">                    Attachment att = i.next();</span>
+<span class="fc" id="L230">                    m_attCache.put(new Element(att.getName(), att));</span>
+<span class="fc" id="L231">                }</span>
+<span class="fc" id="L232">                m_gotall = true;</span>
+<span class="fc" id="L233">            }</span>
+        } else {
+            @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L236">            List&lt; String &gt; keys = m_attCache.getKeysWithExpiryCheck();</span>
+<span class="fc" id="L237">            all = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L238" title="All 2 branches covered.">            for (String key : keys) {</span>
+<span class="fc" id="L239">                Element element = m_attCache.get(key);</span>
+<span class="fc" id="L240">                Attachment cachedAttachment = ( Attachment )element.getObjectValue();</span>
+<span class="pc bpc" id="L241" title="1 of 2 branches missed.">                if (cachedAttachment != null) {</span>
+<span class="fc" id="L242">                    all.add(cachedAttachment);</span>
+                }
+<span class="fc" id="L244">            }</span>
+        }
+
+<span class="fc" id="L247">        return all;</span>
+    }
+
+    /**
+     *  Simply goes through the collection and attempts to locate the
+     *  given attachment of that name.
+     *
+     *  @return null, if no such attachment was in this collection.
+     */
+    private Attachment findAttachmentFromCollection( Collection&lt; Attachment &gt; c, String name ) {
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        for( Attachment att : new ArrayList&lt; &gt;( c ) ) {</span>
+<span class="fc bfc" id="L258" title="All 2 branches covered.">            if( name.equals( att.getFileName() ) ) {</span>
+<span class="fc" id="L259">                return att;</span>
+            }
+<span class="fc" id="L261">        }</span>
+
+<span class="fc" id="L263">        return null;</span>
+    }
+
+    /**
+     *  Refreshes the cache content and updates counters.
+     *
+     *  @return The newly fetched object from the provider.
+     */
+    private List&lt;Attachment&gt; refresh( WikiPage page ) throws ProviderException
+    {
+<span class="fc" id="L273">        List&lt;Attachment&gt; c = m_provider.listAttachments( page );</span>
+<span class="fc" id="L274">        m_cache.put(new Element(page.getName(), c));</span>
+
+<span class="fc" id="L276">        return c;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    @Override
+    public Attachment getAttachmentInfo(WikiPage page, String name, int version) throws ProviderException {
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">        if (log.isDebugEnabled()) {</span>
+<span class="nc" id="L286">            log.debug(&quot;Getting attachments for &quot; + page + &quot;, name=&quot; + name + &quot;, version=&quot; + version);</span>
+        }
+
+        //
+        //  We don't cache previous versions
+        //
+<span class="fc bfc" id="L292" title="All 2 branches covered.">        if (version != WikiProvider.LATEST_VERSION) {</span>
+<span class="fc" id="L293">            log.debug(&quot;...we don't cache old versions&quot;);</span>
+<span class="fc" id="L294">            return m_provider.getAttachmentInfo(page, name, version);</span>
+        }
+
+<span class="fc" id="L297">        Collection&lt;Attachment&gt; c = null;</span>
+<span class="fc" id="L298">        Element element =   m_cache.get(page.getName());</span>
+
+<span class="fc bfc" id="L300" title="All 2 branches covered.">        if (element == null) {</span>
+<span class="fc" id="L301">            log.debug(page.getName() + &quot; wasn't in the cache&quot;);</span>
+<span class="fc" id="L302">            c = refresh(page);</span>
+
+<span class="pc bpc" id="L304" title="1 of 2 branches missed.">            if (c == null) {</span>
+<span class="nc" id="L305">                return null; // No such attachment</span>
+            }
+        } else {
+<span class="fc" id="L308">            log.debug(page.getName() + &quot; FOUND in the cache&quot;);</span>
+<span class="fc" id="L309">            c = (Collection&lt;Attachment&gt;) element.getObjectValue();</span>
+        }
+
+<span class="fc" id="L312">        return findAttachmentFromCollection(c, name);</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public List&lt;Attachment&gt; getVersionHistory( Attachment att )
+    {
+<span class="nc" id="L321">        return m_provider.getVersionHistory( att );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void deleteVersion( Attachment att ) throws ProviderException
+    {
+        // This isn't strictly speaking correct, but it does not really matter
+<span class="nc" id="L331">        m_cache.remove(att.getParentName());</span>
+<span class="nc" id="L332">        m_provider.deleteVersion( att );</span>
+<span class="nc" id="L333">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void deleteAttachment( Attachment att ) throws ProviderException
+    {
+<span class="fc" id="L341">        m_cache.remove(att.getParentName());</span>
+<span class="fc" id="L342">        m_attCache.remove(att.getName());</span>
+<span class="fc" id="L343">        m_provider.deleteAttachment( att );</span>
+<span class="fc" id="L344">    }</span>
+
+
+    /**
+     * Gets the provider class name, and cache statistics (misscount and,hitcount of the attachment cache).
+     *
+     * @return A plain string with all the above mentioned values.
+     */
+    @Override
+    public synchronized String getProviderInfo()
+    {
+<span class="nc" id="L355">        return &quot;Real provider: &quot;+m_provider.getClass().getName()+</span>
+                &quot;.  Cache misses: &quot;+m_cacheMisses+
+                &quot;.  Cache hits: &quot;+m_cacheHits;
+    }
+
+    /**
+     *  Returns the WikiAttachmentProvider that this caching provider delegates to.
+     *
+     *  @return The real provider underneath this one.
+     */
+    public WikiAttachmentProvider getRealProvider()
+    {
+<span class="nc" id="L367">        return m_provider;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void moveAttachmentsForPage( String oldParent, String newParent ) throws ProviderException
+    {
+<span class="fc" id="L376">        m_provider.moveAttachmentsForPage(oldParent, newParent);</span>
+<span class="fc" id="L377">        m_cache.remove(newParent);</span>
+<span class="fc" id="L378">        m_cache.remove(oldParent);</span>
+
+        //
+        //  This is a kludge to make sure that the pages are removed
+        //  from the other cache as well.
+        //
+<span class="fc" id="L384">        String checkName = oldParent + &quot;/&quot;;</span>
+
+        @SuppressWarnings(&quot;unchecked&quot;)
+<span class="fc" id="L387">        List&lt; String &gt; names = m_cache.getKeysWithExpiryCheck();</span>
+<span class="fc bfc" id="L388" title="All 2 branches covered.">        for( String name : names )</span>
+        {
+<span class="pc bpc" id="L390" title="1 of 2 branches missed.">            if( name.startsWith( checkName ) )</span>
+            {
+<span class="nc" id="L392">                m_attCache.remove(name);</span>
+            }
+<span class="fc" id="L394">        }</span>
+<span class="fc" id="L395">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,771 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>BasicAttachmentProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.providers</a> &gt; <span class="el_source">BasicAttachmentProvider.java</span></div><h1>BasicAttachmentProvider.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.providers;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.pages.PageTimeComparator;
+import org.apache.wiki.search.QueryItem;
+import org.apache.wiki.util.FileUtil;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Provides basic, versioning attachments.
+ *
+ *  &lt;PRE&gt;
+ *   Structure is as follows:
+ *      attachment_dir/
+ *         ThisPage/
+ *            attachment.doc/
+ *               attachment.properties
+ *               1.doc
+ *               2.doc
+ *               3.doc
+ *            picture.png/
+ *               attachment.properties
+ *               1.png
+ *               2.png
+ *         ThatPage/
+ *            picture.png/
+ *               attachment.properties
+ *               1.png
+ *             
+ *  &lt;/PRE&gt;
+ *
+ *  The names of the directories will be URLencoded.
+ *  &lt;p&gt;
+ *  &quot;attachment.properties&quot; consists of the following items:
+ *  &lt;UL&gt;
+ *   &lt;LI&gt;1.author = author name for version 1 (etc)
+ *  &lt;/UL&gt;
+ */
+<span class="fc" id="L82">public class BasicAttachmentProvider</span>
+    implements WikiAttachmentProvider
+{
+    private WikiEngine         m_engine;
+    private String             m_storageDir;
+    
+    /** The property name for where the attachments should be stored.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PROP_STORAGEDIR = &quot;jspwiki.basicAttachmentProvider.storageDir&quot;;
+    
+    /*
+     * Disable client cache for files with patterns
+     * since 2.5.96
+     */
+<span class="fc" id="L95">    private Pattern            m_disableCache = null;</span>
+    
+    /** The property name for specifying which attachments are not cached.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PROP_DISABLECACHE = &quot;jspwiki.basicAttachmentProvider.disableCache&quot;;
+
+    /** The name of the property file. */
+    public static final String PROPERTY_FILE   = &quot;attachment.properties&quot;;
+
+    /** The default extension for the page attachment directory name. */
+    public static final String DIR_EXTENSION   = &quot;-att&quot;;
+    
+    /** The default extension for the attachment directory. */
+    public static final String ATTDIR_EXTENSION = &quot;-dir&quot;;
+    
+<span class="fc" id="L109">    static final Logger log = Logger.getLogger( BasicAttachmentProvider.class );</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initialize( WikiEngine engine, Properties properties ) 
+        throws NoRequiredPropertyException,
+               IOException
+    {
+<span class="fc" id="L119">        m_engine = engine;</span>
+<span class="fc" id="L120">        m_storageDir = TextUtil.getCanonicalFilePathProperty(properties, PROP_STORAGEDIR,</span>
+<span class="fc" id="L121">                System.getProperty(&quot;user.home&quot;) + File.separator + &quot;jspwiki-files&quot;);</span>
+
+<span class="fc" id="L123">        String patternString = engine.getWikiProperties().getProperty( PROP_DISABLECACHE );</span>
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">        if ( patternString != null )</span>
+        {
+<span class="nc" id="L126">            m_disableCache = Pattern.compile(patternString);</span>
+        }
+
+        //
+        //  Check if the directory exists - if it doesn't, create it.
+        //
+<span class="fc" id="L132">        File f = new File( m_storageDir );</span>
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        if( !f.exists() )</span>
+        {
+<span class="fc" id="L136">            f.mkdirs();</span>
+        }
+
+        //
+        // Some sanity checks
+        //
+<span class="pc bpc" id="L142" title="1 of 2 branches missed.">        if( !f.exists() ) </span>
+<span class="nc" id="L143">            throw new IOException(&quot;Could not find or create attachment storage directory '&quot;+m_storageDir+&quot;'&quot;);</span>
+
+<span class="pc bpc" id="L145" title="1 of 2 branches missed.">        if( !f.canWrite() ) </span>
+<span class="nc" id="L146">            throw new IOException(&quot;Cannot write to the attachment storage directory '&quot;+m_storageDir+&quot;'&quot;);</span>
+        
+<span class="pc bpc" id="L148" title="1 of 2 branches missed.">        if( !f.isDirectory() )</span>
+<span class="nc" id="L149">            throw new IOException(&quot;Your attachment storage points to a file, not a directory: '&quot;+m_storageDir+&quot;'&quot;);</span>
+<span class="fc" id="L150">    }</span>
+
+    /**
+     *  Finds storage dir, and if it exists, makes sure that it is valid.
+     *
+     *  @param wikipage Page to which this attachment is attached.
+     */
+    private File findPageDir( String wikipage )
+        throws ProviderException
+    {
+<span class="fc" id="L160">        wikipage = mangleName( wikipage );</span>
+
+<span class="fc" id="L162">        File f = new File( m_storageDir, wikipage+DIR_EXTENSION );</span>
+
+<span class="pc bpc" id="L164" title="1 of 4 branches missed.">        if( f.exists() &amp;&amp; !f.isDirectory() )</span>
+        {
+<span class="nc" id="L166">            throw new ProviderException(&quot;Storage dir '&quot;+f.getAbsolutePath()+&quot;' is not a directory!&quot;);</span>
+        }
+
+<span class="fc" id="L169">        return f;</span>
+    }
+
+    private static String mangleName( String wikiname )
+    {
+<span class="fc" id="L174">        String res = TextUtil.urlEncodeUTF8( wikiname );</span>
+
+<span class="fc" id="L176">        return res;</span>
+    }
+
+    private static String unmangleName( String filename )
+    {
+<span class="fc" id="L181">        return TextUtil.urlDecodeUTF8( filename );</span>
+    }
+    
+    /**
+     *  Finds the dir in which the attachment lives.
+     */
+    private File findAttachmentDir( Attachment att )
+        throws ProviderException
+    {
+<span class="fc" id="L190">        File f = new File( findPageDir(att.getParentName()), </span>
+<span class="fc" id="L191">                           mangleName(att.getFileName()+ATTDIR_EXTENSION) );</span>
+
+        //
+        //  Migration code for earlier versions of JSPWiki.
+        //  Originally, we used plain filename.  Then we realized we need
+        //  to urlencode it.  Then we realized that we have to use a
+        //  postfix to make sure illegal file names are never formed.
+        //
+<span class="fc bfc" id="L199" title="All 2 branches covered.">        if( !f.exists() )</span>
+        {
+<span class="fc" id="L201">            File oldf = new File( findPageDir( att.getParentName() ),</span>
+<span class="fc" id="L202">                                  mangleName( att.getFileName() ) );</span>
+<span class="pc bpc" id="L203" title="1 of 2 branches missed.">            if( oldf.exists() )</span>
+            {
+<span class="nc" id="L205">                f = oldf;</span>
+            }
+            else
+            {
+<span class="fc" id="L209">                oldf = new File( findPageDir( att.getParentName() ),</span>
+<span class="fc" id="L210">                                 att.getFileName() );</span>
+
+<span class="pc bpc" id="L212" title="1 of 2 branches missed.">                if( oldf.exists() )</span>
+                {
+<span class="nc" id="L214">                    f = oldf;</span>
+                }
+            }
+        }
+
+<span class="fc" id="L219">        return f;</span>
+    }
+
+    /**
+     *  Goes through the repository and decides which version is
+     *  the newest one in that directory.
+     *
+     *  @return Latest version number in the repository, or 0, if
+     *          there is no page in the repository.
+     */
+    private int findLatestVersion( Attachment att )
+        throws ProviderException
+    {
+        // File pageDir = findPageDir( att.getName() );
+<span class="fc" id="L233">        File attDir  = findAttachmentDir( att );</span>
+
+        // log.debug(&quot;Finding pages in &quot;+attDir.getAbsolutePath());
+<span class="fc" id="L236">        String[] pages = attDir.list( new AttachmentVersionFilter() );</span>
+
+<span class="pc bpc" id="L238" title="1 of 2 branches missed.">        if( pages == null )</span>
+        {
+<span class="nc" id="L240">            return 0; // No such thing found.</span>
+        }
+
+<span class="fc" id="L243">        int version = 0;</span>
+
+<span class="fc bfc" id="L245" title="All 2 branches covered.">        for( int i = 0; i &lt; pages.length; i++ )</span>
+        {
+            // log.debug(&quot;Checking: &quot;+pages[i]);
+<span class="fc" id="L248">            int cutpoint = pages[i].indexOf( '.' );</span>
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">                String pageNum = ( cutpoint &gt; 0 ) ? pages[i].substring( 0, cutpoint ) : pages[i] ;</span>
+
+                try
+                {
+<span class="fc" id="L253">                    int res = Integer.parseInt( pageNum );</span>
+
+<span class="pc bpc" id="L255" title="1 of 2 branches missed.">                    if( res &gt; version )</span>
+                    {
+<span class="fc" id="L257">                        version = res;</span>
+                    }
+                }
+<span class="pc" id="L260">                catch( NumberFormatException e ) {} // It's okay to skip these.</span>
+            }
+
+<span class="fc" id="L263">        return version;</span>
+    }
+
+    /**
+     *  Returns the file extension.  For example &quot;test.png&quot; returns &quot;png&quot;.
+     *  &lt;p&gt;
+     *  If file has no extension, will return &quot;bin&quot;
+     *  
+     *  @param filename The file name to check
+     *  @return The extension.  If no extension is found, returns &quot;bin&quot;.
+     */
+    protected static String getFileExtension( String filename )
+    {
+<span class="fc" id="L276">        String fileExt = &quot;bin&quot;;</span>
+
+<span class="fc" id="L278">        int dot = filename.lastIndexOf('.');</span>
+<span class="fc bfc" id="L279" title="All 4 branches covered.">        if( dot &gt;= 0 &amp;&amp; dot &lt; filename.length()-1 )</span>
+        {
+<span class="fc" id="L281">            fileExt = mangleName( filename.substring( dot+1 ) );</span>
+        }
+
+<span class="fc" id="L284">        return fileExt;</span>
+    }
+
+    /**
+     *  Writes the page properties back to the file system.
+     *  Note that it WILL overwrite any previous properties.
+     */
+    private void putPageProperties( Attachment att, Properties properties ) throws IOException, ProviderException {
+<span class="fc" id="L292">        File attDir = findAttachmentDir( att );</span>
+<span class="fc" id="L293">        File propertyFile = new File( attDir, PROPERTY_FILE );</span>
+
+<span class="fc" id="L295">        OutputStream out = null;</span>
+        
+        try {
+<span class="fc" id="L298">        	out = new FileOutputStream( propertyFile );</span>
+<span class="fc" id="L299">            properties.store( out, &quot; JSPWiki page properties for &quot; + att.getName() + &quot;. DO NOT MODIFY!&quot; );</span>
+<span class="nc" id="L300">        } catch ( IOException ioe ) {</span>
+<span class="nc" id="L301">        	IOUtils.closeQuietly( out );</span>
+<span class="nc" id="L302">        	throw ioe;</span>
+        } finally {
+<span class="fc" id="L304">        	IOUtils.closeQuietly( out );</span>
+        }
+<span class="fc" id="L306">    }</span>
+
+    /**
+     *  Reads page properties from the file system.
+     */
+    private Properties getPageProperties( Attachment att ) throws IOException, ProviderException {
+<span class="fc" id="L312">        Properties props = new Properties();</span>
+
+<span class="fc" id="L314">        File propertyFile = new File( findAttachmentDir(att), PROPERTY_FILE );</span>
+
+<span class="fc bfc" id="L316" title="All 2 branches covered.">        if( propertyFile.exists() ) {</span>
+<span class="fc" id="L317">            InputStream in = null;</span>
+            try {
+<span class="fc" id="L319">            	in = new FileInputStream( propertyFile );</span>
+<span class="fc" id="L320">                props.load( in );</span>
+<span class="nc" id="L321">            } catch ( IOException ioe ) {</span>
+<span class="nc" id="L322">            	IOUtils.closeQuietly( in );</span>
+<span class="nc" id="L323">            	throw ioe;</span>
+            } finally {
+<span class="fc" id="L325">            	IOUtils.closeQuietly( in );</span>
+            }
+        }
+        
+<span class="fc" id="L329">        return props;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void putAttachmentData( Attachment att, InputStream data ) throws ProviderException, IOException {
+<span class="fc" id="L337">        OutputStream out = null;</span>
+<span class="fc" id="L338">        File attDir = findAttachmentDir( att );</span>
+
+<span class="fc bfc" id="L340" title="All 2 branches covered.">        if(!attDir.exists())</span>
+        {
+<span class="fc" id="L342">            attDir.mkdirs();</span>
+        }
+
+<span class="fc" id="L345">        int latestVersion = findLatestVersion( att );</span>
+
+        // System.out.println(&quot;Latest version is &quot;+latestVersion);
+
+        try
+        {
+<span class="fc" id="L351">            int versionNumber = latestVersion+1;</span>
+
+<span class="fc" id="L353">            File newfile = new File( attDir, versionNumber+&quot;.&quot;+</span>
+<span class="fc" id="L354">                                     getFileExtension(att.getFileName()) );</span>
+
+<span class="fc" id="L356">            log.info(&quot;Uploading attachment &quot;+att.getFileName()+&quot; to page &quot;+att.getParentName());</span>
+<span class="fc" id="L357">            log.info(&quot;Saving attachment contents to &quot;+newfile.getAbsolutePath());</span>
+<span class="fc" id="L358">            out = new FileOutputStream(newfile);</span>
+
+<span class="fc" id="L360">            FileUtil.copyContents( data, out );</span>
+
+<span class="fc" id="L362">            Properties props = getPageProperties( att );</span>
+
+<span class="fc" id="L364">            String author = att.getAuthor();</span>
+
+<span class="fc bfc" id="L366" title="All 2 branches covered.">            if( author == null )</span>
+            {
+<span class="fc" id="L368">                author = &quot;unknown&quot;; // FIXME: Should be localized, but cannot due to missing WikiContext</span>
+            }
+
+<span class="fc" id="L371">            props.setProperty( versionNumber+&quot;.author&quot;, author );</span>
+            
+<span class="fc" id="L373">            String changeNote = (String)att.getAttribute(WikiPage.CHANGENOTE);</span>
+<span class="pc bpc" id="L374" title="1 of 2 branches missed.">            if( changeNote != null )</span>
+            {
+<span class="nc" id="L376">                props.setProperty( versionNumber+&quot;.changenote&quot;, changeNote );</span>
+            }
+            
+<span class="fc" id="L379">            putPageProperties( att, props );</span>
+        }
+<span class="nc" id="L381">        catch( IOException e )</span>
+        {
+<span class="nc" id="L383">            log.error( &quot;Could not save attachment data: &quot;, e );</span>
+<span class="nc" id="L384">            IOUtils.closeQuietly( out );</span>
+<span class="nc" id="L385">            throw (IOException) e.fillInStackTrace();</span>
+        }
+        finally
+        {
+<span class="fc" id="L389">            IOUtils.closeQuietly( out );</span>
+        }
+<span class="fc" id="L391">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public String getProviderInfo()
+    {
+<span class="nc" id="L399">        return &quot;&quot;;</span>
+    }
+
+    private File findFile( File dir, Attachment att )
+        throws FileNotFoundException,
+               ProviderException
+    {
+<span class="fc" id="L406">        int version = att.getVersion();</span>
+
+<span class="pc bpc" id="L408" title="1 of 2 branches missed.">        if( version == WikiProvider.LATEST_VERSION )</span>
+        {
+<span class="nc" id="L410">            version = findLatestVersion( att );</span>
+        }
+
+<span class="fc" id="L413">        String ext = getFileExtension( att.getFileName() );</span>
+<span class="fc" id="L414">        File f = new File( dir, version+&quot;.&quot;+ext );</span>
+
+<span class="pc bpc" id="L416" title="1 of 2 branches missed.">        if( !f.exists() )</span>
+        {
+<span class="nc bnc" id="L418" title="All 2 branches missed.">            if (&quot;bin&quot;.equals(ext))</span>
+            {
+<span class="nc" id="L420">                File fOld = new File( dir, version+&quot;.&quot; );</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">                if (fOld.exists())</span>
+<span class="nc" id="L422">                    f = fOld;</span>
+            }
+<span class="nc bnc" id="L424" title="All 2 branches missed.">            if( !f.exists() )</span>
+            {
+<span class="nc" id="L426">                throw new FileNotFoundException(&quot;No such file: &quot;+f.getAbsolutePath()+&quot; exists.&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L430">        return f;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public InputStream getAttachmentData( Attachment att )
+        throws IOException,
+               ProviderException
+    {
+<span class="fc" id="L441">        File attDir = findAttachmentDir( att );</span>
+
+        try
+        {
+<span class="fc" id="L445">            File f = findFile( attDir, att );</span>
+
+<span class="fc" id="L447">            return new FileInputStream( f );</span>
+        }
+<span class="nc" id="L449">        catch( FileNotFoundException e )</span>
+        {
+<span class="nc" id="L451">            log.error(&quot;File not found: &quot;+e.getMessage());</span>
+<span class="nc" id="L452">            throw new ProviderException(&quot;No such page was found.&quot;);</span>
+        }
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public List&lt; Attachment &gt; listAttachments( WikiPage page )
+        throws ProviderException
+    {
+<span class="fc" id="L463">        List&lt;Attachment&gt; result = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L465">        File dir = findPageDir( page.getName() );</span>
+
+<span class="pc bpc" id="L467" title="1 of 2 branches missed.">        if( dir != null )</span>
+        {
+<span class="fc" id="L469">            String[] attachments = dir.list();</span>
+
+<span class="fc bfc" id="L471" title="All 2 branches covered.">            if( attachments != null )</span>
+            {
+                //
+                //  We now have a list of all potential attachments in 
+                //  the directory.
+                //
+<span class="fc bfc" id="L477" title="All 2 branches covered.">                for( int i = 0; i &lt; attachments.length; i++ )</span>
+                {
+<span class="fc" id="L479">                    File f = new File( dir, attachments[i] );</span>
+
+<span class="fc bfc" id="L481" title="All 2 branches covered.">                    if( f.isDirectory() )</span>
+                    {
+<span class="fc" id="L483">                        String attachmentName = unmangleName( attachments[i] );</span>
+
+                        //
+                        //  Is it a new-stylea attachment directory?  If yes,
+                        //  we'll just deduce the name.  If not, however,
+                        //  we'll check if there's a suitable property file
+                        //  in the directory.
+                        //
+<span class="fc bfc" id="L491" title="All 2 branches covered.">                        if( attachmentName.endsWith( ATTDIR_EXTENSION ) )</span>
+                        {
+<span class="fc" id="L493">                            attachmentName = attachmentName.substring( 0, attachmentName.length()-ATTDIR_EXTENSION.length() );</span>
+                        }
+                        else
+                        {
+<span class="fc" id="L497">                            File propFile = new File( f, PROPERTY_FILE );</span>
+
+<span class="pc bpc" id="L499" title="1 of 2 branches missed.">                            if( !propFile.exists() )</span>
+                            {
+                                //
+                                //  This is not obviously a JSPWiki attachment,
+                                //  so let's just skip it.
+                                //
+<span class="fc" id="L505">                                continue;</span>
+                            }
+                        }
+
+<span class="fc" id="L509">                        Attachment att = getAttachmentInfo( page, attachmentName,</span>
+                                                            WikiProvider.LATEST_VERSION );
+
+                        //
+                        //  Sanity check - shouldn't really be happening, unless
+                        //  you mess with the repository directly.
+                        //
+<span class="pc bpc" id="L516" title="1 of 2 branches missed.">                        if( att == null )</span>
+                        {
+<span class="nc" id="L518">                            throw new ProviderException(&quot;Attachment disappeared while reading information:&quot;+</span>
+                                                        &quot; if you did not touch the repository, there is a serious bug somewhere. &quot;+
+                                                        &quot;Attachment = &quot;+attachments[i]+
+                                                        &quot;, decoded = &quot;+attachmentName );
+                        }
+
+<span class="fc" id="L524">                        result.add( att );</span>
+                    }
+                }
+            }
+        }
+
+<span class="fc" id="L530">        return result;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; Attachment &gt; findAttachments( QueryItem[] query )
+    {
+<span class="nc" id="L539">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    // FIXME: Very unoptimized.
+    @Override
+    public List&lt;Attachment&gt; listAllChanged( Date timestamp )
+        throws ProviderException
+    {
+<span class="fc" id="L550">        File attDir = new File( m_storageDir );</span>
+
+<span class="pc bpc" id="L552" title="1 of 2 branches missed.">        if( !attDir.exists() )</span>
+        {
+<span class="nc" id="L554">            throw new ProviderException(&quot;Specified attachment directory &quot;+m_storageDir+&quot; does not exist!&quot;);</span>
+        }
+
+<span class="fc" id="L557">        ArrayList&lt;Attachment&gt; list = new ArrayList&lt;&gt;();</span>
+
+<span class="fc" id="L559">        String[] pagesWithAttachments = attDir.list( new AttachmentFilter() );</span>
+
+<span class="fc bfc" id="L561" title="All 2 branches covered.">        for( int i = 0; i &lt; pagesWithAttachments.length; i++ )</span>
+        {
+<span class="fc" id="L563">            String pageId = unmangleName( pagesWithAttachments[i] );</span>
+<span class="fc" id="L564">            pageId = pageId.substring( 0, pageId.length()-DIR_EXTENSION.length() );</span>
+            
+<span class="fc" id="L566">            Collection&lt;Attachment&gt; c = listAttachments( new WikiPage( m_engine, pageId ) );</span>
+
+<span class="fc bfc" id="L568" title="All 2 branches covered.">            for( Iterator&lt;Attachment&gt; it = c.iterator(); it.hasNext(); )</span>
+            {
+<span class="fc" id="L570">                Attachment att = it.next();</span>
+
+<span class="pc bpc" id="L572" title="1 of 2 branches missed.">                if( att.getLastModified().after( timestamp ) )</span>
+                {
+<span class="fc" id="L574">                    list.add( att );</span>
+                }
+<span class="fc" id="L576">            }</span>
+        }
+
+<span class="fc" id="L579">        Collections.sort( list, new PageTimeComparator() );</span>
+
+<span class="fc" id="L581">        return list;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public Attachment getAttachmentInfo( WikiPage page, String name, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L591">        Attachment att = new Attachment( m_engine, page.getName(), name );</span>
+<span class="fc" id="L592">        File dir = findAttachmentDir( att );</span>
+
+<span class="pc bpc" id="L594" title="1 of 2 branches missed.">        if( !dir.exists() )</span>
+        {
+            // log.debug(&quot;Attachment dir not found - thus no attachment can exist.&quot;);
+<span class="nc" id="L597">            return null;</span>
+        }
+        
+<span class="fc bfc" id="L600" title="All 2 branches covered.">        if( version == WikiProvider.LATEST_VERSION )</span>
+        {
+<span class="fc" id="L602">            version = findLatestVersion(att);</span>
+        }
+
+<span class="fc" id="L605">        att.setVersion( version );</span>
+        
+        // Should attachment be cachable by the client (browser)?
+<span class="pc bpc" id="L608" title="1 of 2 branches missed.">        if (m_disableCache != null) </span>
+        {
+<span class="nc" id="L610">            Matcher matcher = m_disableCache.matcher(name);</span>
+<span class="nc bnc" id="L611" title="All 2 branches missed.">            if (matcher.matches()) </span>
+            {
+<span class="nc" id="L613">                att.setCacheable(false);</span>
+            }
+        }
+        
+
+        // System.out.println(&quot;Fetching info on version &quot;+version);
+        try
+        {
+<span class="fc" id="L621">            Properties props = getPageProperties(att);</span>
+
+<span class="fc" id="L623">            att.setAuthor( props.getProperty( version+&quot;.author&quot; ) );</span>
+
+<span class="fc" id="L625">            String changeNote = props.getProperty( version+&quot;.changenote&quot; );</span>
+<span class="pc bpc" id="L626" title="1 of 2 branches missed.">            if( changeNote != null )</span>
+            {
+<span class="nc" id="L628">                att.setAttribute(WikiPage.CHANGENOTE, changeNote);</span>
+            }
+            
+<span class="fc" id="L631">            File f = findFile( dir, att );</span>
+
+<span class="fc" id="L633">            att.setSize( f.length() );</span>
+<span class="fc" id="L634">            att.setLastModified( new Date(f.lastModified()) );</span>
+        }
+<span class="nc" id="L636">        catch( FileNotFoundException e )</span>
+        {
+<span class="nc" id="L638">            log.error( &quot;Can't get attachment properties for &quot; + att, e );</span>
+<span class="nc" id="L639">            return null;</span>
+        }
+<span class="nc" id="L641">        catch( IOException e )</span>
+        {
+<span class="nc" id="L643">            log.error(&quot;Can't read page properties&quot;, e );</span>
+<span class="nc" id="L644">            throw new ProviderException(&quot;Cannot read page properties: &quot;+e.getMessage());</span>
+<span class="fc" id="L645">        }</span>
+        // FIXME: Check for existence of this particular version.
+
+<span class="fc" id="L648">        return att;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public List&lt;Attachment&gt; getVersionHistory( Attachment att )
+    {
+<span class="nc" id="L657">        ArrayList&lt;Attachment&gt; list = new ArrayList&lt;&gt;();</span>
+
+        try
+        {
+<span class="nc" id="L661">            int latest = findLatestVersion( att );</span>
+
+<span class="nc bnc" id="L663" title="All 2 branches missed.">            for( int i = latest; i &gt;= 1; i-- )</span>
+            {
+<span class="nc" id="L665">                Attachment a = getAttachmentInfo( new WikiPage( m_engine, att.getParentName() ), </span>
+<span class="nc" id="L666">                                                  att.getFileName(), i );</span>
+
+<span class="nc bnc" id="L668" title="All 2 branches missed.">                if( a != null )</span>
+                {
+<span class="nc" id="L670">                    list.add( a );</span>
+                }
+            }
+        }
+<span class="nc" id="L674">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L676">            log.error(&quot;Getting version history failed for page: &quot;+att,e);</span>
+            // FIXME: SHould this fail?
+<span class="nc" id="L678">        }</span>
+
+<span class="nc" id="L680">        return list;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void deleteVersion( Attachment att )
+        throws ProviderException
+    {
+        // FIXME: Does nothing yet.
+<span class="nc" id="L691">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void deleteAttachment( Attachment att )
+        throws ProviderException
+    {
+<span class="fc" id="L700">        File dir = findAttachmentDir( att );</span>
+<span class="fc" id="L701">        String[] files = dir.list();</span>
+
+<span class="fc bfc" id="L703" title="All 2 branches covered.">        for( int i = 0; i &lt; files.length; i++ )</span>
+        {
+<span class="fc" id="L705">            File file = new File( dir.getAbsolutePath() + &quot;/&quot; + files[i] );</span>
+<span class="fc" id="L706">            file.delete();</span>
+        }
+<span class="fc" id="L708">        dir.delete();</span>
+<span class="fc" id="L709">    }</span>
+
+
+    /**
+     *  Returns only those directories that contain attachments.
+     */
+<span class="fc" id="L715">    public static class AttachmentFilter</span>
+        implements FilenameFilter
+    {
+        /**
+         *  {@inheritDoc}
+         */
+        @Override
+        public boolean accept( File dir, String name )
+        {
+<span class="fc" id="L724">            return name.endsWith( DIR_EXTENSION );</span>
+        }
+    }
+
+    /**
+     *  Accepts only files that are actual versions, no control files.
+     */
+<span class="fc" id="L731">    public static class AttachmentVersionFilter</span>
+        implements FilenameFilter
+    {
+        /**
+         *  {@inheritDoc}
+         */
+        @Override
+        public boolean accept( File dir, String name )
+        {
+<span class="fc bfc" id="L740" title="All 2 branches covered.">            return !name.equals( PROPERTY_FILE );</span>
+        }
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+
+    @Override
+    public void moveAttachmentsForPage( String oldParent, String newParent )
+        throws ProviderException
+    {
+<span class="fc" id="L752">        File srcDir = findPageDir( oldParent );</span>
+<span class="fc" id="L753">        File destDir = findPageDir( newParent );</span>
+
+<span class="fc" id="L755">        log.debug(&quot;Trying to move all attachments from &quot;+srcDir+&quot; to &quot;+destDir);</span>
+
+        // If it exists, we're overwriting an old page (this has already been
+        // confirmed at a higher level), so delete any existing attachments.
+<span class="pc bpc" id="L759" title="1 of 2 branches missed.">        if (destDir.exists())</span>
+        {
+<span class="nc" id="L761">            log.error(&quot;Page rename failed because target dirctory &quot;+destDir+&quot; exists&quot;);</span>
+        }
+        else
+        {
+            //destDir.getParentFile().mkdir();
+<span class="fc" id="L766">            srcDir.renameTo(destDir);</span>
+        }
+<span class="fc" id="L768">    }</span>
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

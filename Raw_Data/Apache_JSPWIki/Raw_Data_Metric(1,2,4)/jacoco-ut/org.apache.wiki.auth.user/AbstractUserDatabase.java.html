@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractUserDatabase.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.user</a> &gt; <span class="el_source">AbstractUserDatabase.java</span></div><h1>AbstractUserDatabase.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.user;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Properties;
+import java.util.UUID;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.util.ByteUtils;
+import org.apache.wiki.util.CryptoUtil;
+
+/**
+ * Abstract UserDatabase class that provides convenience methods for finding
+ * profiles, building Principal collections and hashing passwords.
+ * @since 2.3
+ */
+<span class="fc" id="L43">public abstract class AbstractUserDatabase implements UserDatabase</span>
+{
+
+<span class="fc" id="L46">    protected static final Logger log = Logger.getLogger( AbstractUserDatabase.class );</span>
+    protected static final String SHA_PREFIX = &quot;{SHA}&quot;;
+    protected static final String SSHA_PREFIX = &quot;{SSHA}&quot;;
+
+    /**
+     * Looks up and returns the first {@link UserProfile}in the user database
+     * that whose login name, full name, or wiki name matches the supplied
+     * string. This method provides a &quot;forgiving&quot; search algorithm for resolving
+     * principal names when the exact profile attribute that supplied the name
+     * is unknown.
+     * @param index the login name, full name, or wiki name
+     * @see org.apache.wiki.auth.user.UserDatabase#find(java.lang.String)
+     */
+    public UserProfile find( String index ) throws NoSuchPrincipalException
+    {
+<span class="fc" id="L61">        UserProfile profile = null;</span>
+
+        // Try finding by full name
+        try
+        {
+<span class="fc" id="L66">            profile = findByFullName( index );</span>
+        }
+<span class="fc" id="L68">        catch ( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L70">        }</span>
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L73">            return profile;</span>
+        }
+
+        // Try finding by wiki name
+        try
+        {
+<span class="fc" id="L79">            profile = findByWikiName( index );</span>
+        }
+<span class="fc" id="L81">        catch ( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L83">        }</span>
+<span class="fc bfc" id="L84" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L86">            return profile;</span>
+        }
+
+        // Try finding by login name
+        try
+        {
+<span class="fc" id="L92">            profile = findByLoginName( index );</span>
+        }
+<span class="fc" id="L94">        catch ( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L96">        }</span>
+<span class="fc bfc" id="L97" title="All 2 branches covered.">        if ( profile != null )</span>
+        {
+<span class="fc" id="L99">            return profile;</span>
+        }
+
+<span class="fc" id="L102">        throw new NoSuchPrincipalException( &quot;Not in database: &quot; + index );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#findByEmail(java.lang.String)
+     */
+    public abstract UserProfile findByEmail( String index ) throws NoSuchPrincipalException;
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#findByFullName(java.lang.String)
+     */
+    public abstract UserProfile findByFullName( String index ) throws NoSuchPrincipalException;
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#findByLoginName(java.lang.String)
+     */
+    public abstract UserProfile findByLoginName( String index ) throws NoSuchPrincipalException;
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#findByWikiName(java.lang.String)
+     */
+    public abstract UserProfile findByWikiName( String index ) throws NoSuchPrincipalException;
+
+    /**
+     * &lt;p&gt;Looks up the Principals representing a user from the user database. These
+     * are defined as a set of WikiPrincipals manufactured from the login name,
+     * full name, and wiki name. If the user database does not contain a user
+     * with the supplied identifier, throws a {@link NoSuchPrincipalException}.&lt;/p&gt;
+     * &lt;p&gt;When this method creates WikiPrincipals, the Principal containing
+     * the user's full name is marked as containing the common name (see
+     * {@link org.apache.wiki.auth.WikiPrincipal#WikiPrincipal(String, String)}).
+     * @param identifier the name of the principal to retrieve; this corresponds to
+     *            value returned by the user profile's
+     *            {@link UserProfile#getLoginName()}method.
+     * @return the array of Principals representing the user
+     * @see org.apache.wiki.auth.user.UserDatabase#getPrincipals(java.lang.String)
+     * @throws NoSuchPrincipalException {@inheritDoc}
+     */
+    public Principal[] getPrincipals( String identifier ) throws NoSuchPrincipalException
+    {
+        try
+        {
+<span class="fc" id="L148">            UserProfile profile = findByLoginName( identifier );</span>
+<span class="fc" id="L149">            ArrayList&lt;Principal&gt; principals = new ArrayList&lt;Principal&gt;();</span>
+<span class="pc bpc" id="L150" title="2 of 4 branches missed.">            if ( profile.getLoginName() != null &amp;&amp; profile.getLoginName().length() &gt; 0 )</span>
+            {
+<span class="fc" id="L152">                principals.add( new WikiPrincipal( profile.getLoginName(), WikiPrincipal.LOGIN_NAME ) );</span>
+            }
+<span class="pc bpc" id="L154" title="2 of 4 branches missed.">            if ( profile.getFullname() != null &amp;&amp; profile.getFullname().length() &gt; 0 )</span>
+            {
+<span class="fc" id="L156">                principals.add( new WikiPrincipal( profile.getFullname(), WikiPrincipal.FULL_NAME ) );</span>
+            }
+<span class="pc bpc" id="L158" title="2 of 4 branches missed.">            if ( profile.getWikiName() != null &amp;&amp; profile.getWikiName().length() &gt; 0 )</span>
+            {
+<span class="fc" id="L160">                principals.add( new WikiPrincipal( profile.getWikiName(), WikiPrincipal.WIKI_NAME ) );</span>
+            }
+<span class="fc" id="L162">            return principals.toArray( new Principal[principals.size()] );</span>
+        }
+<span class="nc" id="L164">        catch( NoSuchPrincipalException e )</span>
+        {
+<span class="nc" id="L166">            throw e;</span>
+        }
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#initialize(org.apache.wiki.WikiEngine, java.util.Properties)
+     */
+    public abstract void initialize( WikiEngine engine, Properties props ) throws NoRequiredPropertyException,
+            WikiSecurityException;
+
+    /**
+     * Factory method that instantiates a new DefaultUserProfile with a new, distinct
+     * unique identifier.
+     * 
+     * @return A new, empty profile.
+     */
+    public UserProfile newProfile()
+    {
+<span class="fc" id="L185">        return DefaultUserProfile.newProfile( this );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.auth.user.UserDatabase#save(org.apache.wiki.auth.user.UserProfile)
+     */
+    public abstract void save( UserProfile profile ) throws WikiSecurityException;
+
+    /**
+     * Validates the password for a given user. If the user does not exist in
+     * the user database, this method always returns &lt;code&gt;false&lt;/code&gt;. If
+     * the user exists, the supplied password is compared to the stored
+     * password. Note that if the stored password's value starts with
+     * &lt;code&gt;{SHA}&lt;/code&gt;, the supplied password is hashed prior to the
+     * comparison.
+     * @param loginName the user's login name
+     * @param password the user's password (obtained from user input, e.g., a web form)
+     * @return &lt;code&gt;true&lt;/code&gt; if the supplied user password matches the
+     * stored password
+     * @see org.apache.wiki.auth.user.UserDatabase#validatePassword(java.lang.String,
+     *      java.lang.String)
+     */
+    public boolean validatePassword( String loginName, String password )
+    {
+        String hashedPassword;
+        try
+        {
+<span class="fc" id="L213">            UserProfile profile = findByLoginName( loginName );</span>
+<span class="fc" id="L214">            String storedPassword = profile.getPassword();</span>
+            
+            // Is the password stored as a salted hash (the new 2.8 format?)
+<span class="fc" id="L217">            boolean newPasswordFormat = storedPassword.startsWith( SSHA_PREFIX );</span>
+            
+            // If new format, verify the hash
+<span class="fc bfc" id="L220" title="All 2 branches covered.">            if ( newPasswordFormat )</span>
+            {
+<span class="fc" id="L222">                hashedPassword = getHash( password );</span>
+<span class="fc" id="L223">                return CryptoUtil.verifySaltedPassword( password.getBytes( StandardCharsets.UTF_8 ), storedPassword );</span>
+            }
+
+            // If old format, verify using the old SHA verification algorithm
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">            if ( storedPassword.startsWith( SHA_PREFIX ) )</span>
+            {
+<span class="fc" id="L229">                storedPassword = storedPassword.substring( SHA_PREFIX.length() );</span>
+            }
+<span class="fc" id="L231">            hashedPassword = getOldHash( password );</span>
+<span class="fc" id="L232">            boolean verified = hashedPassword.equals( storedPassword ); </span>
+            
+            // If in the old format and password verified, upgrade the hash to SSHA
+<span class="fc bfc" id="L235" title="All 2 branches covered.">            if ( verified )</span>
+            {
+<span class="fc" id="L237">                profile.setPassword( password );</span>
+<span class="fc" id="L238">                save( profile );</span>
+            }
+            
+<span class="fc" id="L241">            return verified;</span>
+        }
+<span class="nc" id="L243">        catch( NoSuchPrincipalException e )</span>
+        {
+        }
+<span class="nc" id="L246">        catch( NoSuchAlgorithmException e )</span>
+        {
+<span class="nc" id="L248">            log.error( &quot;Unsupported algorithm: &quot; + e.getMessage() );</span>
+        }
+<span class="nc" id="L250">        catch( WikiSecurityException e )</span>
+        {
+<span class="nc" id="L252">            log.error( &quot;Could not upgrade SHA password to SSHA because profile could not be saved. Reason: &quot; + e.getMessage(), e );</span>
+<span class="nc" id="L253">        }</span>
+<span class="nc" id="L254">        return false;</span>
+    }
+
+    /**
+     * Generates a new random user identifier (uid) that is guaranteed to be unique.
+     * 
+     * @param db The database for which the UID should be generated.
+     * @return A random, unique UID.
+     */
+    protected static String generateUid( UserDatabase db )
+    {
+        // Keep generating UUIDs until we find one that doesn't collide
+<span class="fc" id="L266">        String uid = null;</span>
+        boolean collision;
+        
+        do 
+        {
+<span class="fc" id="L271">            uid = UUID.randomUUID().toString();</span>
+<span class="fc" id="L272">            collision = true;</span>
+            try
+            {
+<span class="nc" id="L275">                db.findByUid( uid );</span>
+            }
+<span class="fc" id="L277">            catch ( NoSuchPrincipalException e )</span>
+            {
+<span class="fc" id="L279">                collision = false;</span>
+<span class="nc" id="L280">            }</span>
+        } 
+<span class="pc bpc" id="L282" title="2 of 4 branches missed.">        while ( collision || uid == null );</span>
+<span class="fc" id="L283">        return uid;</span>
+    }
+    
+    /**
+     * Private method that calculates the salted SHA-1 hash of a given
+     * &lt;code&gt;String&lt;/code&gt;. Note that as of JSPWiki 2.8, this method calculates
+     * a &lt;em&gt;salted&lt;/em&gt; hash rather than a plain hash.
+     * @param text the text to hash
+     * @return the result hash
+     */
+    protected String getHash( String text )
+    {
+<span class="fc" id="L295">        String hash = null;</span>
+        try
+        {
+<span class="fc" id="L298">            hash = CryptoUtil.getSaltedPassword( text.getBytes(StandardCharsets.UTF_8) );</span>
+        }
+<span class="nc" id="L300">        catch( NoSuchAlgorithmException e )</span>
+        {
+<span class="nc" id="L302">            log.error( &quot;Error creating salted SHA password hash:&quot; + e.getMessage() );</span>
+<span class="nc" id="L303">            hash = text;</span>
+<span class="fc" id="L304">        }</span>
+<span class="fc" id="L305">        return hash;</span>
+    }
+
+    /**
+     * Private method that calculates the SHA-1 hash of a given
+     * &lt;code&gt;String&lt;/code&gt;
+     * @param text the text to hash
+     * @return the result hash
+     * @deprecated this method is retained for backwards compatibility purposes; use {@link #getHash(String)} instead
+     */
+    protected String getOldHash( String text )
+    {
+<span class="fc" id="L317">        String hash = null;</span>
+        try
+        {
+<span class="fc" id="L320">            MessageDigest md = MessageDigest.getInstance( &quot;SHA&quot; );</span>
+<span class="fc" id="L321">            md.update( text.getBytes(StandardCharsets.UTF_8) );</span>
+<span class="fc" id="L322">            byte[] digestedBytes = md.digest();</span>
+<span class="fc" id="L323">            hash = ByteUtils.bytes2hex( digestedBytes );</span>
+        }
+<span class="nc" id="L325">        catch( NoSuchAlgorithmException e )</span>
+        {
+<span class="nc" id="L327">            log.error( &quot;Error creating SHA password hash:&quot; + e.getMessage() );</span>
+<span class="nc" id="L328">            hash = text;</span>
+<span class="fc" id="L329">        }</span>
+<span class="fc" id="L330">        return hash;</span>
+    }
+
+    /**
+     * Parses a long integer from a supplied string, or returns 0 if not parsable.
+     * @param value the string to parse
+     * @return the value parsed
+     */
+    protected long parseLong( String value )
+    {
+<span class="nc bnc" id="L340" title="All 4 branches missed.">        if ( value == null || value.length() == 0 )</span>
+        {
+<span class="nc" id="L342">            return 0;</span>
+        }
+        try
+        {
+<span class="nc" id="L346">            return Long.parseLong( value );</span>
+        }
+<span class="nc" id="L348">        catch ( NumberFormatException e )</span>
+        {
+<span class="nc" id="L350">            return 0;</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

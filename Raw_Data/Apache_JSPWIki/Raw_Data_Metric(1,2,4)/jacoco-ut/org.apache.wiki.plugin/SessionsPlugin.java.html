@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>SessionsPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">SessionsPlugin.java</span></div><h1>SessionsPlugin.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.security.Principal;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+
+/**
+ *  &lt;p&gt;Displays information about active wiki sessions. The parameter
+ *  &lt;code&gt;property&lt;/code&gt; specifies what information is displayed.
+ *  If omitted, the number of sessions is returned.
+ *  
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;property&lt;/b&gt; - specify what output to display, valid values are:&lt;/li&gt;
+ *  &lt;ul&gt;
+ *    &lt;li&gt;&lt;code&gt;users&lt;/code&gt; - returns a comma-separated list of
+ *    users&lt;/li&gt;
+ *    &lt;li&gt;&lt;code&gt;distinctUsers&lt;/code&gt; - will only show
+ *    distinct users.
+ *  &lt;/ul&gt;
+ *  &lt;/ul&gt;
+ *  @since 2.3.84
+ */
+<span class="nc" id="L49">public class SessionsPlugin</span>
+    implements WikiPlugin
+{
+    /** The parameter name for setting the property value. */
+    public static final String PARAM_PROP = &quot;property&quot;;
+    
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L61">        WikiEngine engine = context.getEngine();</span>
+<span class="nc" id="L62">        String prop = params.get( PARAM_PROP );</span>
+        
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if ( &quot;users&quot;.equals( prop ) )</span>
+        {
+<span class="nc" id="L66">            Principal[] principals = WikiSession.userPrincipals( engine );</span>
+<span class="nc" id="L67">            StringBuilder s = new StringBuilder();</span>
+<span class="nc bnc" id="L68" title="All 2 branches missed.">            for ( int i = 0; i &lt; principals.length; i++ )</span>
+            {
+<span class="nc" id="L70">                s.append(principals[i].getName() + &quot;, &quot;);</span>
+            }
+            // remove the last comma and blank :
+<span class="nc bnc" id="L73" title="All 2 branches missed.">            return s.substring(0, s.length() - (s.length() &gt; 2 ? 2 : 0) );</span>
+        }
+
+        //
+        // show each user session only once (with a counter that indicates the
+        // number of sessions for each user)
+<span class="nc bnc" id="L79" title="All 2 branches missed.">        if (&quot;distinctUsers&quot;.equals(prop))</span>
+        {
+<span class="nc" id="L81">            Principal[] principals = WikiSession.userPrincipals(engine);</span>
+            // we do not assume that the principals are sorted, so first count
+            // them :
+<span class="nc" id="L84">            HashMap&lt;String,Integer&gt; distinctPrincipals = new HashMap&lt;String,Integer&gt;();</span>
+<span class="nc bnc" id="L85" title="All 2 branches missed.">            for (int i = 0; i &lt; principals.length; i++)</span>
+            {
+<span class="nc" id="L87">                String principalName = principals[i].getName();</span>
+
+<span class="nc bnc" id="L89" title="All 2 branches missed.">                if (distinctPrincipals.containsKey(principalName))</span>
+                {
+                    // we already have an entry, increase the counter:
+<span class="nc" id="L92">                    int numSessions = distinctPrincipals.get(principalName).intValue();</span>
+                    // store the new value:
+<span class="nc" id="L94">                    distinctPrincipals.put(principalName, ++numSessions);</span>
+<span class="nc" id="L95">                }</span>
+                else
+                {
+                    // first time we see this entry, add entry to HashMap with value 1
+<span class="nc" id="L99">                    distinctPrincipals.put(principalName, 1);</span>
+                }
+            }
+            //
+            //
+<span class="nc" id="L104">            StringBuilder s = new StringBuilder();</span>
+<span class="nc" id="L105">            Iterator&lt;Map.Entry&lt;String, Integer&gt;&gt; entries = distinctPrincipals.entrySet().iterator();</span>
+<span class="nc bnc" id="L106" title="All 2 branches missed.">            while (entries.hasNext())</span>
+            {
+<span class="nc" id="L108">                Map.Entry&lt;String, Integer&gt; entry = entries.next();</span>
+<span class="nc" id="L109">                s.append( entry.getKey() + &quot;(&quot; + entry.getValue().toString() + &quot;), &quot; );</span>
+<span class="nc" id="L110">            }</span>
+            // remove the last comma and blank :
+<span class="nc bnc" id="L112" title="All 2 branches missed.">            if (s.length() &gt;= 2) return s.substring(0,    s.length() - 2);</span>
+        }
+
+<span class="nc" id="L115">        return String.valueOf( WikiSession.sessions( engine ) );</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,366 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Preferences.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.preferences</a> &gt; <span class="el_source">Preferences.java</span></div><h1>Preferences.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.preferences;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.MissingResourceException;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.TimeZone;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.jsp.PageContext;
+
+import org.apache.commons.lang.LocaleUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.PropertyReader;
+import org.apache.wiki.util.TextUtil;
+
+import com.google.gson.Gson;
+
+/**
+ *  Represents an object which is used to store user preferences.
+ *
+ */
+<span class="nc" id="L51">public class Preferences</span>
+    extends HashMap&lt;String,String&gt;
+{
+    private static final long serialVersionUID = 1L;
+
+    /**
+     *  The name under which a Preferences object is stored in the HttpSession.
+     *  Its value is {@value}.
+     */
+    public static final String SESSIONPREFS = &quot;prefs&quot;;
+
+<span class="fc" id="L62">    private static Logger log = Logger.getLogger( Preferences.class );</span>
+
+    /**
+     *  This is an utility method which is called to make sure that the
+     *  JSP pages do have proper access to any user preferences.  It should be
+     *  called from the commonheader.jsp.
+     *  &lt;p&gt;
+     *  This method reads user cookie preferences and mixes them up with any
+     *  default preferences (and in the future, any user-specific preferences)
+     *  and puts them all in the session, so that they do not have to be rewritten
+     *  again.
+     *  &lt;p&gt;
+     *  This method will remember if the user has already changed his prefs.
+     *
+     *  @param pageContext The JSP PageContext.
+     */
+    public static void setupPreferences( PageContext pageContext )
+    {
+        //HttpSession session = pageContext.getSession();
+
+        //if( session.getAttribute( SESSIONPREFS ) == null )
+        //{
+<span class="nc" id="L84">            reloadPreferences( pageContext );</span>
+        //}
+<span class="nc" id="L86">    }</span>
+
+    /**
+     *  Reloads the preferences from the PageContext into the WikiContext.
+     *
+     *  @param pageContext The page context.
+     */
+    // FIXME: The way that date preferences are chosen is currently a bit wacky: it all
+    //        gets saved to the cookie based on the browser state with which the user
+    //        happened to first arrive to the site with.  This, unfortunately, means that
+    //        even if the user changes e.g. language preferences (like in a web cafe),
+    //        the old preferences still remain in a site cookie.
+    public static void reloadPreferences( PageContext pageContext )
+    {
+<span class="nc" id="L100">        Preferences prefs = new Preferences();</span>
+<span class="nc" id="L101">        Properties props = PropertyReader.loadWebAppProps( pageContext.getServletContext() );</span>
+<span class="nc" id="L102">        WikiContext ctx = WikiContext.findContext( pageContext );</span>
+<span class="nc" id="L103">        String dateFormat = ctx.getEngine().getInternationalizationManager().get( InternationalizationManager.CORE_BUNDLE,</span>
+<span class="nc" id="L104">                                                                                  getLocale( ctx ),</span>
+                                                                                  &quot;common.datetimeformat&quot; );
+
+<span class="nc" id="L107">        prefs.put(&quot;SkinName&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.skinname&quot;, &quot;PlainVanilla&quot; ) );</span>
+<span class="nc" id="L108">        prefs.put(&quot;DateFormat&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.dateformat&quot;, dateFormat ) );</span>
+<span class="nc" id="L109">        prefs.put(&quot;TimeZone&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.timezone&quot;, java.util.TimeZone.getDefault().getID() ) );</span>
+<span class="nc" id="L110">        prefs.put(&quot;Orientation&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.orientation&quot;, &quot;fav-left&quot; ) );</span>
+<span class="nc" id="L111">        prefs.put(&quot;Sidebar&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.sidebar&quot;, &quot;active&quot; ) );</span>
+<span class="nc" id="L112">        prefs.put(&quot;Layout&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.layout&quot;, &quot;fluid&quot; ) );</span>
+<span class="nc" id="L113">        prefs.put(&quot;Language&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.language&quot;, getLocale( ctx ).toString() ) );</span>
+<span class="nc" id="L114">        prefs.put(&quot;SectionEditing&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.sectionediting&quot;, &quot;true&quot; ) );</span>
+<span class="nc" id="L115">        prefs.put(&quot;Appearance&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.appearance&quot;, &quot;true&quot; ) );</span>
+
+        // FIXME: editormanager reads jspwiki.editor -- which of both properties should continue
+<span class="nc" id="L118">        prefs.put(&quot;editor&quot;, TextUtil.getStringProperty( props, &quot;jspwiki.defaultprefs.template.editor&quot;, &quot;plain&quot; ) );</span>
+
+<span class="nc" id="L120">        parseJSONPreferences( (HttpServletRequest) pageContext.getRequest(), prefs );</span>
+
+<span class="nc" id="L122">        pageContext.getSession().setAttribute( SESSIONPREFS, prefs );</span>
+<span class="nc" id="L123">    }</span>
+
+
+    /**
+     *  Parses new-style preferences stored as JSON objects and stores them
+     *  in the session.  Everything in the cookie is stored.
+     *
+     *  @param request
+     *  @param prefs The default hashmap of preferences
+     *
+     */
+	private static void parseJSONPreferences( HttpServletRequest request, Preferences prefs ) {
+<span class="nc" id="L135">        String prefVal = TextUtil.urlDecodeUTF8( HttpUtil.retrieveCookieValue( request, &quot;JSPWikiUserPrefs&quot; ) );</span>
+
+<span class="nc bnc" id="L137" title="All 2 branches missed.">        if( prefVal != null ) {</span>
+            // Convert prefVal JSON to a generic hashmap
+            @SuppressWarnings(&quot;unchecked&quot;)
+<span class="nc" id="L140">            Map&lt;String,String&gt; map = new Gson().fromJson(prefVal, Map.class );</span>
+
+<span class="nc bnc" id="L142" title="All 2 branches missed.">            for (String key : map.keySet()) {</span>
+<span class="nc" id="L143">                key = TextUtil.replaceEntities( key );</span>
+                // Sometimes this is not a String as it comes from the Cookie set by Javascript
+<span class="nc" id="L145">                Object value = map.get(key);</span>
+<span class="nc bnc" id="L146" title="All 2 branches missed.">                if (value != null) {</span>
+<span class="nc" id="L147">                    prefs.put( key, value.toString() );</span>
+                }
+<span class="nc" id="L149">            }</span>
+        }
+<span class="nc" id="L151">    }</span>
+
+    /**
+     *  Returns a preference value programmatically.
+     *  FIXME
+     *
+     *  @param wikiContext
+     *  @param name
+     *  @return the preference value
+     */
+    public static String getPreference( WikiContext wikiContext, String name ) {
+<span class="fc" id="L162">        HttpServletRequest request = wikiContext.getHttpRequest();</span>
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        if ( request == null ) return null;</span>
+
+<span class="fc" id="L165">        Preferences prefs = (Preferences)request.getSession().getAttribute( SESSIONPREFS );</span>
+
+<span class="pc bpc" id="L167" title="1 of 2 branches missed.">        if( prefs != null ) {</span>
+<span class="nc" id="L168">            return prefs.get( name );</span>
+        }
+
+<span class="fc" id="L171">        return null;</span>
+    }
+
+    /**
+     *  Returns a preference value programmatically.
+     *  FIXME
+     *
+     *  @param pageContext
+     *  @param name
+     *  @return the preference value
+     */
+    public static String getPreference( PageContext pageContext, String name )
+    {
+<span class="nc" id="L184">        Preferences prefs = (Preferences)pageContext.getSession().getAttribute( SESSIONPREFS );</span>
+
+<span class="nc bnc" id="L186" title="All 2 branches missed.">        if( prefs != null )</span>
+<span class="nc" id="L187">            return prefs.get( name );</span>
+
+<span class="nc" id="L189">        return null;</span>
+    }
+
+
+    /**
+     * Get Locale according to user-preference settings or the user browser locale
+     *
+     * @param context The context to examine.
+     * @return a Locale object.
+     * @since 2.8
+     */
+    public static Locale getLocale( WikiContext context ) {
+<span class="fc" id="L201">        Locale loc = null;</span>
+
+<span class="fc" id="L203">        String langSetting = getPreference( context, &quot;Language&quot; );</span>
+
+        // parse language and construct valid Locale object
+<span class="pc bpc" id="L206" title="1 of 2 branches missed.">        if( langSetting != null ) {</span>
+<span class="nc" id="L207">            String language = &quot;&quot;;</span>
+<span class="nc" id="L208">            String country  = &quot;&quot;;</span>
+<span class="nc" id="L209">            String variant  = &quot;&quot;;</span>
+
+<span class="nc" id="L211">            String[] res = StringUtils.split( langSetting, &quot;-_&quot; );</span>
+
+<span class="nc bnc" id="L213" title="All 2 branches missed.">            if( res.length &gt; 2 ) variant = res[2];</span>
+<span class="nc bnc" id="L214" title="All 2 branches missed.">            if( res.length &gt; 1 ) country = res[1];</span>
+
+<span class="nc bnc" id="L216" title="All 2 branches missed.">            if( res.length &gt; 0 ) {</span>
+<span class="nc" id="L217">                language = res[0];</span>
+
+<span class="nc" id="L219">                loc = new Locale( language, country, variant );</span>
+            }
+        }
+
+        // see if default locale is set server side
+<span class="pc bpc" id="L224" title="1 of 2 branches missed.">        if( loc == null ) {</span>
+<span class="fc" id="L225">            String locale = context.getEngine().getWikiProperties().getProperty( &quot;jspwiki.preferences.default-locale&quot; );</span>
+            try {
+<span class="fc" id="L227">                loc = LocaleUtils.toLocale( locale );</span>
+<span class="nc" id="L228">            } catch( IllegalArgumentException iae ) {</span>
+<span class="nc" id="L229">                log.error( iae.getMessage() );</span>
+<span class="fc" id="L230">            }</span>
+        }
+
+        // otherwise try to find out the browser's preferred language setting, or use the JVM's default
+<span class="pc bpc" id="L234" title="1 of 2 branches missed.">        if( loc == null ) {</span>
+<span class="fc" id="L235">            HttpServletRequest request = context.getHttpRequest();</span>
+<span class="fc bfc" id="L236" title="All 2 branches covered.">            loc = ( request != null ) ? request.getLocale() : Locale.getDefault();</span>
+        }
+
+<span class="fc" id="L239">        log.debug( &quot;using locale &quot;+loc.toString() );</span>
+<span class="fc" id="L240">        return loc;</span>
+    }
+
+    /**
+     *  Locates the i18n ResourceBundle given.  This method interprets
+     *  the request locale, and uses that to figure out which language the
+     *  user wants.
+     *  @see org.apache.wiki.i18n.InternationalizationManager
+     *  @param context {@link WikiContext} holding the user's locale
+     *  @param bundle  The name of the bundle you are looking for.
+     *  @return A localized string (or from the default language, if not found)
+     *  @throws MissingResourceException If the bundle cannot be found
+     */
+    public static ResourceBundle getBundle( WikiContext context, String bundle )
+        throws MissingResourceException
+    {
+<span class="fc" id="L256">        Locale loc = getLocale( context );</span>
+<span class="fc" id="L257">        InternationalizationManager i18n = context.getEngine().getInternationalizationManager();</span>
+<span class="fc" id="L258">        return i18n.getBundle( bundle, loc );</span>
+    }
+
+    /**
+     *  Get SimpleTimeFormat according to user browser locale and preferred time
+     *  formats. If not found, it will revert to whichever format is set for the
+     *  default
+     *
+     *  @param context WikiContext to use for rendering.
+     *  @param tf Which version of the dateformat you are looking for?
+     *  @return A SimpleTimeFormat object which you can use to render
+     *  @since 2.8
+     */
+    public static SimpleDateFormat getDateFormat( WikiContext context, TimeFormat tf )
+    {
+<span class="fc" id="L273">        InternationalizationManager imgr = context.getEngine().getInternationalizationManager();</span>
+<span class="fc" id="L274">        Locale clientLocale = getLocale( context );</span>
+<span class="fc" id="L275">        String prefTimeZone = getPreference( context, &quot;TimeZone&quot; );</span>
+        String prefDateFormat;
+
+<span class="fc" id="L278">        log.debug(&quot;Checking for preferences...&quot;);</span>
+
+<span class="pc bpc" id="L280" title="3 of 4 branches missed.">        switch( tf )</span>
+        {
+            case DATETIME:
+<span class="fc" id="L283">                prefDateFormat = getPreference( context, &quot;DateFormat&quot; );</span>
+<span class="fc" id="L284">                log.debug(&quot;Preferences fmt = &quot;+prefDateFormat);</span>
+<span class="pc bpc" id="L285" title="1 of 2 branches missed.">                if( prefDateFormat == null )</span>
+                {
+<span class="fc" id="L287">                    prefDateFormat = imgr.get( InternationalizationManager.CORE_BUNDLE,</span>
+                                               clientLocale,
+                                               &quot;common.datetimeformat&quot; );
+<span class="fc" id="L290">                    log.debug(&quot;Using locale-format = &quot;+prefDateFormat);</span>
+                }
+                break;
+
+            case TIME:
+<span class="nc" id="L295">                prefDateFormat = imgr.get( &quot;common.timeformat&quot; );</span>
+<span class="nc" id="L296">                break;</span>
+
+            case DATE:
+<span class="nc" id="L299">                prefDateFormat = imgr.get( &quot;common.dateformat&quot; );</span>
+<span class="nc" id="L300">                break;</span>
+
+            default:
+<span class="nc" id="L303">                throw new InternalWikiException( &quot;Got a TimeFormat for which we have no value!&quot; );</span>
+        }
+
+        try
+        {
+<span class="fc" id="L308">            SimpleDateFormat fmt = new SimpleDateFormat( prefDateFormat, clientLocale );</span>
+
+<span class="pc bpc" id="L310" title="1 of 2 branches missed.">            if( prefTimeZone != null )</span>
+            {
+<span class="nc" id="L312">                TimeZone tz = TimeZone.getTimeZone( prefTimeZone );</span>
+                // TimeZone tz = TimeZone.getDefault();
+                // tz.setRawOffset(Integer.parseInt(prefTimeZone));
+
+<span class="nc" id="L316">                fmt.setTimeZone( tz );</span>
+            }
+
+<span class="fc" id="L319">            return fmt;</span>
+        }
+<span class="nc" id="L321">        catch( Exception e )</span>
+        {
+<span class="nc" id="L323">            return null;</span>
+        }
+    }
+
+    /**
+     *  A simple helper function to render a date based on the user preferences.
+     *  This is useful for example for all plugins.
+     *
+     *  @param context  The context which is used to get the preferences
+     *  @param date     The date to render.
+     *  @param tf       In which format the date should be rendered.
+     *  @return A ready-rendered date.
+     *  @since 2.8
+     */
+    public static String renderDate( WikiContext context, Date date, TimeFormat tf )
+    {
+<span class="nc" id="L339">        DateFormat df = getDateFormat( context, tf );</span>
+
+<span class="nc" id="L341">        return df.format( date );</span>
+    }
+
+    /**
+     *  Is used to choose between the different date formats that JSPWiki supports.
+     *  &lt;ul&gt;
+     *   &lt;li&gt;TIME: A time format, without  date&lt;/li&gt;
+     *   &lt;li&gt;DATE: A date format, without a time&lt;/li&gt;
+     *   &lt;li&gt;DATETIME: A date format, with a time&lt;/li&gt;
+     *  &lt;/ul&gt;
+     *
+     *  @since 2.8
+     */
+<span class="fc" id="L354">    public enum TimeFormat</span>
+    {
+        /** A time format, no date. */
+<span class="fc" id="L357">        TIME,</span>
+
+        /** A date format, no time. */
+<span class="fc" id="L360">        DATE,</span>
+
+        /** A date+time format. */
+<span class="fc" id="L363">        DATETIME</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

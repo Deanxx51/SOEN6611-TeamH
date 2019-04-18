@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiEvent.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">WikiEvent.java</span></div><h1>WikiEvent.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.event;
+
+import java.util.EventObject;
+
+/**
+ * Abstract parent class for wiki events.
+ *
+ * @since 2.3.79
+ */
+public abstract class WikiEvent extends EventObject
+{
+    private static final long serialVersionUID = 1829433967558773960L;
+
+    /** Indicates a exception or error state. */
+    public static final int ERROR          = -99;
+
+    /** Indicates an undefined state. */
+    public static final int UNDEFINED      = -98;
+
+<span class="fc" id="L39">    private int m_type = UNDEFINED;</span>
+
+    private final long m_when;
+
+    // ............
+
+
+   /**
+     * Constructs an instance of this event.
+     * @param src the Object that is the source of the event.
+     * @param type   the event type.
+     */
+    public WikiEvent( Object src, int type )
+    {
+<span class="fc" id="L53">        super( src );</span>
+<span class="fc" id="L54">        m_when = System.currentTimeMillis();</span>
+<span class="fc" id="L55">        setType( type );</span>
+<span class="fc" id="L56">    }</span>
+    
+    /**
+     * Convenience method that returns the typed object to which the event applied.
+     * 
+     * @return the typed object to which the event applied.
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt;T&gt; T getSrc()
+    {
+<span class="fc" id="L66">        return (T) super.getSource();</span>
+    }
+
+
+    /**
+     *  Returns the timestamp of when this WikiEvent occurred.
+     *
+     * @return this event's timestamp
+     * @since 2.4.74
+     */
+    public long getWhen()
+    {
+<span class="nc" id="L78">        return m_when;</span>
+    }
+
+
+   /**
+     * Sets the type of this event. Validation of acceptable
+     * type values is the responsibility of each subclass.
+     *
+     * @param type      the type of this WikiEvent.
+     */
+    protected void setType( int type )
+    {
+<span class="fc" id="L90">        m_type = type;</span>
+<span class="fc" id="L91">    }</span>
+
+
+   /**
+     * Returns the type of this event.
+     *
+     * @return  the type of this WikiEvent. See the enumerated values
+     *          defined in {@link org.apache.wiki.event.WikiEvent}).
+     */
+    public int getType()
+    {
+<span class="fc" id="L102">        return m_type;</span>
+    }
+
+
+   /** Returns a String (human-readable) description of an event type.
+     * This should be subclassed as necessary.
+     * @return the String description
+     */
+    public String getTypeDescription()
+    {
+<span class="nc bnc" id="L112" title="All 3 branches missed.">        switch ( m_type )</span>
+        {
+<span class="nc" id="L114">            case ERROR:                return &quot;exception or error event&quot;;</span>
+<span class="nc" id="L115">            case UNDEFINED:            return &quot;undefined event type&quot;;</span>
+<span class="nc" id="L116">            default:                   return &quot;unknown event type (&quot; + m_type + &quot;)&quot;;</span>
+        }
+    }
+
+
+   /**
+     * Returns true if the int value is a valid WikiEvent type.
+     * Because the WikiEvent class does not itself any event types,
+     * this method returns true if the event type is anything except
+     * {@link #ERROR} or {@link #UNDEFINED}. This method is meant to
+     * be subclassed as appropriate.
+     * 
+     * @param type The value to test.
+     * @return true, if the value is a valid WikiEvent type.
+     */
+    public static boolean isValidType( int type )
+    {
+<span class="nc bnc" id="L133" title="All 4 branches missed.">        return type != ERROR &amp;&amp; type != UNDEFINED;</span>
+    }
+
+
+    /**
+     * Returns a textual representation of an event type.
+     * @return the String representation
+     */
+    public String eventName()
+    {
+<span class="nc bnc" id="L143" title="All 3 branches missed.">        switch( m_type )</span>
+        {
+<span class="nc" id="L145">            case ERROR:                return &quot;ERROR&quot;;</span>
+<span class="nc" id="L146">            case UNDEFINED:            return &quot;UNDEFINED&quot;;</span>
+<span class="nc" id="L147">            default:                   return &quot;UNKNOWN (&quot; + m_type + &quot;)&quot;;</span>
+        }
+    }
+
+    /**
+     * Prints a String (human-readable) representation of this object.
+     * This should be subclassed as necessary.
+     * @see java.lang.Object#toString()
+     * @return the String representation
+     */
+    public String toString()
+    {
+<span class="fc" id="L159">    	StringBuilder out = new StringBuilder();</span>
+<span class="fc" id="L160">        out.append( &quot;WikiEvent.&quot; );</span>
+<span class="fc" id="L161">        out.append( eventName() );</span>
+<span class="fc" id="L162">        out.append( &quot; [source=&quot; );</span>
+<span class="fc" id="L163">        out.append( getSource().toString() );</span>
+<span class="fc" id="L164">        out.append( &quot;]&quot; );</span>
+<span class="fc" id="L165">        return out.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormOpen.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormOpen.java</span></div><h1>FormOpen.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.forms;
+
+import java.text.MessageFormat;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+
+/**
+ *  Opens a WikiForm.
+ *
+ * Builds the HTML code for opening a FORM.
+ *
+ * &lt;p&gt;Since we're only providing an opening FORM tag, we can't use
+ * the ECS utilities.
+ *
+ * A Form plugin line that produces one looks like this:
+ * &lt;p&gt;&lt;pre&gt;
+ *   [{FormOpen name='formname' handler='pluginname'
+ *          submit='submitservlet'
+ *          show='always'
+ *   }]
+ * &lt;/pre&gt;
+ *
+ * &lt;p&gt;Mandatory parameters:
+ * &lt;br&gt;The &lt;i&gt;name&lt;/i&gt; field identifies this particular form to the
+ * Form plugin across pages.
+ * &lt;br&gt;The &lt;i&gt;handler&lt;/i&gt; field is a WikiPlugin name; it will be
+ * invoked with the form field values.
+ *
+ * &lt;p&gt;Optional parameters:
+ * &lt;p&gt;The submitservlet is the name of a JSP/servlet capable of
+ * handling the input from this form. It is optional; the default
+ * value is the current page (which can handle the input by using
+ * this Plugin.)
+ *
+ * &lt;p&gt;The &lt;i&gt;hide&lt;/i&gt; parameter affects the visibility of this
+ * form. If left out, the form is always shown. If set to
+ * 'onsuccess', the form is not shown if it was submitted
+ * successfully. (Note that a reload of the page would cause the
+ * context to reset, and the form would be shown again. This may
+ * be a useless option.)
+ *
+ */
+<span class="nc" id="L66">public class FormOpen</span>
+    extends FormElement
+{
+<span class="nc" id="L69">    private static org.apache.log4j.Logger log =</span>
+<span class="nc" id="L70">        org.apache.log4j.Logger.getLogger( FormOpen.class );</span>
+
+    /** Parameter name for setting the method (GET or POST).  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_METHOD = &quot;method&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L81">        ResourceBundle rb = Preferences.getBundle( ctx, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+<span class="nc" id="L82">        String formName = params.get( PARAM_FORM );</span>
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if( formName == null )</span>
+        {
+<span class="nc" id="L85">            throw new PluginException( MessageFormat.format( rb.getString( &quot;formopen.missingparam&quot; ), PARAM_FORM ) );</span>
+        }
+<span class="nc" id="L87">        String hide     = params.get( PARAM_HIDEFORM );</span>
+<span class="nc" id="L88">        String sourcePage = ctx.getPage().getName();</span>
+<span class="nc" id="L89">        String submitServlet = params.get( PARAM_SUBMITHANDLER );</span>
+<span class="nc bnc" id="L90" title="All 2 branches missed.">        if( submitServlet == null )</span>
+<span class="nc" id="L91">            submitServlet = ctx.getURL( WikiContext.VIEW, sourcePage );</span>
+
+<span class="nc" id="L93">        String method = params.get( PARAM_METHOD );</span>
+<span class="nc bnc" id="L94" title="All 2 branches missed.">        if( method == null ) method=&quot;post&quot;;</span>
+
+<span class="nc bnc" id="L96" title="All 4 branches missed.">        if( !(method.equalsIgnoreCase(&quot;get&quot;) || method.equalsIgnoreCase(&quot;post&quot;)) )</span>
+        {
+<span class="nc" id="L98">            throw new PluginException( rb.getString( &quot;formopen.postorgetonly&quot; ) );</span>
+        }
+
+<span class="nc" id="L101">        FormInfo info = getFormInfo( ctx );</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">        if( info != null )</span>
+        {
+            // Previous information may be the result of submitting
+            // this form, or of a FormSet plugin, or both. If it
+            // exists and is for this form, fine.
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            if( formName.equals( info.getName() ) )</span>
+            {
+<span class="nc" id="L109">                log.debug( &quot;Previous FormInfo for this form was found in context.&quot; );</span>
+                // If the FormInfo exists, and if we're supposed to display on
+                // error only, we need to exit now.
+<span class="nc bnc" id="L112" title="All 2 branches missed.">                if( hide != null &amp;&amp;</span>
+<span class="nc bnc" id="L113" title="All 2 branches missed.">                    HIDE_SUCCESS.equals( hide ) &amp;&amp;</span>
+<span class="nc bnc" id="L114" title="All 2 branches missed.">                    info.getStatus() == FormInfo.EXECUTED )</span>
+                {
+<span class="nc" id="L116">                    info.setHide( true );</span>
+<span class="nc" id="L117">                    return &quot;&lt;p&gt;&quot; + rb.getString( &quot;formopen.noneedtoshow&quot; ) + &quot;&lt;/p&gt;&quot;;</span>
+                }
+            }
+            else
+            {
+                // This would mean that a new form was started without
+                // closing an old one.  Get rid of the garbage.
+<span class="nc" id="L124">                info = new FormInfo();</span>
+            }
+        }
+        else
+        {
+            // No previous FormInfo available; store now, so it'll be
+            // available for upcoming Form input elements.
+<span class="nc" id="L131">            info = new FormInfo();</span>
+<span class="nc" id="L132">            storeFormInfo( ctx, info );</span>
+        }
+
+<span class="nc" id="L135">        info.setName( formName );</span>
+<span class="nc" id="L136">        info.setAction( submitServlet );</span>
+
+<span class="nc" id="L138">        StringBuilder tag = new StringBuilder( 40 );</span>
+<span class="nc" id="L139">        tag.append( &quot;&lt;div class=\&quot;wikiform\&quot;&gt;\n&quot; );</span>
+<span class="nc" id="L140">        tag.append( &quot;&lt;form action=\&quot;&quot; + submitServlet );</span>
+<span class="nc" id="L141">        tag.append( &quot;\&quot; name=\&quot;&quot; + formName );</span>
+<span class="nc" id="L142">        tag.append( &quot;\&quot; accept-charset=\&quot;&quot; + ctx.getEngine().getContentEncoding() );</span>
+<span class="nc" id="L143">        tag.append( &quot;\&quot; method=\&quot;&quot;+method+&quot;\&quot; enctype=\&quot;application/x-www-form-urlencoded\&quot;&gt;\n&quot; );</span>
+<span class="nc" id="L144">        tag.append( &quot;  &lt;input type=\&quot;hidden\&quot; name=\&quot;&quot; + PARAM_FORMNAMEHIDDEN );</span>
+<span class="nc" id="L145">        tag.append( &quot;\&quot; value=\&quot;&quot; + formName + &quot;\&quot;/&gt;\n&quot; );</span>
+
+<span class="nc" id="L147">        return tag.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

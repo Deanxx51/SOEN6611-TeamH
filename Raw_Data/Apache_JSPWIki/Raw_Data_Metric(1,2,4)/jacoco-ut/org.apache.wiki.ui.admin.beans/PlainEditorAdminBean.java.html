@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PlainEditorAdminBean.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui.admin.beans</a> &gt; <span class="el_source">PlainEditorAdminBean.java</span></div><h1>PlainEditorAdminBean.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui.admin.beans;
+
+import javax.management.NotCompliantMBeanException;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.ui.admin.AdminBean;
+import org.apache.wiki.management.SimpleMBean;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  This class is still experimental.
+ *  
+ *
+ */
+public class PlainEditorAdminBean
+    extends SimpleMBean
+    implements AdminBean
+{
+    private static final String TEMPLATE = 
+        &quot;&lt;div&gt;&quot;+
+        &quot;&lt;input type='checkbox' id='ajax' %checked/&gt;Use AJAX?&lt;br /&gt;&quot;+
+        &quot;&lt;input type='submit' value='Submit'/&gt;&quot;+
+        &quot;%messages&quot;+
+        &quot;&lt;/div&gt;&quot;
+        ;
+    
+    private boolean m_checked;
+    
+<span class="fc" id="L49">    private static final String[] ATTRIBUTES = {&quot;title&quot;,&quot;checked&quot;};</span>
+<span class="fc" id="L50">    private static final String[] METHODS    = {};</span>
+    
+    public PlainEditorAdminBean() throws NotCompliantMBeanException
+<span class="fc" id="L53">    {</span>
+<span class="fc" id="L54">    }</span>
+    
+    public String doGet(WikiContext context)
+    {
+<span class="nc" id="L58">        HttpServletRequest req = context.getHttpRequest();</span>
+        
+<span class="nc bnc" id="L60" title="All 6 branches missed.">        if( req != null &amp;&amp; req.getMethod().equals(&quot;POST&quot;) &amp;&amp; getTitle().equals( req.getParameter(&quot;form&quot;) ) )</span>
+        {
+<span class="nc" id="L62">            return doPost( context );</span>
+        }
+<span class="nc" id="L64">        String base = TEMPLATE;</span>
+        
+<span class="nc" id="L66">        base = TextUtil.replaceString( base, &quot;%checked&quot;, &quot;checked='checked'&quot; );</span>
+<span class="nc" id="L67">        base = TextUtil.replaceString( base, &quot;%messages&quot;, &quot;&quot; );</span>
+        
+<span class="nc" id="L69">        return base;</span>
+    }
+
+    public String doPost( WikiContext context )
+    {
+<span class="nc" id="L74">        HttpServletRequest req = context.getHttpRequest();</span>
+        
+<span class="nc" id="L76">        boolean checked = &quot;checked&quot;.equals( req.getParameter( &quot;id&quot; ) );</span>
+        
+        // Make changes
+        
+<span class="nc" id="L80">        String base = TEMPLATE;</span>
+        
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        base = TextUtil.replaceString( base, &quot;%checked&quot;, checked ? &quot;checked='checked'&quot; : &quot;&quot; );</span>
+<span class="nc" id="L83">        base = TextUtil.replaceString( base, &quot;%messages&quot;, &quot;&lt;br /&gt;&lt;font color='red'&gt;Your settings have been saved&lt;/font&gt;&quot; );</span>
+        
+<span class="nc" id="L85">        return base;</span>
+    }
+    
+    public String getTitle()
+    {
+<span class="fc" id="L90">        return &quot;Plain editor&quot;;</span>
+    }
+
+    public int getType()
+    {
+<span class="fc" id="L95">        return EDITOR;</span>
+    }
+
+    public boolean isEnabled()
+    {
+<span class="nc" id="L100">        return true;</span>
+    }
+
+    public String getId()
+    {
+<span class="nc" id="L105">        return &quot;editor.plain&quot;;</span>
+    }
+    
+    public boolean getChecked()
+    {
+<span class="nc" id="L110">        return m_checked;</span>
+    }
+    
+    public String[] getAttributeNames()
+    {
+<span class="fc" id="L115">        return ATTRIBUTES;</span>
+    }
+
+    public String[] getMethodNames()
+    {
+<span class="fc" id="L120">        return METHODS;</span>
+    }
+
+    public void initialize(WikiEngine engine)
+    {
+        // TODO Auto-generated method stub
+        
+<span class="nc" id="L127">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

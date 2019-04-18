@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Decision.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">Decision.java</span></div><h1>Decision.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import org.apache.wiki.api.exceptions.WikiException;
+
+/**
+ * &lt;p&gt;
+ * AbstractStep subclass that asks an actor Principal to choose an Outcome on
+ * behalf of an owner (also a Principal). The actor &quot;makes the decision&quot; by
+ * calling the {@link #decide(Outcome)} method. When this method is called, it
+ * will set the Decision's Outcome to the one supplied. If the parent Workflow
+ * is in the {@link Workflow#WAITING} state, it will be re-started. Any checked
+ * WikiExceptions thrown by the workflow after re-start will be re-thrown to
+ * callers.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * When a Decision completes, its {@link #isCompleted()} method returns
+ * &lt;code&gt;true&lt;/code&gt;. It also tells its parent WorkflowManager to remove it
+ * from the list of pending tasks by calling
+ * {@link DecisionQueue#remove(Decision)}.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * To enable actors to choose an appropriate Outcome, Decisions can store
+ * arbitrary key-value pairs called &quot;facts.&quot; These facts can be presented by the
+ * user interface to show details the actor needs to know about. Facts are added
+ * by calling classes to the Decision, in order of expected presentation, by the
+ * {@link #addFact(Fact)} method. They can be retrieved, in order, via
+ * {@link #getFacts()}.
+ * &lt;/p&gt;
+ *
+ * @since 2.5
+ */
+public abstract class Decision extends AbstractStep
+{
+    private static final long serialVersionUID = -6835601038263238062L;
+
+    private Principal m_actor;
+
+    private int m_id;
+
+    private final Outcome m_defaultOutcome;
+
+    private final List&lt;Fact&gt; m_facts;
+
+    /**
+     * Constructs a new Decision for a required &quot;actor&quot; Principal, having a
+     * default Outcome.
+     * 
+     * @param workflow the parent Workflow object
+     * @param messageKey the i18n message key that represents the message the
+     *            actor will see
+     * @param actor the Principal (&lt;em&gt;e.g.&lt;/em&gt;, a WikiPrincipal, Role,
+     *            GroupPrincipal) who is required to select an appropriate
+     *            Outcome
+     * @param defaultOutcome the Outcome that the user interface will recommend
+     *            as the default choice
+     */
+    public Decision( Workflow workflow, String messageKey, Principal actor, Outcome defaultOutcome )
+    {
+<span class="fc" id="L82">        super( workflow, messageKey );</span>
+<span class="fc" id="L83">        m_actor = actor;</span>
+<span class="fc" id="L84">        m_defaultOutcome = defaultOutcome;</span>
+<span class="fc" id="L85">        m_facts = new ArrayList&lt;Fact&gt;();</span>
+<span class="fc" id="L86">        addSuccessor( defaultOutcome, null );</span>
+<span class="fc" id="L87">    }</span>
+
+    /**
+     * Appends a Fact to the list of Facts associated with this Decision.
+     * 
+     * @param fact the new fact to add
+     */
+    public final void addFact( Fact fact )
+    {
+<span class="fc" id="L96">        m_facts.add( fact );</span>
+<span class="fc" id="L97">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Sets this Decision's outcome, and restarts the parent Workflow if it is
+     * in the {@link Workflow#WAITING} state and this Decision is its currently
+     * active Step. Any checked WikiExceptions thrown by the workflow after
+     * re-start will be re-thrown to callers.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This method cannot be invoked if the Decision is not the current Workflow
+     * step; all other invocations will throw an IllegalStateException. If the
+     * Outcome supplied to this method is one one of the Outcomes returned by
+     * {@link #getAvailableOutcomes()}, an IllegalArgumentException will be
+     * thrown.
+     * &lt;/p&gt;
+     * 
+     * @param outcome the Outcome of the Decision
+     * @throws WikiException if the act of restarting the Workflow throws an
+     *             exception
+     */
+    public void decide( Outcome outcome ) throws WikiException
+    {
+<span class="fc" id="L120">        super.setOutcome( outcome );</span>
+
+        // If current workflow is waiting for input, restart it and remove
+        // Decision from DecisionQueue
+<span class="fc" id="L124">        Workflow w = getWorkflow();</span>
+<span class="pc bpc" id="L125" title="1 of 4 branches missed.">        if( w.getCurrentState() == Workflow.WAITING &amp;&amp; this.equals( w.getCurrentStep() ) )</span>
+        {
+<span class="fc" id="L127">            WorkflowManager wm = w.getWorkflowManager();</span>
+<span class="fc bfc" id="L128" title="All 2 branches covered.">            if( wm != null )</span>
+            {
+<span class="fc" id="L130">                wm.getDecisionQueue().remove( this );</span>
+            }
+            // Restart workflow
+<span class="fc" id="L133">            w.restart();</span>
+        }
+<span class="fc" id="L135">    }</span>
+
+    /**
+     * Default implementation that always returns {@link Outcome#STEP_CONTINUE}
+     * if the current Outcome isn't a completion (which will be true if the
+     * {@link #decide(Outcome)} method hasn't been executed yet. This method
+     * will also add the Decision to the associated DecisionQueue.
+     * 
+     * @return the Outcome of the execution
+     * @throws WikiException never
+     */
+    public Outcome execute() throws WikiException
+    {
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        if( getOutcome().isCompletion() )</span>
+        {
+<span class="fc" id="L150">            return getOutcome();</span>
+        }
+
+        // Put decision in the DecisionQueue
+<span class="fc" id="L154">        WorkflowManager wm = getWorkflow().getWorkflowManager();</span>
+<span class="fc bfc" id="L155" title="All 2 branches covered.">        if( wm != null )</span>
+        {
+<span class="fc" id="L157">            wm.getDecisionQueue().add( this );</span>
+        }
+
+        // Indicate we are waiting for user input
+<span class="fc" id="L161">        return Outcome.STEP_CONTINUE;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Principal getActor()
+    {
+<span class="fc" id="L169">        return m_actor;</span>
+    }
+
+    /**
+     * Returns the default or suggested outcome, which must be one of those
+     * returned by {@link #getAvailableOutcomes()}. This method is guaranteed
+     * to return a non-&lt;code&gt;null&lt;/code&gt; Outcome.
+     * 
+     * @return the default outcome.
+     */
+    public Outcome getDefaultOutcome()
+    {
+<span class="fc" id="L181">        return m_defaultOutcome;</span>
+    }
+
+    /**
+     * Returns the Facts associated with this Decision, in the order in which
+     * they were added.
+     * 
+     * @return the list of Facts
+     */
+    public final List&lt; Fact &gt; getFacts()
+    {
+<span class="fc" id="L192">        return Collections.unmodifiableList( m_facts );</span>
+    }
+
+    /**
+     * Returns the unique identifier for this Decision. Normally, this ID is
+     * programmatically assigned when the Decision is added to the
+     * DecisionQueue.
+     * 
+     * @return the identifier
+     */
+    public final int getId()
+    {
+<span class="nc" id="L204">        return m_id;</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the Decision can be reassigned to another
+     * actor. This implementation always returns &lt;code&gt;true&lt;/code&gt;.
+     * 
+     * @return the result
+     */
+    public boolean isReassignable()
+    {
+<span class="fc" id="L215">        return true;</span>
+    }
+
+    /**
+     * Reassigns the Decision to a new actor (that is, provide an outcome). If
+     * the Decision is not reassignable, this method throws an
+     * IllegalArgumentException.
+     * 
+     * @param actor the actor to reassign the Decision to
+     */
+    public final synchronized void reassign( Principal actor )
+    {
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">        if( isReassignable() )</span>
+        {
+<span class="fc" id="L229">            m_actor = actor;</span>
+        }
+        else
+        {
+<span class="nc" id="L233">            throw new IllegalArgumentException( &quot;Decision cannot be reassigned.&quot; );</span>
+        }
+<span class="fc" id="L235">    }</span>
+
+    /**
+     * Sets the unique identfier for this Decision.
+     * 
+     * @param id the identifier
+     */
+    public final void setId( int id )
+    {
+<span class="fc" id="L244">        m_id = id;</span>
+<span class="fc" id="L245">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

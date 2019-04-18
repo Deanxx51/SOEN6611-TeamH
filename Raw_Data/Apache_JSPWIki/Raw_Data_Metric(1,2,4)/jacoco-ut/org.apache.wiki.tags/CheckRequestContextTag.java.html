@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CheckRequestContextTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">CheckRequestContextTag.java</span></div><h1>CheckRequestContextTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.wiki.api.exceptions.ProviderException;
+
+/**
+ *  Includes body, if the request context matches.  To understand more about
+ *  RequestContexts, please look at the WikiContext class.
+ *
+ *  @since 2.0
+ *  @see org.apache.wiki.WikiContext
+ */
+<span class="nc" id="L33">public class CheckRequestContextTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 0L;
+    
+    private String m_context;
+<span class="nc" id="L39">    private String[] m_contextList = {};</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void initTag()
+    {
+<span class="nc" id="L47">        super.initTag();</span>
+<span class="nc" id="L48">        m_context = null;</span>
+<span class="nc" id="L49">        m_contextList = new String[0];</span>
+<span class="nc" id="L50">    }</span>
+    
+    /**
+     *  Returns the context.
+     *  
+     *  @return Return the context.
+     */
+    public String getContext()
+    {
+<span class="nc" id="L59">        return m_context;</span>
+    }
+
+    /**
+     *  Set the context to check for.
+     *  
+     *  @param arg One of the RequestsContexts.
+     */
+    public void setContext( String arg )
+    {
+<span class="nc" id="L69">        m_context = arg;</span>
+        
+<span class="nc" id="L71">        m_contextList = StringUtils.split(arg,'|');</span>
+<span class="nc" id="L72">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+<span class="nc bnc" id="L82" title="All 2 branches missed.">        for(int i = 0; i &lt; m_contextList.length; i++ )</span>
+        {
+<span class="nc" id="L84">            String ctx = m_wikiContext.getRequestContext();</span>
+            
+<span class="nc" id="L86">            String checkedCtx = m_contextList[i];</span>
+
+<span class="nc bnc" id="L88" title="All 2 branches missed.">            if( checkedCtx.length() &gt; 0 )</span>
+            {
+<span class="nc bnc" id="L90" title="All 2 branches missed.">                if( checkedCtx.charAt(0) == '!' )</span>
+                {
+<span class="nc bnc" id="L92" title="All 2 branches missed.">                    if( !ctx.equalsIgnoreCase(checkedCtx.substring(1) ) )</span>
+                    {
+<span class="nc" id="L94">                        return EVAL_BODY_INCLUDE;</span>
+                    }
+                }
+<span class="nc bnc" id="L97" title="All 2 branches missed.">                else if( ctx.equalsIgnoreCase(m_contextList[i]) )</span>
+                {
+<span class="nc" id="L99">                    return EVAL_BODY_INCLUDE;</span>
+                }
+            }
+        }
+
+<span class="nc" id="L104">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

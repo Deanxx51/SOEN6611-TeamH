@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>IteratorTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">IteratorTag.java</span></div><h1>IteratorTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
+
+import javax.servlet.jsp.JspWriter;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.tagext.BodyTagSupport;
+import javax.servlet.jsp.tagext.TryCatchFinally;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiPage;
+
+
+/**
+ *  Iterates through tags.
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;list - a collection.
+ *  &lt;/UL&gt;
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L46">public abstract class IteratorTag extends BodyTagSupport implements TryCatchFinally {</span>
+
+	private static final long serialVersionUID = 8945334759300595321L;
+	protected String m_pageName;
+    protected Iterator&lt; ? &gt; m_iterator;
+    protected WikiContext m_wikiContext;
+
+<span class="nc" id="L53">    private static final Logger log = Logger.getLogger( IteratorTag.class );</span>
+
+    /**
+     *  Sets the collection that is used to form the iteration.
+     *  
+     *  @param arg A Collection which will be iterated.
+     */
+    public void setList( Collection&lt; ? &gt; arg )
+    {
+<span class="nc bnc" id="L62" title="All 2 branches missed.">        if( arg != null )</span>
+<span class="nc" id="L63">            m_iterator = arg.iterator();</span>
+<span class="nc" id="L64">    }</span>
+
+    /**
+     *  Sets the collection list, but using an array.
+     *  @param arg An array of objects which will be iterated.
+     */
+    public void setList( Object[] arg )
+    {
+<span class="nc bnc" id="L72" title="All 2 branches missed.">        if( arg != null )</span>
+        {
+<span class="nc" id="L74">            m_iterator = Arrays.asList(arg).iterator();</span>
+        }
+<span class="nc" id="L76">    }</span>
+
+    /**
+     *  Clears the iterator away.  After calling this method doStartTag()
+     *  will always return SKIP_BODY
+     */
+    public void clearList()
+    {
+<span class="nc" id="L84">        m_iterator = null;</span>
+<span class="nc" id="L85">    }</span>
+    
+    /**
+     *  Override this method to reset your own iterator.
+     */
+    public void resetIterator()
+    {
+        // No operation here
+<span class="nc" id="L93">    }</span>
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doStartTag()
+    {
+<span class="nc" id="L101">        m_wikiContext = WikiContext.findContext(pageContext);</span>
+        
+<span class="nc" id="L103">        resetIterator();</span>
+        
+<span class="nc bnc" id="L105" title="All 2 branches missed.">        if( m_iterator == null ) return SKIP_BODY;</span>
+
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if( m_iterator.hasNext() )</span>
+        {
+<span class="nc" id="L109">            buildContext();</span>
+        }
+
+<span class="nc" id="L112">        return EVAL_BODY_BUFFERED;</span>
+    }
+
+    /**
+     *  Arg, I hate globals.
+     */
+    private void buildContext()
+    {
+        //
+        //  Build a clone of the current context
+        //
+<span class="nc" id="L123">        WikiContext context = (WikiContext)m_wikiContext.clone();</span>
+        
+<span class="nc" id="L125">        Object o = m_iterator.next();</span>
+        
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if( o instanceof WikiPage )</span>
+<span class="nc" id="L128">            context.setPage( (WikiPage)o );</span>
+
+        //
+        //  Push it to the iterator stack, and set the id.
+        //
+<span class="nc" id="L133">        pageContext.setAttribute( WikiTagBase.ATTR_CONTEXT, context, PageContext.REQUEST_SCOPE );</span>
+<span class="nc" id="L134">        pageContext.setAttribute( getId(), o );</span>
+<span class="nc" id="L135">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doEndTag()
+    {
+        // Return back to the original.
+<span class="nc" id="L144">        pageContext.setAttribute( WikiTagBase.ATTR_CONTEXT, m_wikiContext, PageContext.REQUEST_SCOPE );</span>
+
+<span class="nc" id="L146">        return EVAL_PAGE;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doAfterBody()
+    {
+<span class="nc bnc" id="L155" title="All 2 branches missed.">        if( bodyContent != null )</span>
+        {
+            try
+            {
+<span class="nc" id="L159">                JspWriter out = getPreviousOut();</span>
+<span class="nc" id="L160">                out.print(bodyContent.getString());</span>
+<span class="nc" id="L161">                bodyContent.clearBody();</span>
+            }
+<span class="nc" id="L163">            catch( IOException e )</span>
+            {
+<span class="nc" id="L165">                log.error(&quot;Unable to get inner tag text&quot;, e);</span>
+                // FIXME: throw something?
+<span class="nc" id="L167">            }</span>
+        }
+
+<span class="nc bnc" id="L170" title="All 4 branches missed.">        if( m_iterator != null &amp;&amp; m_iterator.hasNext() )</span>
+        {
+<span class="nc" id="L172">            buildContext();</span>
+<span class="nc" id="L173">            return EVAL_BODY_BUFFERED;</span>
+        }
+
+<span class="nc" id="L176">        return SKIP_BODY;</span>
+    }
+    
+    /**
+     *  In case your tag throws an exception at any point, you can
+     *  override this method and implement a custom exception handler.
+     *  &lt;p&gt;
+     *  By default, this handler does nothing.
+     *  
+     *  @param arg0 The Throwable that the tag threw
+     *  
+     *  @throws Throwable I have no idea why this would throw anything
+     */
+    @Override
+    public void doCatch(Throwable arg0) throws Throwable
+    {
+<span class="nc" id="L192">    }</span>
+
+    /**
+     *  Executed after the tag has been finished.  This is a great place
+     *  to put any cleanup code.  However you &lt;b&gt;must&lt;/b&gt; call super.doFinally()
+     *  if you override this method, or else some of the things may not
+     *  work as expected.
+     */
+    @Override
+    public void doFinally()
+    {
+<span class="nc" id="L203">        resetIterator();</span>
+<span class="nc" id="L204">        m_iterator = null;</span>
+<span class="nc" id="L205">        m_pageName = null;</span>
+<span class="nc" id="L206">        m_wikiContext = null;        </span>
+<span class="nc" id="L207">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

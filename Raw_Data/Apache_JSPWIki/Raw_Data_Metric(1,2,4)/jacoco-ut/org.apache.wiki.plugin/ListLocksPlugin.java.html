@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ListLocksPlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">ListLocksPlugin.java</span></div><h1>ListLocksPlugin.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.pages.PageLock;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.preferences.Preferences;
+
+/**
+ *  This is a plugin for the administrator: It allows him to see in a single
+ *  glance who is editing what.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *   NONE
+ *  @since 2.0.22.
+ */
+<span class="nc" id="L41">public class ListLocksPlugin</span>
+    implements WikiPlugin
+{
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L50">    	StringBuilder result = new StringBuilder();</span>
+
+<span class="nc" id="L52">        PageManager mgr = context.getEngine().getPageManager();</span>
+<span class="nc" id="L53">        List&lt;PageLock&gt; locks = mgr.getActiveLocks();</span>
+<span class="nc" id="L54">        ResourceBundle rb = Preferences.getBundle( context, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+
+<span class="nc" id="L56">        result.append(&quot;&lt;table class=\&quot;wikitable\&quot;&gt;\n&quot;);</span>
+<span class="nc" id="L57">        result.append(&quot;&lt;tr&gt;\n&quot;);</span>
+<span class="nc" id="L58">        result.append( &quot;&lt;th&gt;&quot; + rb.getString( &quot;plugin.listlocks.page&quot; ) + &quot;&lt;/th&gt;&lt;th&gt;&quot; + rb.getString( &quot;plugin.listlocks.locked.by&quot; )</span>
+<span class="nc" id="L59">                       + &quot;&lt;/th&gt;&lt;th&gt;&quot; + rb.getString( &quot;plugin.listlocks.acquired&quot; ) + &quot;&lt;/th&gt;&lt;th&gt;&quot;</span>
+<span class="nc" id="L60">                       + rb.getString( &quot;plugin.listlocks.expires&quot; ) + &quot;&lt;/th&gt;\n&quot; );</span>
+<span class="nc" id="L61">        result.append(&quot;&lt;/tr&gt;&quot;);</span>
+
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if( locks.size() == 0 )</span>
+        {
+<span class="nc" id="L65">            result.append( &quot;&lt;tr&gt;&lt;td colspan=\&quot;4\&quot; class=\&quot;odd\&quot;&gt;&quot; + rb.getString( &quot;plugin.listlocks.no.locks.exist&quot; )</span>
+                           + &quot;&lt;/td&gt;&lt;/tr&gt;\n&quot; );
+        }
+        else
+        {
+<span class="nc" id="L70">            int rowNum = 1;</span>
+<span class="nc bnc" id="L71" title="All 2 branches missed.">            for( Iterator&lt;PageLock&gt; i = locks.iterator(); i.hasNext(); )</span>
+            {
+<span class="nc" id="L73">                PageLock lock = i.next();</span>
+
+<span class="nc bnc" id="L75" title="All 2 branches missed.">                result.append( rowNum % 2 != 0 ? &quot;&lt;tr class=\&quot;odd\&quot;&gt;&quot; : &quot;&lt;tr&gt;&quot; );</span>
+<span class="nc" id="L76">                result.append( &quot;&lt;td&gt;&quot; + lock.getPage() + &quot;&lt;/td&gt;&quot; );</span>
+<span class="nc" id="L77">                result.append( &quot;&lt;td&gt;&quot; + lock.getLocker() + &quot;&lt;/td&gt;&quot; );</span>
+<span class="nc" id="L78">                result.append( &quot;&lt;td&gt;&quot; + Preferences.renderDate( context, lock.getAcquisitionTime(), Preferences.TimeFormat.DATETIME ) + &quot;&lt;/td&gt;&quot; );</span>
+<span class="nc" id="L79">                result.append( &quot;&lt;td&gt;&quot; + Preferences.renderDate( context, lock.getExpiryTime(), Preferences.TimeFormat.DATETIME ) + &quot;&lt;/td&gt;&quot; );</span>
+<span class="nc" id="L80">                result.append( &quot;&lt;/tr&gt;\n&quot; );</span>
+<span class="nc" id="L81">                rowNum++;</span>
+<span class="nc" id="L82">            }</span>
+        }
+
+<span class="nc" id="L85">        result.append(&quot;&lt;/table&gt;&quot;);</span>
+
+<span class="nc" id="L87">        return result.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

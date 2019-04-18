@@ -1,0 +1,825 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TemplateManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">TemplateManager.java</span></div><h1>TemplateManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.ui;
+
+import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeSet;
+import java.util.Vector;
+
+import javax.servlet.ServletContext;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.jstl.fmt.LocaleSupport;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.InternalWikiException;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.modules.ModuleManager;
+import org.apache.wiki.modules.WikiModuleInfo;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.preferences.Preferences.TimeFormat;
+import org.apache.wiki.util.ClassUtil;
+
+
+/**
+ *  This class takes care of managing JSPWiki templates.  This class also provides
+ *  the ResourceRequest mechanism.
+ *
+ *  @since 2.1.62
+ */
+public class TemplateManager extends ModuleManager {
+
+    private static final String SKIN_DIRECTORY = &quot;skins&quot;;
+
+    /**
+     * Requests a JavaScript function to be called during window.onload. Value is {@value}.
+     */
+    public static final String RESOURCE_JSFUNCTION = &quot;jsfunction&quot;;
+
+    /**
+     * Requests a JavaScript associative array with all localized strings.
+     */
+    public static final String RESOURCE_JSLOCALIZEDSTRINGS = &quot;jslocalizedstrings&quot;;
+
+    /**
+     * Requests a stylesheet to be inserted. Value is {@value}.
+     */
+    public static final String RESOURCE_STYLESHEET = &quot;stylesheet&quot;;
+
+    /**
+     * Requests a script to be loaded. Value is {@value}.
+     */
+    public static final String RESOURCE_SCRIPT = &quot;script&quot;;
+
+    /**
+     * Requests inlined CSS. Value is {@value}.
+     */
+    public static final String RESOURCE_INLINECSS = &quot;inlinecss&quot;;
+
+    /** The default directory for the properties. Value is {@value}. */
+    public static final String DIRECTORY = &quot;templates&quot;;
+
+    /** The name of the default template. Value is {@value}. */
+    public static final String DEFAULT_TEMPLATE = &quot;default&quot;;
+
+    /** Name of the file that contains the properties. */
+
+    public static final String PROPERTYFILE = &quot;template.properties&quot;;
+
+    /** Location of I18N Resource bundles, and path prefix and suffixes */
+
+    public static final String I18NRESOURCE_PREFIX = &quot;templates/default_&quot;;
+
+    public static final String I18NRESOURCE_SUFFIX = &quot;.properties&quot;;
+
+    /** The default (en) RESOURCE name and id. */
+
+    public static final String I18NRESOURCE_EN = &quot;templates/default.properties&quot;;
+    public static final String I18NRESOURCE_EN_ID = &quot;en&quot;;
+
+    /** I18N string to mark the default locale */
+
+    public static final String I18NDEFAULT_LOCALE = &quot;prefs.user.language.default&quot;;
+
+    /** I18N string to mark the server timezone */
+
+    public static final String I18NSERVER_TIMEZONE = &quot;prefs.user.timezone.server&quot;;
+
+    /** Prefix of the default timeformat properties. */
+
+    public static final String TIMEFORMATPROPERTIES = &quot;jspwiki.defaultprefs.timeformat.&quot;;
+
+    /**
+     * The name under which the resource includes map is stored in the
+     * WikiContext.
+     */
+    public static final String RESOURCE_INCLUDES = &quot;jspwiki.resourceincludes&quot;;
+
+    // private Cache m_propertyCache;
+
+<span class="fc" id="L135">    protected static final Logger log = Logger.getLogger(TemplateManager.class);</span>
+
+    /** Requests a HTTP header. Value is {@value}. */
+    public static final String RESOURCE_HTTPHEADER = &quot;httpheader&quot;;
+
+    /**
+     *  Creates a new TemplateManager.  There is typically one manager per engine.
+     *
+     *  @param engine The owning engine.
+     *  @param properties The property list used to initialize this.
+     */
+    public TemplateManager( WikiEngine engine, Properties properties )
+    {
+<span class="fc" id="L148">        super(engine);</span>
+
+        //
+        //  Uses the unlimited cache.
+        //
+        // m_propertyCache = new Cache( true, false );
+<span class="fc" id="L154">    }</span>
+
+    /**
+     *  Check the existence of a template.
+     */
+    // FIXME: Does not work yet
+    public boolean templateExists( String templateName ) {
+<span class="nc" id="L161">        ServletContext context = m_engine.getServletContext();</span>
+<span class="nc" id="L162">        InputStream in = context.getResourceAsStream( getPath(templateName)+&quot;ViewTemplate.jsp&quot;);</span>
+
+<span class="nc bnc" id="L164" title="All 2 branches missed.">        if( in != null ) {</span>
+<span class="nc" id="L165">            IOUtils.closeQuietly( in );</span>
+<span class="nc" id="L166">            return true;</span>
+        }
+
+<span class="nc" id="L169">        return false;</span>
+    }
+
+    /**
+     *  Tries to locate a given resource from the template directory. If the
+     *  given resource is not found under the current name, returns the
+     *  path to the corresponding one in the default template.
+     *
+     *  @param sContext The servlet context
+     *  @param name The name of the resource
+     *  @return The name of the resource which was found.
+     */
+    private static String findResource( ServletContext sContext, String name ) {
+<span class="nc" id="L182">        InputStream is = sContext.getResourceAsStream( name );</span>
+
+<span class="nc bnc" id="L184" title="All 2 branches missed.">        if( is == null ) {</span>
+<span class="nc" id="L185">            String defname = makeFullJSPName( DEFAULT_TEMPLATE, removeTemplatePart(name) );</span>
+<span class="nc" id="L186">            is = sContext.getResourceAsStream( defname );</span>
+
+<span class="nc bnc" id="L188" title="All 2 branches missed.">            name = is != null ? defname : null;</span>
+        }
+
+<span class="nc" id="L191">        IOUtils.closeQuietly( is );</span>
+
+<span class="nc" id="L193">        return name;</span>
+    }
+
+    /**
+     *  Attempts to find a resource from the given template, and if it's not found
+     *  attempts to locate it from the default template.
+     * @param sContext
+     * @param template
+     * @param name
+     * @return the Resource for the given template and name.
+     */
+    private static String findResource( ServletContext sContext, String template, String name )
+    {
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if( name.charAt(0) == '/' )</span>
+        {
+            // This is already a full path
+<span class="nc" id="L209">            return findResource( sContext, name );</span>
+        }
+
+<span class="nc" id="L212">        String fullname = makeFullJSPName( template, name );</span>
+
+<span class="nc" id="L214">        return findResource( sContext, fullname );</span>
+    }
+
+    /**
+     *  An utility method for finding a JSP page.  It searches only under
+     *  either current context or by the absolute name.
+     *
+     *  @param pageContext the JSP PageContext
+     *  @param name The name of the JSP page to look for (e.g &quot;Wiki.jsp&quot;)
+     *  @return The context path to the resource
+     */
+    public String findJSP( PageContext pageContext, String name )
+    {
+<span class="nc" id="L227">        ServletContext sContext = pageContext.getServletContext();</span>
+
+<span class="nc" id="L229">        return findResource( sContext, name );</span>
+    }
+
+    /**
+     *  Removes the template part of a name.
+     */
+    private static String removeTemplatePart( String name )
+    {
+<span class="nc" id="L237">        int idx = 0;</span>
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        if( name.startsWith( &quot;/&quot; ) ) idx = 1;</span>
+
+<span class="nc" id="L240">        idx = name.indexOf('/', idx);</span>
+<span class="nc bnc" id="L241" title="All 2 branches missed.">        if( idx != -1 )</span>
+        {
+<span class="nc" id="L243">            idx = name.indexOf('/', idx+1); // Find second &quot;/&quot;</span>
+
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            if( idx != -1 )</span>
+            {
+<span class="nc" id="L247">                name = name.substring( idx+1 );</span>
+            }
+        }
+
+<span class="nc bnc" id="L251" title="All 2 branches missed.">        if( log.isDebugEnabled() ) log.debug( &quot;Final name = &quot;+name );</span>
+<span class="nc" id="L252">        return name;</span>
+    }
+
+    /**
+     *  Returns the full name (/templates/foo/bar) for name=bar, template=foo.
+     *
+     * @param template The name of the template.
+     * @param name The name of the resource.
+     * @return The full name for a template.
+     */
+    private static String makeFullJSPName( String template, String name )
+    {
+<span class="nc" id="L264">        return &quot;/&quot;+DIRECTORY+&quot;/&quot;+template+&quot;/&quot;+name;</span>
+    }
+
+    /**
+     *  Attempts to locate a resource under the given template.  If that template
+     *  does not exist, or the page does not exist under that template, will
+     *  attempt to locate a similarly named file under the default template.
+     *  &lt;p&gt;
+     *  Even though the name suggests only JSP files can be located, but in fact
+     *  this method can find also other resources than JSP files.
+     *
+     *  @param pageContext The JSP PageContext
+     *  @param template From which template we should seek initially?
+     *  @param name Which resource are we looking for (e.g. &quot;ViewTemplate.jsp&quot;)
+     *  @return path to the JSP page; null, if it was not found.
+     */
+    public String findJSP( PageContext pageContext, String template, String name )
+    {
+<span class="nc bnc" id="L282" title="All 4 branches missed.">        if( name == null || template == null )</span>
+        {
+<span class="nc" id="L284">            log.fatal(&quot;findJSP() was asked to find a null template or name (&quot;+template+&quot;,&quot;+name+&quot;).&quot;+</span>
+                      &quot; JSP page '&quot;+
+<span class="nc" id="L286">                      ((HttpServletRequest)pageContext.getRequest()).getRequestURI()+&quot;'&quot;);</span>
+<span class="nc" id="L287">            throw new InternalWikiException(&quot;Illegal arguments to findJSP(); please check logs.&quot;);</span>
+        }
+
+<span class="nc" id="L290">        return findResource( pageContext.getServletContext(), template, name );</span>
+    }
+
+    /**
+     *  Attempts to locate a resource under the given template.  This matches the
+     *  functionality findJSP(), but uses the WikiContext as the argument.  If there
+     *  is no servlet context (i.e. this is embedded), will just simply return
+     *  a best-guess.
+     *  &lt;p&gt;
+     *  This method is typically used to locate any resource, including JSP pages, images,
+     *  scripts, etc.
+     *
+     *  @since 2.6
+     *  @param ctx the wiki context
+     *  @param template the name of the template to use
+     *  @param name the name of the resource to fine
+     *  @return the path to the resource
+     */
+    public String findResource( WikiContext ctx, String template, String name )
+    {
+<span class="nc bnc" id="L310" title="All 2 branches missed.">        if( m_engine.getServletContext() != null )</span>
+        {
+<span class="nc" id="L312">            return findResource( m_engine.getServletContext(), template, name );</span>
+        }
+
+<span class="nc" id="L315">        return getPath(template)+&quot;/&quot;+name;</span>
+    }
+
+    /**
+     *  Returns a property, as defined in the template.  The evaluation
+     *  is lazy, i.e. the properties are not loaded until the template is
+     *  actually used for the first time.
+     */
+    /*
+    public String getTemplateProperty( WikiContext context, String key )
+    {
+        String template = context.getTemplate();
+
+        try
+        {
+            Properties props = (Properties)m_propertyCache.getFromCache( template, -1 );
+
+            if( props == null )
+            {
+                try
+                {
+                    props = getTemplateProperties( template );
+
+                    m_propertyCache.putInCache( template, props );
+                }
+                catch( IOException e )
+                {
+                    log.warn(&quot;IO Exception while reading template properties&quot;,e);
+
+                    return null;
+                }
+            }
+
+            return props.getProperty( key );
+        }
+        catch( NeedsRefreshException ex )
+        {
+            // FIXME
+            return null;
+        }
+    }
+*/
+    /**
+     *  Returns an absolute path to a given template.
+     */
+    private static String getPath( String template )
+    {
+<span class="nc" id="L362">        return &quot;/&quot;+DIRECTORY+&quot;/&quot;+template+&quot;/&quot;;</span>
+    }
+
+    /**
+     *   Lists the skins available under this template.  Returns an
+     *   empty Set, if there are no extra skins available.  Note that
+     *   this method does not check whether there is anything actually
+     *   in the directories, it just lists them.  This may change
+     *   in the future.
+     *
+     *   @param pageContext the JSP PageContext
+     *   @param template The template to search
+     *   @return Set of Strings with the skin names.
+     *   @since 2.3.26
+     */
+    public Set&lt; String &gt; listSkins( PageContext pageContext, String template )
+    {
+<span class="nc" id="L379">        String place = makeFullJSPName( template, SKIN_DIRECTORY );</span>
+
+<span class="nc" id="L381">        ServletContext sContext = pageContext.getServletContext();</span>
+
+<span class="nc" id="L383">        Set&lt;String&gt; skinSet = sContext.getResourcePaths( place );</span>
+<span class="nc" id="L384">        TreeSet&lt;String&gt; resultSet = new TreeSet&lt;&gt;();</span>
+
+<span class="nc bnc" id="L386" title="All 2 branches missed.">        if( log.isDebugEnabled() ) log.debug( &quot;Listings skins from &quot;+place );</span>
+
+<span class="nc bnc" id="L388" title="All 2 branches missed.">        if( skinSet != null )</span>
+        {
+<span class="nc" id="L390">            String[] skins = {};</span>
+
+<span class="nc" id="L392">            skins = skinSet.toArray(skins);</span>
+
+<span class="nc bnc" id="L394" title="All 2 branches missed.">            for (int i = 0; i &lt; skins.length; i++)</span>
+            {
+<span class="nc" id="L396">                String[] s = StringUtils.split(skins[i], &quot;/&quot;);</span>
+
+<span class="nc bnc" id="L398" title="All 4 branches missed.">                if (s.length &gt; 2 &amp;&amp; skins[i].endsWith(&quot;/&quot;))</span>
+                {
+<span class="nc" id="L400">                    String skinName = s[s.length - 1];</span>
+<span class="nc" id="L401">                    resultSet.add(skinName);</span>
+<span class="nc bnc" id="L402" title="All 2 branches missed.">                    if (log.isDebugEnabled())</span>
+<span class="nc" id="L403">                        log.debug(&quot;...adding skin '&quot; + skinName + &quot;'&quot;);</span>
+                }
+            }
+        }
+
+<span class="nc" id="L408">        return resultSet;</span>
+    }
+
+    /**
+     * List all installed i18n language properties by classpath searching for files like :
+     *    templates/default_*.properties
+     *    templates/default.properties
+     *
+     * @param pageContext
+     * @return map of installed Languages
+     * @since 2.7.x
+     */
+    public Map&lt; String, String &gt; listLanguages(PageContext pageContext)
+    {
+<span class="nc" id="L422">        Map&lt; String, String &gt; resultMap = new LinkedHashMap&lt;&gt;();</span>
+<span class="nc" id="L423">        String clientLanguage = ((HttpServletRequest) pageContext.getRequest()).getLocale().toString();</span>
+
+<span class="nc" id="L425">        List&lt; String &gt; entries = ClassUtil.classpathEntriesUnder( DIRECTORY );</span>
+<span class="nc bnc" id="L426" title="All 2 branches missed.">        for( String name : entries ) {</span>
+<span class="nc bnc" id="L427" title="All 2 branches missed.">            if ( name.equals( I18NRESOURCE_EN ) ||</span>
+<span class="nc bnc" id="L428" title="All 4 branches missed.">                    (name.startsWith( I18NRESOURCE_PREFIX ) &amp;&amp; name.endsWith( I18NRESOURCE_SUFFIX ) ) )</span>
+            {
+<span class="nc bnc" id="L430" title="All 2 branches missed.">                if (name.equals( I18NRESOURCE_EN )) {</span>
+<span class="nc" id="L431">                    name = I18NRESOURCE_EN_ID;</span>
+                }    else {
+<span class="nc" id="L433">                    name = name.substring(I18NRESOURCE_PREFIX.length(), name.lastIndexOf(I18NRESOURCE_SUFFIX));</span>
+                }
+<span class="nc bnc" id="L435" title="All 2 branches missed.">                Locale locale = new Locale(name.substring(0, 2), ((name.indexOf(&quot;_&quot;) == -1) ? &quot;&quot; : name.substring(3, 5)));</span>
+<span class="nc" id="L436">                String defaultLanguage = &quot;&quot;;</span>
+<span class="nc bnc" id="L437" title="All 2 branches missed.">                if (clientLanguage.startsWith(name))</span>
+                {
+<span class="nc" id="L439">                    defaultLanguage = LocaleSupport.getLocalizedMessage(pageContext, I18NDEFAULT_LOCALE);</span>
+                }
+<span class="nc" id="L441">                resultMap.put(name, locale.getDisplayName(locale) + &quot; &quot; + defaultLanguage);</span>
+            }
+<span class="nc" id="L443">        }</span>
+
+<span class="nc" id="L445">        return resultMap;</span>
+    }
+
+
+    /**
+     * List all available timeformats, read from the jspwiki.properties
+     *
+     * @param pageContext
+     * @return map of TimeFormats
+     * @since 2.7.x
+     */
+    public Map&lt; String, String &gt; listTimeFormats(PageContext pageContext)
+    {
+<span class="nc" id="L458">        WikiContext context = WikiContext.findContext( pageContext );</span>
+<span class="nc" id="L459">        Properties props = m_engine.getWikiProperties();</span>
+<span class="nc" id="L460">        ArrayList&lt;String&gt; tfArr = new ArrayList&lt;&gt;(40);</span>
+<span class="nc" id="L461">        LinkedHashMap&lt;String,String&gt; resultMap = new LinkedHashMap&lt;&gt;();</span>
+
+        /* filter timeformat properties */
+<span class="nc bnc" id="L464" title="All 2 branches missed.">        for (Enumeration&lt; ? &gt; e = props.propertyNames(); e.hasMoreElements();)</span>
+        {
+<span class="nc" id="L466">            String name = (String) e.nextElement();</span>
+
+<span class="nc bnc" id="L468" title="All 2 branches missed.">            if (name.startsWith(TIMEFORMATPROPERTIES))</span>
+            {
+<span class="nc" id="L470">                tfArr.add(name);</span>
+            }
+<span class="nc" id="L472">        }</span>
+
+        /* fetch actual formats */
+<span class="nc bnc" id="L475" title="All 2 branches missed.">        if (tfArr.size() == 0)  {/* no props found - make sure some default formats are avail */</span>
+<span class="nc" id="L476">            tfArr.add(&quot;dd-MMM-yy&quot;);</span>
+<span class="nc" id="L477">            tfArr.add(&quot;d-MMM-yyyy&quot;);</span>
+<span class="nc" id="L478">            tfArr.add(&quot;EEE, dd-MMM-yyyy, zzzz&quot;);</span>
+        } else {
+<span class="nc" id="L480">            Collections.sort(tfArr);</span>
+
+<span class="nc bnc" id="L482" title="All 2 branches missed.">            for (int i = 0; i &lt; tfArr.size(); i++) {</span>
+<span class="nc" id="L483">                tfArr.set(i, props.getProperty(tfArr.get(i)));</span>
+            }
+        }
+
+<span class="nc" id="L487">        String prefTimeZone = Preferences.getPreference( context, &quot;TimeZone&quot; );</span>
+        //TimeZone tz = TimeZone.getDefault();
+<span class="nc" id="L489">        TimeZone tz = TimeZone.getTimeZone(prefTimeZone);</span>
+        /*try
+        {
+            tz.setRawOffset(Integer.parseInt(prefTimeZone));
+        }
+        catch (Exception e)
+        {
+        }*/
+
+<span class="nc" id="L498">        Date d = new Date(); // current date</span>
+        try
+        {
+            // dummy format pattern
+<span class="nc" id="L502">            SimpleDateFormat fmt = Preferences.getDateFormat( context, TimeFormat.DATETIME );</span>
+<span class="nc" id="L503">            fmt.setTimeZone(tz);</span>
+
+<span class="nc bnc" id="L505" title="All 2 branches missed.">            for (int i = 0; i &lt; tfArr.size(); i++)</span>
+            {
+                try
+                {
+<span class="nc" id="L509">                    String f = tfArr.get(i);</span>
+<span class="nc" id="L510">                    fmt.applyPattern(f);</span>
+
+<span class="nc" id="L512">                    resultMap.put(f, fmt.format(d));</span>
+                }
+<span class="nc" id="L514">                catch (IllegalArgumentException e)</span>
+                {
+<span class="nc" id="L516">                } // skip parameter</span>
+            }
+        }
+<span class="nc" id="L519">        catch (IllegalArgumentException e)</span>
+        {
+<span class="nc" id="L521">        } // skip parameter</span>
+
+<span class="nc" id="L523">        return resultMap;</span>
+    }
+
+    /**
+     * List all timezones, with special marker for server timezone
+     *
+     * @param pageContext
+     * @return map of TimeZones
+     * @since 2.7.x
+     */
+    public Map&lt; String, String &gt; listTimeZones(PageContext pageContext)
+    {
+<span class="nc" id="L535">        Map&lt;String,String&gt; resultMap = new LinkedHashMap&lt;&gt;();</span>
+
+<span class="nc" id="L537">        String[][] tzs = { { &quot;GMT-12&quot;, &quot;Enitwetok, Kwajalien&quot; },</span>
+                          { &quot;GMT-11&quot;, &quot;Nome, Midway Island, Samoa&quot; },
+                          { &quot;GMT-10&quot;, &quot;Hawaii&quot; },
+                          { &quot;GMT-9&quot;, &quot;Alaska&quot; },
+                          { &quot;GMT-8&quot;, &quot;Pacific Time&quot; },
+                          { &quot;GMT-7&quot;, &quot;Mountain Time&quot; },
+                          { &quot;GMT-6&quot;, &quot;Central Time, Mexico City&quot; },
+                          { &quot;GMT-5&quot;, &quot;Eastern Time, Bogota, Lima, Quito&quot; },
+                          { &quot;GMT-4&quot;, &quot;Atlantic Time, Caracas, La Paz&quot; },
+                          { &quot;GMT-3:30&quot;, &quot;Newfoundland&quot; },
+                          { &quot;GMT-3&quot;, &quot;Brazil, Buenos Aires, Georgetown, Falkland Is.&quot; },
+                          { &quot;GMT-2&quot;, &quot;Mid-Atlantic, Ascention Is., St Helena&quot; },
+                          { &quot;GMT-1&quot;, &quot;Azores, Cape Verde Islands&quot; },
+                          { &quot;GMT&quot;, &quot;Casablanca, Dublin, Edinburgh, London, Lisbon, Monrovia&quot; },
+                          { &quot;GMT+1&quot;, &quot;Berlin, Brussels, Copenhagen, Madrid, Paris, Rome&quot; },
+                          { &quot;GMT+2&quot;, &quot;Helsinki, Athens, Kaliningrad, South Africa, Warsaw&quot; },
+                          { &quot;GMT+3&quot;, &quot;Baghdad, Riyadh, Moscow, Nairobi&quot; },
+                          { &quot;GMT+3:30&quot;, &quot;Tehran&quot; },
+                          { &quot;GMT+4&quot;, &quot;Adu Dhabi, Baku, Muscat, Tbilisi&quot; },
+                          { &quot;GMT+4:30&quot;, &quot;Kabul&quot; },
+                          { &quot;GMT+5&quot;, &quot;Islamabad, Karachi, Tashkent&quot; },
+                          { &quot;GMT+5:30&quot;, &quot;Bombay, Calcutta, Madras, New Delhi&quot; },
+                          { &quot;GMT+6&quot;, &quot;Almaty, Colomba, Dhakra&quot; },
+                          { &quot;GMT+7&quot;, &quot;Bangkok, Hanoi, Jakarta&quot; },
+                          { &quot;GMT+8&quot;, &quot;Beijing, Hong Kong, Perth, Singapore, Taipei&quot; },
+                          { &quot;GMT+9&quot;, &quot;Osaka, Sapporo, Seoul, Tokyo, Yakutsk&quot; },
+                          { &quot;GMT+9:30&quot;, &quot;Adelaide, Darwin&quot; },
+                          { &quot;GMT+10&quot;, &quot;Melbourne, Papua New Guinea, Sydney, Vladivostok&quot; },
+                          { &quot;GMT+11&quot;, &quot;Magadan, New Caledonia, Solomon Islands&quot; },
+                          { &quot;GMT+12&quot;, &quot;Auckland, Wellington, Fiji, Marshall Island&quot; } };
+
+<span class="nc" id="L568">        java.util.TimeZone servertz = java.util.TimeZone.getDefault();</span>
+
+<span class="nc bnc" id="L570" title="All 2 branches missed.">        for( int i = 0; i &lt; tzs.length; i++ )</span>
+        {
+<span class="nc" id="L572">            String tzID = tzs[i][0];</span>
+<span class="nc" id="L573">            java.util.TimeZone tz = java.util.TimeZone.getTimeZone(tzID);</span>
+
+<span class="nc" id="L575">            String serverTimeZone = &quot;&quot;;</span>
+
+<span class="nc bnc" id="L577" title="All 2 branches missed.">            if( servertz.getRawOffset() == tz.getRawOffset() )</span>
+            {
+<span class="nc" id="L579">                serverTimeZone = LocaleSupport.getLocalizedMessage(pageContext, I18NSERVER_TIMEZONE);</span>
+<span class="nc" id="L580">                tzID = servertz.getID();</span>
+            }
+
+<span class="nc" id="L583">            resultMap.put(tzID, &quot;(&quot; + tzs[i][0] + &quot;) &quot;+tzs[i][1] + &quot; &quot; + serverTimeZone);</span>
+        }
+
+<span class="nc" id="L586">        return resultMap;</span>
+    }
+
+    /**
+     *  Always returns a valid property map.
+     */
+    /*
+    private Properties getTemplateProperties( String templateName )
+        throws IOException
+    {
+        Properties p = new Properties();
+
+        ServletContext context = m_engine.getServletContext();
+
+        InputStream propertyStream = context.getResourceAsStream(getPath(templateName)+PROPERTYFILE);
+
+        if( propertyStream != null )
+        {
+            p.load( propertyStream );
+
+            propertyStream.close();
+        }
+        else
+        {
+            log.debug(&quot;Template '&quot;+templateName+&quot;' does not have a propertyfile '&quot;+PROPERTYFILE+&quot;'.&quot;);
+        }
+
+        return p;
+    }
+*/
+    /**
+     *  Returns the include resources marker for a given type.  This is in a
+     *  HTML or Javascript comment format.
+     *
+     *  @param context the wiki context
+     *  @param type the marker
+     *  @return the generated marker comment
+     */
+    public static String getMarker(WikiContext context, String type )
+    {
+<span class="nc bnc" id="L626" title="All 2 branches missed.">        if( type.equals(RESOURCE_JSLOCALIZEDSTRINGS) )</span>
+        {
+<span class="nc" id="L628">            return getJSLocalizedStrings( context );</span>
+        }
+<span class="nc bnc" id="L630" title="All 2 branches missed.">        else if( type.equals(RESOURCE_JSFUNCTION) )</span>
+        {
+<span class="nc" id="L632">            return &quot;/* INCLUDERESOURCES (&quot;+type+&quot;) */&quot;;</span>
+        }
+<span class="nc" id="L634">        return &quot;&lt;!-- INCLUDERESOURCES (&quot;+type+&quot;) --&gt;&quot;;</span>
+    }
+
+    /**
+     *  Extract all i18n strings in the javascript domain. (javascript.*)
+     *  Returns a javascript snippet which defines the LocalizedStings array.
+     *
+     *  @param context the {@link WikiContext}
+     *  @return Javascript snippet which defines the LocalizedStrings array
+     *  @since 2.5.108
+     */
+    private static String getJSLocalizedStrings( WikiContext context )
+    {
+<span class="nc" id="L647">    	StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc" id="L649">        sb.append( &quot;var LocalizedStrings = {\n&quot;);</span>
+
+<span class="nc" id="L651">        ResourceBundle rb = Preferences.getBundle( context, InternationalizationManager.DEF_TEMPLATE );</span>
+
+<span class="nc" id="L653">        boolean first = true;</span>
+
+<span class="nc bnc" id="L655" title="All 2 branches missed.">        for( Enumeration&lt; String &gt; en = rb.getKeys(); en.hasMoreElements(); )</span>
+        {
+<span class="nc" id="L657">            String key = en.nextElement();</span>
+
+<span class="nc bnc" id="L659" title="All 2 branches missed.">            if( key.startsWith(&quot;javascript&quot;) )</span>
+            {
+<span class="nc bnc" id="L661" title="All 2 branches missed.">                if( first )</span>
+                {
+<span class="nc" id="L663">                    first = false;</span>
+                }
+                else
+                {
+<span class="nc" id="L667">                    sb.append( &quot;,\n&quot; );</span>
+                }
+<span class="nc" id="L669">                sb.append( &quot;\&quot;&quot;+key+&quot;\&quot;:\&quot;&quot;+rb.getString(key)+&quot;\&quot;&quot; );</span>
+            }
+<span class="nc" id="L671">        }</span>
+<span class="nc" id="L672">        sb.append(&quot;\n};\n&quot;);</span>
+
+<span class="nc" id="L674">        return( sb.toString() );</span>
+    }
+
+    /**
+     *  Adds a resource request to the current request context.
+     *  The content will be added at the resource-type marker
+     *  (see IncludeResourcesTag) in WikiJSPFilter.
+     *  &lt;p&gt;
+     *  The resources can be of different types.  For RESOURCE_SCRIPT and RESOURCE_STYLESHEET
+     *  this is an URI path to the resource (a script file or an external stylesheet)
+     *  that needs to be included.  For RESOURCE_INLINECSS
+     *  the resource should be something that can be added between &amp;lt;style&gt;&amp;lt;/style&gt; in the
+     *  header file (commonheader.jsp).  For RESOURCE_JSFUNCTION it is the name of the Javascript
+     *  function that should be run at page load.
+     *  &lt;p&gt;
+     *  The IncludeResourceTag inserts code in the template files, which is then filled
+     *  by the WikiFilter after the request has been rendered but not yet sent to the recipient.
+     *  &lt;p&gt;
+     *  Note that ALL resource requests get rendered, so this method does not check if
+     *  the request already exists in the resources.  Therefore, if you have a plugin which
+     *  makes a new resource request every time, you'll end up with multiple resource requests
+     *  rendered.  It's thus a good idea to make this request only once during the page
+     *  life cycle.
+     *
+     *  @param ctx The current wiki context
+     *  @param type What kind of a request should be added?
+     *  @param resource The resource to add.
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public static void addResourceRequest( WikiContext ctx, String type, String resource )
+    {
+<span class="nc" id="L705">        HashMap&lt;String,Vector&lt;String&gt;&gt; resourcemap = (HashMap&lt;String,Vector&lt;String&gt;&gt;) ctx.getVariable( RESOURCE_INCLUDES );</span>
+
+<span class="nc bnc" id="L707" title="All 2 branches missed.">        if( resourcemap == null )</span>
+        {
+<span class="nc" id="L709">            resourcemap = new HashMap&lt;&gt;();</span>
+        }
+
+<span class="nc" id="L712">        Vector&lt;String&gt; resources = resourcemap.get( type );</span>
+
+<span class="nc bnc" id="L714" title="All 2 branches missed.">        if( resources == null )</span>
+        {
+<span class="nc" id="L716">            resources = new Vector&lt;&gt;();</span>
+        }
+
+<span class="nc" id="L719">        String resourceString = null;</span>
+
+<span class="nc bnc" id="L721" title="All 2 branches missed.">        if( type.equals(RESOURCE_SCRIPT) )</span>
+        {
+<span class="nc" id="L723">            resourceString = &quot;&lt;script type='text/javascript' src='&quot;+resource+&quot;'&gt;&lt;/script&gt;&quot;;</span>
+        }
+<span class="nc bnc" id="L725" title="All 2 branches missed.">        else if( type.equals(RESOURCE_STYLESHEET) )</span>
+        {
+<span class="nc" id="L727">            resourceString = &quot;&lt;link rel='stylesheet' type='text/css' href='&quot;+resource+&quot;' /&gt;&quot;;</span>
+        }
+<span class="nc bnc" id="L729" title="All 2 branches missed.">        else if( type.equals(RESOURCE_INLINECSS) )</span>
+        {
+<span class="nc" id="L731">            resourceString = &quot;&lt;style type='text/css'&gt;\n&quot;+resource+&quot;\n&lt;/style&gt;\n&quot;;</span>
+        }
+<span class="nc bnc" id="L733" title="All 2 branches missed.">        else if( type.equals(RESOURCE_JSFUNCTION) )</span>
+        {
+<span class="nc" id="L735">            resourceString = resource;</span>
+        }
+<span class="nc bnc" id="L737" title="All 2 branches missed.">        else if( type.equals(RESOURCE_HTTPHEADER) )</span>
+        {
+<span class="nc" id="L739">            resourceString = resource;</span>
+        }
+
+<span class="nc bnc" id="L742" title="All 2 branches missed.">        if( resourceString != null )</span>
+        {
+<span class="nc" id="L744">            resources.add( resourceString );</span>
+        }
+
+<span class="nc" id="L747">        log.debug(&quot;Request to add a resource: &quot;+resourceString);</span>
+
+<span class="nc" id="L749">        resourcemap.put( type, resources );</span>
+<span class="nc" id="L750">        ctx.setVariable( RESOURCE_INCLUDES, resourcemap );</span>
+<span class="nc" id="L751">    }</span>
+
+    /**
+     *  Returns resource requests for a particular type.  If there are no resources,
+     *  returns an empty array.
+     *
+     *  @param ctx WikiContext
+     *  @param type The resource request type
+     *  @return a String array for the resource requests
+     */
+
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public static String[] getResourceRequests( WikiContext ctx, String type )
+    {
+<span class="nc" id="L765">        HashMap&lt;String,Vector&lt;String&gt;&gt; hm = (HashMap&lt;String,Vector&lt;String&gt;&gt;) ctx.getVariable( RESOURCE_INCLUDES );</span>
+
+<span class="nc bnc" id="L767" title="All 2 branches missed.">        if( hm == null ) return new String[0];</span>
+
+<span class="nc" id="L769">        Vector&lt;String&gt; resources = hm.get( type );</span>
+
+<span class="nc bnc" id="L771" title="All 2 branches missed.">        if( resources == null ) return new String[0];</span>
+
+<span class="nc" id="L773">        String[] res = new String[resources.size()];</span>
+
+<span class="nc" id="L775">        return resources.toArray( res );</span>
+    }
+
+    /**
+     *  Returns all those types that have been requested so far.
+     *
+     * @param ctx the wiki context
+     * @return the array of types requested
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public static String[] getResourceTypes( WikiContext ctx )
+    {
+<span class="nc" id="L787">        String[] res = new String[0];</span>
+
+<span class="nc bnc" id="L789" title="All 2 branches missed.">        if( ctx != null )</span>
+        {
+<span class="nc" id="L791">            HashMap&lt;String,String&gt; hm = (HashMap&lt;String,String&gt;) ctx.getVariable( RESOURCE_INCLUDES );</span>
+
+<span class="nc bnc" id="L793" title="All 2 branches missed.">            if( hm != null )</span>
+            {
+<span class="nc" id="L795">                Set&lt;String&gt; keys = hm.keySet();</span>
+
+<span class="nc" id="L797">                res = keys.toArray( res );</span>
+            }
+        }
+
+<span class="nc" id="L801">        return res;</span>
+    }
+
+    /**
+     *  Returns an empty collection, since at the moment the TemplateManager
+     *  does not manage any modules.
+     *
+     *  @return {@inheritDoc}
+     */
+    @Override
+    public Collection&lt; WikiModuleInfo &gt; modules()
+    {
+<span class="nc" id="L813">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    /**
+     *  Returns null!
+     *  {@inheritDoc}
+     */
+    @Override
+    public WikiModuleInfo getModuleInfo(String moduleName) {
+<span class="nc" id="L822">    	return null;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

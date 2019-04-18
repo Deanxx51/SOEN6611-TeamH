@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractCommand.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">AbstractCommand.java</span></div><h1>AbstractCommand.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui;
+
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ * Abstract, immutable Command implementation class. All of the fields in this
+ * class are &lt;code&gt;final&lt;/code&gt;. This class is thread-safe.
+ * @since 2.4.22
+ */
+public abstract class AbstractCommand implements Command
+{
+<span class="fc" id="L31">    private static final Command[] ALL_COMMANDS = new Command[] {</span>
+        PageCommand.ATTACH,
+        PageCommand.COMMENT,
+        PageCommand.CONFLICT,
+        PageCommand.DELETE,
+        PageCommand.DIFF,
+        PageCommand.EDIT,
+        PageCommand.INFO,
+        PageCommand.NONE,
+        PageCommand.OTHER,
+        PageCommand.PREVIEW,
+        PageCommand.RENAME,
+        PageCommand.RSS,
+        PageCommand.UPLOAD,
+        PageCommand.VIEW,
+        GroupCommand.DELETE_GROUP,
+        GroupCommand.EDIT_GROUP,
+        GroupCommand.VIEW_GROUP,
+        WikiCommand.CREATE_GROUP,
+        WikiCommand.ERROR,
+        WikiCommand.FIND,
+        WikiCommand.INSTALL,
+        WikiCommand.LOGIN,
+        WikiCommand.LOGOUT,
+        WikiCommand.MESSAGE,
+        WikiCommand.PREFS,
+        WikiCommand.WORKFLOW,
+        WikiCommand.ADMIN,
+        RedirectCommand.REDIRECT
+    };
+
+    private static final String    HTTPS = &quot;HTTPS://&quot;;
+
+    private static final String    HTTP = &quot;HTTP://&quot;;
+
+    private final String           m_jsp;
+
+    private final String           m_jspFriendlyName;
+
+    private final String           m_urlPattern;
+
+    private final String           m_requestContext;
+
+    private final String           m_contentTemplate;
+
+    private final Object           m_target;
+
+    /**
+     * Constructs a new Command with a specified wiki context, URL pattern,
+     * content template and target. The URL pattern is used to derive
+     * the JSP; if it is a &quot;local&quot; JSP (that is, it does not contain
+     * the &lt;code&gt;http://&lt;/code&gt; or &lt;code&gt;https://&lt;/code&gt; prefixes),
+     * then the JSP will be a cleansed version of the URL pattern;
+     * symbols (such as &lt;code&gt;%u&lt;/code&gt;) will removed. If it the supplied
+     * URL pattern points to a non-local destination, the JSP will be set
+     * to the value supplied, unmodified.
+     * @param requestContext the request context
+     * @param urlPattern the URL pattern
+     * @param contentTemplate the content template; may be &lt;code&gt;null&lt;/code&gt;
+     * @param target the target of the command, such as a WikiPage; may be
+     *            &lt;code&gt;null&lt;/code&gt;
+     * @throws IllegalArgumentException if the request content or URL pattern is
+     *             &lt;code&gt;null&lt;/code&gt;
+     */
+    protected AbstractCommand( String requestContext, String urlPattern, String contentTemplate, Object target )
+<span class="fc" id="L96">    {</span>
+<span class="pc bpc" id="L97" title="2 of 4 branches missed.">        if ( requestContext == null || urlPattern == null )</span>
+        {
+<span class="nc" id="L99">            throw new IllegalArgumentException( &quot;Request context, URL pattern and type must not be null.&quot; );</span>
+        }
+
+<span class="fc" id="L102">        m_requestContext = requestContext;</span>
+
+<span class="fc bfc" id="L104" title="All 2 branches covered.">        if ( urlPattern.toUpperCase().startsWith( HTTP ) ||</span>
+<span class="pc bpc" id="L105" title="1 of 2 branches missed.">             urlPattern.toUpperCase().endsWith( HTTPS ) )</span>
+        {
+            // For an HTTP/HTTPS url, pass it through without modification
+<span class="fc" id="L108">            m_jsp = urlPattern;</span>
+<span class="fc" id="L109">            m_jspFriendlyName = &quot;Special Page&quot;;</span>
+        }
+        else
+        {
+            // For local JSPs, take everything to the left of ?, then
+            // delete all variable substitutions
+<span class="fc" id="L115">            String jsp = urlPattern;</span>
+<span class="fc" id="L116">            int qPosition = urlPattern.indexOf( '?' );</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">            if ( qPosition != -1 )</span>
+            {
+<span class="fc" id="L119">                jsp = jsp.substring( 0, qPosition );</span>
+            }
+<span class="fc" id="L121">            m_jsp = removeSubstitutions(jsp);</span>
+
+            // Calculate the &quot;friendly name&quot; for the JSP
+<span class="fc bfc" id="L124" title="All 2 branches covered.">            if ( m_jsp.toUpperCase().endsWith( &quot;.JSP&quot; ) )</span>
+            {
+<span class="fc" id="L126">                m_jspFriendlyName = TextUtil.beautifyString( m_jsp.substring( 0, m_jsp.length() - 4 ) );</span>
+            }
+            else
+            {
+<span class="fc" id="L130">                m_jspFriendlyName = m_jsp;</span>
+            }
+        }
+
+<span class="fc" id="L134">        m_urlPattern = urlPattern;</span>
+
+<span class="fc" id="L136">        m_contentTemplate = contentTemplate;</span>
+
+<span class="fc" id="L138">        m_target = target;</span>
+<span class="fc" id="L139">    }</span>
+
+    //
+    //  This is just *so* much faster than doing String.replaceAll().  It would, in fact,
+    //  be worth to cache this value.
+    //
+    private String removeSubstitutions(String jsp)
+    {
+        //return jsp.replaceAll( &quot;\u0025[a-z|A-Z]&quot;, &quot;&quot; );
+<span class="fc" id="L148">    	StringBuilder newjsp = new StringBuilder( jsp.length() );</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">        for( int i = 0; i &lt; jsp.length(); i++ )</span>
+        {
+<span class="fc" id="L151">            char c = jsp.charAt(i);</span>
+<span class="pc bpc" id="L152" title="2 of 6 branches missed.">            if( c == '%' &amp;&amp; i &lt; jsp.length()-1 &amp;&amp; Character.isLetterOrDigit( jsp.charAt(i+1) ) )</span>
+            {
+<span class="fc" id="L154">                i++;</span>
+<span class="fc" id="L155">                continue;</span>
+            }
+<span class="fc" id="L157">            newjsp.append( c );</span>
+        }
+<span class="fc" id="L159">        return newjsp.toString();</span>
+    }
+
+    /**
+     * Returns a defensively-created array of all
+     * static Commands.
+     * @return the array of commands
+     */
+    public static final Command[] allCommands()
+    {
+<span class="fc" id="L169">        return ALL_COMMANDS.clone();</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#targetedCommand(Object)
+     */
+    public abstract Command targetedCommand( Object target );
+
+    /**
+     * @see org.apache.wiki.ui.Command#getContentTemplate()
+     */
+    public final String getContentTemplate()
+    {
+<span class="fc" id="L182">        return m_contentTemplate;</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#getJSP()
+     */
+    public final String getJSP()
+    {
+<span class="fc" id="L190">        return m_jsp;</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#getName()
+     */
+    public abstract String getName();
+
+    /**
+     * @see org.apache.wiki.ui.Command#getRequestContext()
+     */
+    public final String getRequestContext()
+    {
+<span class="fc" id="L203">        return m_requestContext;</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#getTarget()
+     */
+    public final Object getTarget()
+    {
+<span class="fc" id="L211">        return m_target;</span>
+    }
+
+    /**
+     * @see org.apache.wiki.ui.Command#getURLPattern()
+     */
+    public final String getURLPattern()
+    {
+<span class="fc" id="L219">        return m_urlPattern;</span>
+    }
+
+    /**
+     * Returns the &quot;friendly name&quot; for this command's JSP, namely
+     * a beatified version of the JSP's name without the .jsp suffix.
+     * @return the friendly name
+     */
+    protected final String getJSPFriendlyName()
+    {
+<span class="nc" id="L229">        return m_jspFriendlyName;</span>
+    }
+
+    /**
+     * Returns a String representation of the Command.
+     * @see java.lang.Object#toString()
+     */
+    public final String toString()
+    {
+<span class="nc bnc" id="L238" title="All 2 branches missed.">        return &quot;Command&quot; +</span>
+               &quot;[context=&quot; + m_requestContext + &quot;,&quot; +
+               &quot;urlPattern=&quot; + m_urlPattern + &quot;,&quot; +
+               &quot;jsp=&quot; +  m_jsp +
+<span class="nc" id="L242">               ( m_target == null ? &quot;&quot; : &quot;,target=&quot; + m_target + m_target.toString() ) +</span>
+               &quot;]&quot;;
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

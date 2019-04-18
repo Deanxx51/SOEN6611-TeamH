@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AbstractStep.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">AbstractStep.java</span></div><h1>AbstractStep.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.io.Serializable;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.apache.wiki.api.exceptions.WikiException;
+
+/**
+ * Abstact superclass that provides a complete implementation of most
+ * Step methods; subclasses need only implement {@link #execute()} and
+ * {@link #getActor()}.
+ *
+ * @since 2.5
+ */
+public abstract class AbstractStep implements Step
+{
+
+    private static final long serialVersionUID = 8635678679349653768L;
+
+    /** Timestamp of when the step started. */
+    private Date m_start;
+
+    /** Timestamp of when the step ended. */
+    private Date m_end;
+
+    private final String m_key;
+
+    private boolean m_completed;
+
+    private final Map&lt;Outcome, Step&gt; m_successors;
+
+    private Workflow m_workflow;
+
+    private Outcome m_outcome;
+
+    private final List&lt;String&gt; m_errors;
+
+    private boolean m_started;
+
+    /**
+     * Protected constructor that creates a new Step with a specified message key.
+     * After construction, the method {@link #setWorkflow(Workflow)} should be
+     * called.
+     *
+     * @param messageKey
+     *            the Step's message key, such as
+     *            &lt;code&gt;decision.editPageApproval&lt;/code&gt;. By convention, the
+     *            message prefix should be a lower-case version of the Step's
+     *            type, plus a period (&lt;em&gt;e.g.&lt;/em&gt;, &lt;code&gt;task.&lt;/code&gt;
+     *            and &lt;code&gt;decision.&lt;/code&gt;).
+     */
+    protected AbstractStep( String messageKey )
+<span class="fc" id="L79">    {</span>
+<span class="fc" id="L80">        m_started = false;</span>
+<span class="fc" id="L81">        m_start = Workflow.TIME_NOT_SET;</span>
+<span class="fc" id="L82">        m_completed = false;</span>
+<span class="fc" id="L83">        m_end = Workflow.TIME_NOT_SET;</span>
+<span class="fc" id="L84">        m_errors = new ArrayList&lt;String&gt;();</span>
+<span class="fc" id="L85">        m_outcome = Outcome.STEP_CONTINUE;</span>
+<span class="fc" id="L86">        m_key = messageKey;</span>
+<span class="fc" id="L87">        m_successors = new LinkedHashMap&lt;Outcome, Step&gt;();</span>
+<span class="fc" id="L88">    }</span>
+
+    /**
+     * Constructs a new Step belonging to a specified Workflow and having a
+     * specified message key.
+     *
+     * @param workflow
+     *            the workflow the Step belongs to
+     * @param messageKey
+     *            the Step's message key, such as
+     *            &lt;code&gt;decision.editPageApproval&lt;/code&gt;. By convention, the
+     *            message prefix should be a lower-case version of the Step's
+     *            type, plus a period (&lt;em&gt;e.g.&lt;/em&gt;, &lt;code&gt;task.&lt;/code&gt;
+     *            and &lt;code&gt;decision.&lt;/code&gt;).
+     */
+    public AbstractStep( Workflow workflow, String messageKey )
+    {
+<span class="fc" id="L105">        this( messageKey );</span>
+<span class="fc" id="L106">        setWorkflow( workflow );</span>
+<span class="fc" id="L107">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    public final void addSuccessor(Outcome outcome, Step step)
+    {
+<span class="fc" id="L114">        m_successors.put( outcome, step );</span>
+<span class="fc" id="L115">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Collection&lt; Outcome &gt; getAvailableOutcomes()
+    {
+<span class="fc" id="L122">        Set&lt;Outcome&gt; outcomes = m_successors.keySet();</span>
+<span class="fc" id="L123">        return Collections.unmodifiableCollection( outcomes );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final List&lt; String &gt; getErrors()
+    {
+<span class="fc" id="L131">        return Collections.unmodifiableList( m_errors );</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public abstract Outcome execute() throws WikiException;
+
+    /**
+     * {@inheritDoc}
+     */
+    public abstract Principal getActor();
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Date getEndTime()
+    {
+<span class="fc" id="L149">        return m_end;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Serializable[] getMessageArguments()
+    {
+<span class="nc bnc" id="L157" title="All 2 branches missed.">        if ( m_workflow == null )</span>
+        {
+<span class="nc" id="L159">            return new Serializable[0];</span>
+        }
+<span class="nc" id="L161">        return m_workflow.getMessageArguments();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final String getMessageKey()
+    {
+<span class="fc" id="L169">        return m_key;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final synchronized Outcome getOutcome()
+    {
+<span class="fc" id="L177">        return m_outcome;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public Principal getOwner()
+    {
+<span class="nc bnc" id="L185" title="All 2 branches missed.">        if ( m_workflow == null )</span>
+        {
+<span class="nc" id="L187">            return null;</span>
+        }
+<span class="nc" id="L189">        return m_workflow.getOwner();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Date getStartTime()
+    {
+<span class="fc" id="L197">        return m_start;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final synchronized Workflow getWorkflow()
+    {
+<span class="fc" id="L205">        return m_workflow;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final boolean isCompleted()
+    {
+<span class="fc" id="L213">        return m_completed;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final boolean isStarted()
+    {
+<span class="fc" id="L221">        return m_started;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public final synchronized void setOutcome(Outcome outcome)
+    {
+        // Is this an allowed Outcome?
+<span class="fc bfc" id="L230" title="All 2 branches covered.">        if ( !m_successors.containsKey( outcome ) )</span>
+        {
+<span class="fc bfc" id="L232" title="All 2 branches covered.">            if ( !Outcome.STEP_CONTINUE.equals( outcome ) &amp;&amp;</span>
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">                 !Outcome.STEP_ABORT.equals( outcome ) )</span>
+            {
+<span class="nc" id="L235">                 throw new IllegalArgumentException( &quot;Outcome &quot; + outcome.getMessageKey() + &quot; is not supported for this Step.&quot; );</span>
+            }
+        }
+
+        // Is this a &quot;completion&quot; outcome?
+<span class="fc bfc" id="L240" title="All 2 branches covered.">        if ( outcome.isCompletion() )</span>
+        {
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">            if ( m_completed )</span>
+            {
+<span class="nc" id="L244">                throw new IllegalStateException( &quot;Step has already been marked complete; cannot set again.&quot; );</span>
+            }
+<span class="fc" id="L246">            m_completed = true;</span>
+<span class="fc" id="L247">            m_end = new Date( System.currentTimeMillis() );</span>
+        }
+<span class="fc" id="L249">        m_outcome = outcome;</span>
+<span class="fc" id="L250">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    public final synchronized void start() throws WikiException
+    {
+<span class="fc bfc" id="L257" title="All 2 branches covered.">        if ( m_started )</span>
+        {
+<span class="fc" id="L259">            throw new IllegalStateException( &quot;Step already started.&quot; );</span>
+        }
+<span class="fc" id="L261">        m_started = true;</span>
+<span class="fc" id="L262">        m_start = new Date( System.currentTimeMillis() );</span>
+<span class="fc" id="L263">    }</span>
+
+    /**
+     * {@inheritDoc}
+     */
+    public final Step getSuccessor( Outcome outcome )
+    {
+<span class="fc" id="L270">        return m_successors.get( outcome );</span>
+    }
+
+    // --------------------------Helper methods--------------------------
+
+    /**
+     * method that sets the parent Workflow post-construction.
+     * @param workflow the parent workflow to set
+     */
+    public final synchronized void setWorkflow( Workflow workflow )
+    {
+<span class="fc" id="L281">        m_workflow = workflow;</span>
+<span class="fc" id="L282">    }</span>
+
+    /**
+     * Protected helper method that adds a String representing an error message
+     * to the Step's cached errors list.
+     *
+     * @param message
+     *            the error message
+     */
+    protected final synchronized void addError( String message )
+    {
+<span class="fc" id="L293">        m_errors.add( message );</span>
+<span class="fc" id="L294">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

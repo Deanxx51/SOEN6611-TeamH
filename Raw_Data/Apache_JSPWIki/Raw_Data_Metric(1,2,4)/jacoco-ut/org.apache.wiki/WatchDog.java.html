@@ -1,0 +1,433 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WatchDog.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">WatchDog.java</span></div><h1>WatchDog.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki;
+
+import java.lang.ref.WeakReference;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.log4j.Logger;
+
+
+/**
+ *  WatchDog is a general system watchdog.  You can attach any Watchable or a
+ *  Thread object to it, and it will notify you if a timeout has been exceeded.
+ *  &lt;p&gt;
+ *  The notification of the timeouts is done from a separate WatchDog thread,
+ *  of which there is one per watched thread.  This Thread is named 'WatchDog for
+ *  XXX', where XXX is your Thread name.
+ *  &lt;p&gt;
+ *  The suggested method of obtaining a WatchDog is via the static factory
+ *  method, since it will return you the correct watchdog for the current
+ *  thread.  However, we do not prevent you from creating your own watchdogs
+ *  either.
+ *  &lt;p&gt;
+ *  If you create a WatchDog for a Thread, the WatchDog will figure out when
+ *  the Thread is dead, and will stop itself accordingly.  However, this object
+ *  is not automatically released, so you might want to check it out after a while.
+ *
+ *  @since  2.4.92
+ */
+public final class WatchDog {
+
+    private Watchable m_watchable;
+<span class="fc" id="L53">    private Stack&lt; State &gt; m_stateStack = new Stack&lt; State &gt;();</span>
+<span class="fc" id="L54">    private boolean m_enabled = true;</span>
+    private WikiEngine m_engine;
+
+<span class="fc" id="L57">    private static final Logger log = Logger.getLogger( WatchDog.class );</span>
+
+<span class="fc" id="L59">    private static Map&lt; Integer, WeakReference&lt; WatchDog &gt; &gt; c_kennel = new ConcurrentHashMap&lt; Integer, WeakReference&lt; WatchDog &gt; &gt;();</span>
+
+    private static WikiBackgroundThread c_watcherThread;
+
+    /**
+     *  Returns the current watchdog for the current thread. This
+     *  is the preferred method of getting you a Watchdog, since it
+     *  keeps an internal list of Watchdogs for you so that there
+     *  won't be more than one watchdog per thread.
+     *
+     *  @param engine The WikiEngine to which the Watchdog should be bonded to.
+     *  @return A usable WatchDog object.
+     */
+    public static WatchDog getCurrentWatchDog( WikiEngine engine ) {
+<span class="fc" id="L73">        Thread t = Thread.currentThread();</span>
+<span class="fc" id="L74">        WatchDog wd = null;</span>
+
+<span class="fc" id="L76">        WeakReference&lt; WatchDog &gt; w = c_kennel.get( t.hashCode() );</span>
+
+<span class="pc bpc" id="L78" title="1 of 2 branches missed.">        if( w != null ) {</span>
+<span class="nc" id="L79">        	wd = w.get();</span>
+        }
+
+<span class="pc bpc" id="L82" title="3 of 4 branches missed.">        if( w == null || wd == null ) {</span>
+<span class="fc" id="L83">            wd = new WatchDog( engine, t );</span>
+<span class="fc" id="L84">            w = new WeakReference&lt; WatchDog &gt;( wd );</span>
+
+<span class="fc" id="L86">            c_kennel.put( t.hashCode(), w );</span>
+        }
+
+<span class="fc" id="L89">        return wd;</span>
+    }
+
+    /**
+     *  Creates a new WatchDog for a Watchable.
+     *
+     *  @param engine  The WikiEngine.
+     *  @param watch   A Watchable object.
+     */
+<span class="fc" id="L98">    public WatchDog( WikiEngine engine, Watchable watch ) {</span>
+<span class="fc" id="L99">        m_engine    = engine;</span>
+<span class="fc" id="L100">        m_watchable = watch;</span>
+
+<span class="fc" id="L102">        synchronized( this.getClass() ) {</span>
+<span class="fc bfc" id="L103" title="All 2 branches covered.">            if( c_watcherThread == null ) {</span>
+<span class="fc" id="L104">                c_watcherThread = new WatchDogThread( engine );</span>
+<span class="fc" id="L105">                c_watcherThread.start();</span>
+            }
+<span class="fc" id="L107">        }</span>
+<span class="fc" id="L108">    }</span>
+
+    /**
+     *  Creates a new WatchDog for a Thread.  The Thread is wrapped in a Watchable wrapper for this purpose.
+     *
+     *  @param engine The WikiEngine
+     *  @param thread A Thread for watching.
+     */
+    public WatchDog(WikiEngine engine, Thread thread) {
+<span class="fc" id="L117">        this( engine, new ThreadWrapper(thread) );</span>
+<span class="fc" id="L118">    }</span>
+
+    /**
+     *  Hopefully finalizes this properly.  This is rather untested for now...
+     */
+    private static void scrub() {
+        //
+        //  During finalization, the object may already be cleared (depending
+        //  on the finalization order).  Therefore, it's possible that this
+        //  method is called from another thread after the WatchDog itself
+        //  has been cleared.
+        //
+<span class="pc bpc" id="L130" title="1 of 2 branches missed.">        if( c_kennel == null ) {</span>
+<span class="nc" id="L131">        	return;</span>
+        }
+
+<span class="fc bfc" id="L134" title="All 2 branches covered.">        for( Map.Entry&lt; Integer, WeakReference&lt; WatchDog &gt; &gt; e : c_kennel.entrySet() ) {</span>
+<span class="fc" id="L135">            WeakReference&lt; WatchDog &gt; w = e.getValue();</span>
+
+            //
+            //  Remove expired as well
+            //
+<span class="pc bpc" id="L140" title="1 of 2 branches missed.">            if( w.get() == null ) {</span>
+<span class="nc" id="L141">                c_kennel.remove( e.getKey() );</span>
+<span class="nc" id="L142">                scrub();</span>
+<span class="nc" id="L143">                break;</span>
+            }
+<span class="fc" id="L145">        }</span>
+<span class="fc" id="L146">    }</span>
+
+    /**
+     *  Can be used to enable the WatchDog.  Will cause a new Thread to be created, if none was existing previously.
+     */
+    public void enable() {
+<span class="nc" id="L152">        synchronized( this.getClass() ) {</span>
+<span class="nc bnc" id="L153" title="All 2 branches missed.">            if( !m_enabled ) {</span>
+<span class="nc" id="L154">                m_enabled = true;</span>
+<span class="nc" id="L155">                c_watcherThread = new WatchDogThread( m_engine );</span>
+<span class="nc" id="L156">                c_watcherThread.start();</span>
+            }
+<span class="nc" id="L158">        }</span>
+<span class="nc" id="L159">    }</span>
+
+    /**
+     *  Is used to disable a WatchDog.  The watchdog thread is shut down and resources released.
+     */
+    public void disable() {
+<span class="nc" id="L165">        synchronized( this.getClass() ) {</span>
+<span class="nc bnc" id="L166" title="All 2 branches missed.">            if( m_enabled ) {</span>
+<span class="nc" id="L167">                m_enabled = false;</span>
+<span class="nc" id="L168">                c_watcherThread.shutdown();</span>
+<span class="nc" id="L169">                c_watcherThread = null;</span>
+            }
+<span class="nc" id="L171">        }</span>
+<span class="nc" id="L172">    }</span>
+
+    /**
+     *  Enters a watched state with no expectation of the expected completion time. In practice this method is
+     *  used when you have no idea, but would like to figure out, e.g. via debugging, where exactly your Watchable is.
+     *
+     *  @param state A free-form string description of your state.
+     */
+    public void enterState( String state ) {
+<span class="fc" id="L181">        enterState( state, Integer.MAX_VALUE );</span>
+<span class="fc" id="L182">    }</span>
+
+    /**
+     *  Enters a watched state which has an expected completion time.  This is the main method for using the
+     *  WatchDog.  For example:
+     *
+     *  &lt;code&gt;
+     *     WatchDog w = m_engine.getCurrentWatchDog();
+     *     w.enterState(&quot;Processing Foobar&quot;, 60);
+     *     foobar();
+     *     w.exitState();
+     *  &lt;/code&gt;
+     *
+     *  If the call to foobar() takes more than 60 seconds, you will receive an ERROR in the log stream.
+     *
+     *  @param state A free-form string description of the state
+     *  @param expectedCompletionTime The timeout in seconds.
+     */
+    public void enterState( String state, int expectedCompletionTime ) {
+<span class="pc bpc" id="L201" title="1 of 2 branches missed.">        if( log.isDebugEnabled() ){</span>
+<span class="nc" id="L202">        	log.debug( m_watchable.getName() + &quot;: Entering state &quot; + state +</span>
+        			                           &quot;, expected completion in &quot; + expectedCompletionTime + &quot; s&quot;);
+        }
+
+<span class="fc" id="L206">        synchronized( m_stateStack ) {</span>
+<span class="fc" id="L207">            State st = new State( state, expectedCompletionTime );</span>
+<span class="fc" id="L208">            m_stateStack.push( st );</span>
+<span class="fc" id="L209">        }</span>
+<span class="fc" id="L210">    }</span>
+
+    /**
+     *  Exits a state entered with enterState().  This method does not check that the state is correct, it'll just
+     *  pop out whatever is on the top of the state stack.
+     */
+    public void exitState() {
+<span class="fc" id="L217">        exitState( null );</span>
+<span class="fc" id="L218">    }</span>
+
+    /**
+     *  Exits a particular state entered with enterState().  The state is checked against the current state, and if
+     *  they do not match, an error is flagged.
+     *
+     *  @param state The state you wish to exit.
+     */
+    public void exitState( String state ) {
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">        if( !m_stateStack.empty() ) {</span>
+<span class="fc" id="L228">            synchronized( m_stateStack ) {</span>
+<span class="fc" id="L229">                State st = m_stateStack.peek();</span>
+<span class="pc bpc" id="L230" title="3 of 4 branches missed.">                if( state == null || st.getState().equals( state ) ) {</span>
+<span class="fc" id="L231">                    m_stateStack.pop();</span>
+
+<span class="pc bpc" id="L233" title="1 of 2 branches missed.">                    if( log.isDebugEnabled() ) {</span>
+<span class="nc" id="L234">                    	log.debug( m_watchable.getName() + &quot;: Exiting state &quot; + st.getState() );</span>
+                    }
+                } else {
+                    // FIXME: should actually go and fix things for that
+<span class="nc" id="L238">                    log.error( &quot;exitState() called before enterState()&quot; );</span>
+                }
+<span class="fc" id="L240">            }</span>
+        } else {
+<span class="nc" id="L242">            log.warn( &quot;Stack for &quot; + m_watchable.getName() + &quot; is empty!&quot; );</span>
+        }
+<span class="fc" id="L244">    }</span>
+
+    /**
+     * helper to see if the associated stateStack is not empty.
+     *
+     * @return {@code true} if not empty, {@code false} otherwise.
+     */
+    public boolean isStateStackNotEmpty() {
+<span class="pc bpc" id="L252" title="1 of 4 branches missed.">		return m_stateStack != null &amp;&amp; !m_stateStack.isEmpty();</span>
+	}
+
+    /**
+     * helper to see if the associated watchable is alive.
+     *
+     * @return {@code true} if it's alive, {@code false} otherwise.
+     */
+    public boolean isWatchableAlive() {
+<span class="pc bpc" id="L261" title="2 of 4 branches missed.">    	return m_watchable != null &amp;&amp; m_watchable.isAlive();</span>
+    }
+
+    private void check() {
+<span class="pc bpc" id="L265" title="1 of 2 branches missed.">        if( log.isDebugEnabled() ) {</span>
+<span class="nc" id="L266">        	log.debug( &quot;Checking watchdog '&quot; + m_watchable.getName() + &quot;'&quot; );</span>
+        }
+
+<span class="fc" id="L269">        synchronized( m_stateStack ) {</span>
+<span class="pc bpc" id="L270" title="1 of 2 branches missed.">            if( !m_stateStack.empty() ) {</span>
+<span class="fc" id="L271">                State st = m_stateStack.peek();</span>
+<span class="fc" id="L272">                long now = System.currentTimeMillis();</span>
+
+<span class="pc bpc" id="L274" title="1 of 2 branches missed.">                if( now &gt; st.getExpiryTime() ) {</span>
+<span class="nc" id="L275">                    log.info( &quot;Watchable '&quot; + m_watchable.getName() + &quot;' exceeded timeout in state '&quot; + st.getState() +</span>
+<span class="nc" id="L276">                    		  &quot;' by &quot; + (now - st.getExpiryTime()) / 1000 + &quot; seconds&quot; +</span>
+<span class="nc bnc" id="L277" title="All 2 branches missed.">                    		 ( log.isDebugEnabled() ? &quot;&quot; : &quot;Enable DEBUG-level logging to see stack traces.&quot; ) );</span>
+<span class="nc" id="L278">                    dumpStackTraceForWatchable();</span>
+
+<span class="nc" id="L280">                    m_watchable.timeoutExceeded(st.getState());</span>
+                }
+<span class="fc" id="L282">            } else {</span>
+<span class="nc" id="L283">            	log.warn( &quot;Stack for &quot; + m_watchable.getName() + &quot; is empty!&quot; );</span>
+            }
+<span class="fc" id="L285">        }</span>
+<span class="fc" id="L286">    }</span>
+
+    /**
+     *  Dumps the stack traces as DEBUG level events.
+     */
+    private void dumpStackTraceForWatchable() {
+<span class="nc bnc" id="L292" title="All 2 branches missed.">        if( !log.isDebugEnabled() ) {</span>
+<span class="nc" id="L293">        	return;</span>
+        }
+
+<span class="nc" id="L296">        Map&lt;Thread, StackTraceElement[]&gt; stackTraces = Thread.getAllStackTraces();</span>
+<span class="nc" id="L297">        Set&lt;Thread&gt; threads = stackTraces.keySet();</span>
+<span class="nc" id="L298">        Iterator&lt;Thread&gt; threadIterator = threads.iterator();</span>
+<span class="nc" id="L299">        StringBuilder stacktrace = new StringBuilder();</span>
+
+<span class="nc bnc" id="L301" title="All 2 branches missed.">        while ( threadIterator.hasNext() ) {</span>
+<span class="nc" id="L302">            Thread t = threadIterator.next();</span>
+<span class="nc bnc" id="L303" title="All 2 branches missed.">            if( t.getName().equals( m_watchable.getName() ) ) {</span>
+<span class="nc bnc" id="L304" title="All 2 branches missed.">                if( t.getName().equals( m_watchable.getName() ) ) {</span>
+<span class="nc" id="L305">                    stacktrace.append( &quot;dumping stacktrace for too long running thread : &quot; + t );</span>
+                } else {
+<span class="nc" id="L307">                    stacktrace.append( &quot;dumping stacktrace for other running thread : &quot; + t );</span>
+                }
+<span class="nc" id="L309">                StackTraceElement[] ste = stackTraces.get( t );</span>
+<span class="nc bnc" id="L310" title="All 2 branches missed.">                for( int i = 0; i &lt; ste.length; i++ ) {</span>
+<span class="nc" id="L311">                    stacktrace.append( &quot;\n&quot; + ste[i] );</span>
+                }
+            }
+<span class="nc" id="L314">        }</span>
+
+<span class="nc" id="L316">        log.debug( stacktrace.toString() );</span>
+<span class="nc" id="L317">    }</span>
+
+    /**
+     *  Strictly for debugging/informative purposes.
+     *
+     *  @return Random ramblings.
+     */
+    public String toString() {
+<span class="nc" id="L325">        synchronized( m_stateStack ) {</span>
+<span class="nc" id="L326">            String state = &quot;Idle&quot;;</span>
+
+<span class="nc bnc" id="L328" title="All 2 branches missed.">            if( !m_stateStack.empty() ) {</span>
+<span class="nc" id="L329">                State st = m_stateStack.peek();</span>
+<span class="nc" id="L330">                state = st.getState();</span>
+            }
+<span class="nc" id="L332">            return &quot;WatchDog state=&quot; + state;</span>
+        }
+    }
+
+    /**
+     *  This is the chief watchdog thread.
+     */
+    private static class WatchDogThread extends WikiBackgroundThread {
+        /** How often the watchdog thread should wake up (in seconds) */
+        private static final int CHECK_INTERVAL = 30;
+
+        public WatchDogThread( WikiEngine engine ) {
+<span class="fc" id="L344">            super( engine, CHECK_INTERVAL );</span>
+<span class="fc" id="L345">            setName( &quot;WatchDog for '&quot; + engine.getApplicationName() + &quot;'&quot; );</span>
+<span class="fc" id="L346">        }</span>
+
+        public void startupTask() {
+<span class="fc" id="L349">        }</span>
+
+        public void shutdownTask() {
+<span class="nc" id="L352">            WatchDog.scrub();</span>
+<span class="nc" id="L353">        }</span>
+
+        /**
+         *  Checks if the watchable is alive, and if it is, checks if
+         *  the stack is finished.
+         *
+         *  If the watchable has been deleted in the mean time, will
+         *  simply shut down itself.
+         */
+        public void backgroundTask() throws Exception {
+<span class="pc bpc" id="L363" title="1 of 2 branches missed.">            if( c_kennel == null ) {</span>
+<span class="nc" id="L364">            	return;</span>
+            }
+
+<span class="fc bfc" id="L367" title="All 2 branches covered.">            for( Map.Entry&lt; Integer, WeakReference&lt; WatchDog &gt; &gt; entry : c_kennel.entrySet() ) {</span>
+<span class="fc" id="L368">                WeakReference&lt; WatchDog &gt; wr = entry.getValue();</span>
+<span class="fc" id="L369">                WatchDog w = wr.get();</span>
+<span class="pc bpc" id="L370" title="1 of 2 branches missed.">                if( w != null ) {</span>
+<span class="pc bpc" id="L371" title="1 of 4 branches missed.">                    if( w.isWatchableAlive() &amp;&amp; w.isStateStackNotEmpty() ) {</span>
+<span class="fc" id="L372">                        w.check();</span>
+                    } else {
+<span class="fc" id="L374">                        c_kennel.remove( entry.getKey() );</span>
+<span class="fc" id="L375">                        break;</span>
+                    }
+                }
+<span class="fc" id="L378">            }</span>
+
+<span class="fc" id="L380">            WatchDog.scrub();</span>
+<span class="fc" id="L381">        }</span>
+
+    }
+
+    /**
+     *  A class which just stores the state in our State stack.
+     */
+    private static class State {
+
+        protected String m_state;
+        protected long   m_enterTime;
+        protected long   m_expiryTime;
+
+<span class="fc" id="L394">        protected State( String state, int expiry ) {</span>
+<span class="fc" id="L395">            m_state      = state;</span>
+<span class="fc" id="L396">            m_enterTime  = System.currentTimeMillis();</span>
+<span class="fc" id="L397">            m_expiryTime = m_enterTime + (expiry * 1000L);</span>
+<span class="fc" id="L398">        }</span>
+
+        protected String getState() {
+<span class="nc" id="L401">            return m_state;</span>
+        }
+
+        protected long getExpiryTime() {
+<span class="fc" id="L405">            return m_expiryTime;</span>
+        }
+    }
+
+    /**
+     *  This class wraps a Thread so that it can become Watchable.
+     */
+    private static class ThreadWrapper implements Watchable {
+        private Thread m_thread;
+
+<span class="fc" id="L415">        public ThreadWrapper( Thread thread ) {</span>
+<span class="fc" id="L416">            m_thread = thread;</span>
+<span class="fc" id="L417">        }</span>
+
+        public void timeoutExceeded( String state ) {
+            // TODO: Figure out something sane to do here.
+<span class="nc" id="L421">        }</span>
+
+        public String getName() {
+<span class="nc" id="L424">            return m_thread.getName();</span>
+        }
+
+        public boolean isAlive() {
+<span class="fc" id="L428">            return m_thread.isAlive();</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TraditionalDiffProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.diff</a> &gt; <span class="el_source">TraditionalDiffProvider.java</span></div><h1>TraditionalDiffProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+*/
+
+package org.apache.wiki.diff;
+
+import java.io.IOException;
+import java.text.ChoiceFormat;
+import java.text.Format;
+import java.text.MessageFormat;
+import java.text.NumberFormat;
+import java.util.Properties;
+import java.util.ResourceBundle;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.TextUtil;
+import org.suigeneris.jrcs.diff.Diff;
+import org.suigeneris.jrcs.diff.DifferentiationFailedException;
+import org.suigeneris.jrcs.diff.Revision;
+import org.suigeneris.jrcs.diff.RevisionVisitor;
+import org.suigeneris.jrcs.diff.delta.AddDelta;
+import org.suigeneris.jrcs.diff.delta.ChangeDelta;
+import org.suigeneris.jrcs.diff.delta.Chunk;
+import org.suigeneris.jrcs.diff.delta.DeleteDelta;
+import org.suigeneris.jrcs.diff.myers.MyersDiff;
+
+
+/**
+ * This is the JSPWiki 'traditional' diff.  It uses an internal diff engine.
+ * 
+ */
+public class TraditionalDiffProvider implements DiffProvider
+{
+<span class="fc" id="L54">    private static final Logger log = Logger.getLogger(TraditionalDiffProvider.class);</span>
+
+    private static final String CSS_DIFF_ADDED = &quot;&lt;tr&gt;&lt;td class=\&quot;diffadd\&quot;&gt;&quot;;
+    private static final String CSS_DIFF_REMOVED = &quot;&lt;tr&gt;&lt;td class=\&quot;diffrem\&quot;&gt;&quot;;
+    private static final String CSS_DIFF_UNCHANGED = &quot;&lt;tr&gt;&lt;td class=\&quot;diff\&quot;&gt;&quot;;
+<span class="fc" id="L59">    private static final String CSS_DIFF_CLOSE = &quot;&lt;/td&gt;&lt;/tr&gt;&quot; + Diff.NL;</span>
+
+
+    /**
+     *  Constructs the provider.
+     */
+    public TraditionalDiffProvider()
+<span class="fc" id="L66">    {</span>
+<span class="fc" id="L67">    }</span>
+
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.WikiProvider#getProviderInfo()
+     */
+    public String getProviderInfo()
+    {
+<span class="fc" id="L76">        return &quot;TraditionalDiffProvider&quot;;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.WikiProvider#initialize(org.apache.wiki.WikiEngine, java.util.Properties)
+     */
+    public void initialize(WikiEngine engine, Properties properties)
+        throws NoRequiredPropertyException, IOException
+    {
+<span class="fc" id="L86">    }</span>
+
+    /**
+     * Makes a diff using the BMSI utility package. We use our own diff printer,
+     * which makes things easier.
+     * 
+     * @param ctx The WikiContext in which the diff should be made.
+     * @param p1 The first string
+     * @param p2 The second string.
+     * 
+     * @return Full HTML diff.
+     */
+    public String makeDiffHtml( WikiContext ctx, String p1, String p2 )
+    {
+<span class="fc" id="L100">        String diffResult = &quot;&quot;;</span>
+
+        try
+        {
+<span class="fc" id="L104">            String[] first  = Diff.stringToArray(TextUtil.replaceEntities(p1));</span>
+<span class="fc" id="L105">            String[] second = Diff.stringToArray(TextUtil.replaceEntities(p2));</span>
+<span class="fc" id="L106">            Revision rev = Diff.diff(first, second, new MyersDiff());</span>
+
+<span class="pc bpc" id="L108" title="2 of 4 branches missed.">            if( rev == null || rev.size() == 0 )</span>
+            {
+                // No difference
+
+<span class="nc" id="L112">                return &quot;&quot;;</span>
+            }
+
+<span class="fc" id="L115">            StringBuffer ret = new StringBuffer(rev.size() * 20); // Guessing how big it will become...</span>
+
+<span class="fc" id="L117">            ret.append(&quot;&lt;table class=\&quot;diff\&quot; border=\&quot;0\&quot; cellspacing=\&quot;0\&quot; cellpadding=\&quot;0\&quot;&gt;\n&quot;);</span>
+<span class="fc" id="L118">            rev.accept( new RevisionPrint(ctx,ret) );</span>
+<span class="fc" id="L119">            ret.append(&quot;&lt;/table&gt;\n&quot;);</span>
+
+<span class="fc" id="L121">            return ret.toString();</span>
+        }
+<span class="nc" id="L123">        catch( DifferentiationFailedException e )</span>
+        {
+<span class="nc" id="L125">            diffResult = &quot;makeDiff failed with DifferentiationFailedException&quot;;</span>
+<span class="nc" id="L126">            log.error(diffResult, e);</span>
+        }
+
+<span class="nc" id="L129">        return diffResult;</span>
+    }
+
+
+    private static final class RevisionPrint
+        implements RevisionVisitor
+    {
+<span class="fc" id="L136">        private StringBuffer m_result = null;</span>
+        private WikiContext  m_context;
+        private ResourceBundle m_rb;
+        
+        private RevisionPrint(WikiContext ctx,StringBuffer sb)
+<span class="fc" id="L141">        {</span>
+<span class="fc" id="L142">            m_result = sb;</span>
+<span class="fc" id="L143">            m_context = ctx;</span>
+<span class="fc" id="L144">            m_rb = Preferences.getBundle( ctx, InternationalizationManager.CORE_BUNDLE );</span>
+<span class="fc" id="L145">        }</span>
+
+        public void visit(Revision rev)
+        {
+            // GNDN (Goes nowhere, does nothing)
+<span class="fc" id="L150">        }</span>
+
+        public void visit(AddDelta delta)
+        {
+<span class="fc" id="L154">            Chunk changed = delta.getRevised();</span>
+<span class="fc" id="L155">            print(changed, m_rb.getString( &quot;diff.traditional.added&quot; ) );</span>
+<span class="fc" id="L156">            changed.toString(m_result, CSS_DIFF_ADDED, CSS_DIFF_CLOSE);</span>
+<span class="fc" id="L157">        }</span>
+
+        public void visit(ChangeDelta delta)
+        {
+<span class="fc" id="L161">            Chunk changed = delta.getOriginal();</span>
+<span class="fc" id="L162">            print(changed, m_rb.getString( &quot;diff.traditional.changed&quot;) );</span>
+<span class="fc" id="L163">            changed.toString(m_result, CSS_DIFF_REMOVED, CSS_DIFF_CLOSE);</span>
+<span class="fc" id="L164">            delta.getRevised().toString(m_result, CSS_DIFF_ADDED, CSS_DIFF_CLOSE);</span>
+<span class="fc" id="L165">        }</span>
+
+        public void visit(DeleteDelta delta)
+        {
+<span class="nc" id="L169">            Chunk changed = delta.getOriginal();</span>
+<span class="nc" id="L170">            print(changed, m_rb.getString( &quot;diff.traditional.removed&quot;) );</span>
+<span class="nc" id="L171">            changed.toString(m_result, CSS_DIFF_REMOVED, CSS_DIFF_CLOSE);</span>
+<span class="nc" id="L172">        }</span>
+
+        private void print(Chunk changed, String type)
+        {
+<span class="fc" id="L176">            m_result.append(CSS_DIFF_UNCHANGED);</span>
+            
+<span class="fc" id="L178">            String[] choiceString = </span>
+            {
+<span class="fc" id="L180">               m_rb.getString(&quot;diff.traditional.oneline&quot;),</span>
+<span class="fc" id="L181">               m_rb.getString(&quot;diff.traditional.lines&quot;)</span>
+            };
+<span class="fc" id="L183">            double[] choiceLimits = { 1, 2 };</span>
+            
+<span class="fc" id="L185">            MessageFormat fmt = new MessageFormat(&quot;&quot;);</span>
+<span class="fc" id="L186">            fmt.setLocale( Preferences.getLocale(m_context) );</span>
+<span class="fc" id="L187">            ChoiceFormat cfmt = new ChoiceFormat( choiceLimits, choiceString );</span>
+<span class="fc" id="L188">            fmt.applyPattern( type );</span>
+<span class="fc" id="L189">            Format[] formats = { NumberFormat.getInstance(), cfmt, NumberFormat.getInstance() };</span>
+<span class="fc" id="L190">            fmt.setFormats( formats );</span>
+            
+<span class="fc" id="L192">            Object[] params = { changed.first() + 1, </span>
+<span class="fc" id="L193">                                changed.size(),</span>
+<span class="fc" id="L194">                                changed.size() };</span>
+<span class="fc" id="L195">            m_result.append( fmt.format(params) );</span>
+<span class="fc" id="L196">            m_result.append(CSS_DIFF_CLOSE);</span>
+<span class="fc" id="L197">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

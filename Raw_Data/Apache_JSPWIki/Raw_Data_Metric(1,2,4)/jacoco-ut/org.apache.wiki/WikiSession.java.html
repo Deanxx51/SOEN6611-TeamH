@@ -1,0 +1,901 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiSession.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">WikiSession.java</span></div><h1>WikiSession.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki;
+
+import java.security.AccessControlException;
+import java.security.Principal;
+import java.security.PrivilegedAction;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
+import javax.security.auth.Subject;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.auth.AuthenticationManager;
+import org.apache.wiki.auth.GroupPrincipal;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.SessionMonitor;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.authorize.Group;
+import org.apache.wiki.auth.authorize.GroupManager;
+import org.apache.wiki.auth.authorize.Role;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.event.WikiEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiSecurityEvent;
+
+/**
+ * &lt;p&gt;Represents a long-running wiki session, with an associated user Principal,
+ * user Subject, and authentication status. This class is initialized with
+ * minimal, default-deny values: authentication is set to &lt;code&gt;false&lt;/code&gt;,
+ * and the user principal is set to &lt;code&gt;null&lt;/code&gt;.&lt;/p&gt;
+ * &lt;p&gt;The WikiSession class allows callers to:&lt;/p&gt;
+ * &lt;ul&gt;
+ *   &lt;li&gt;Obtain the authentication status of the user via
+ *     {@link #isAnonymous()} and {@link #isAuthenticated()}&lt;/li&gt;
+ *   &lt;li&gt;Query the session for Principals representing the
+ *     user's identity via {@link #getLoginPrincipal()},
+ *     {@link #getUserPrincipal()} and {@link #getPrincipals()}&lt;/li&gt;
+ *   &lt;li&gt;Store, retrieve and clear UI messages via
+ *     {@link #addMessage(String)}, {@link #getMessages(String)}
+ *     and {@link #clearMessages(String)}&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;p&gt;To keep track of the Principals each user posseses, each WikiSession
+ * stores a JAAS Subject. Various login processes add or remove Principals
+ * when users authenticate or log out.&lt;/p&gt;
+ * &lt;p&gt;WikiSession implements the {@link org.apache.wiki.event.WikiEventListener}
+ * interface and listens for group add/change/delete events fired by
+ * event sources the WikiSession is registered with. Normally,
+ * {@link org.apache.wiki.auth.AuthenticationManager} registers each WikiSession
+ * with the {@link org.apache.wiki.auth.authorize.GroupManager}
+ * so it can catch group events. Thus, when a user is added to a
+ * {@link org.apache.wiki.auth.authorize.Group}, a corresponding
+ * {@link org.apache.wiki.auth.GroupPrincipal} is injected into
+ * the Subject's Principal set. Likewise, when the user is removed from
+ * the Group or the Group is deleted, the GroupPrincipal is removed
+ * from the Subject. The effect that this strategy produces is extremely
+ * beneficial: when someone adds a user to a wiki group, that user
+ * &lt;em&gt;immediately&lt;/em&gt; gains the privileges associated with that
+ * group; he or she does not need to re-authenticate.
+ * &lt;/p&gt;
+ * &lt;p&gt;In addition to methods for examining individual &lt;code&gt;WikiSession&lt;/code&gt;
+ * objects, this class also contains a number of static methods for
+ * managing WikiSessions for an entire wiki. These methods allow callers
+ * to find, query and remove WikiSession objects, and
+ * to obtain a list of the current wiki session users.&lt;/p&gt;
+ * &lt;p&gt;WikiSession encloses a protected static class, {@link SessionMonitor},
+ * to keep track of WikiSessions registered with each wiki.&lt;/p&gt;
+ */
+public final class WikiSession implements WikiEventListener
+{
+
+    /** An anonymous user's session status. */
+    public static final String  ANONYMOUS             = &quot;anonymous&quot;;
+
+    /** An asserted user's session status. */
+    public static final String  ASSERTED              = &quot;asserted&quot;;
+
+    /** An authenticated user's session status. */
+    public static final String  AUTHENTICATED         = &quot;authenticated&quot;;
+
+    private static final int    ONE                   = 48;
+
+    private static final int    NINE                  = 57;
+
+    private static final int    DOT                   = 46;
+
+<span class="fc" id="L114">    private static final Logger log                   = Logger.getLogger( WikiSession.class );</span>
+
+    private static final String ALL                   = &quot;*&quot;;
+
+<span class="fc" id="L118">    private static ThreadLocal&lt;WikiSession&gt; c_guestSession = new ThreadLocal&lt;&gt;();</span>
+
+<span class="fc" id="L120">    private final Subject       m_subject             = new Subject();</span>
+
+<span class="fc" id="L122">    private final Map&lt;String,Set&lt;String&gt;&gt; m_messages  = new HashMap&lt;&gt;();</span>
+
+    /** The WikiEngine that created this session. */
+<span class="fc" id="L125">    private WikiEngine          m_engine              = null;</span>
+
+<span class="fc" id="L127">    private String              m_status              = ANONYMOUS;</span>
+
+<span class="fc" id="L129">    private Principal           m_userPrincipal       = WikiPrincipal.GUEST;</span>
+
+<span class="fc" id="L131">    private Principal           m_loginPrincipal      = WikiPrincipal.GUEST;</span>
+
+<span class="fc" id="L133">    private Locale              m_cachedLocale        = Locale.getDefault();</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if one of this WikiSession's user Principals
+     * can be shown to belong to a particular wiki group. If the user is
+     * not authenticated, this method will always return &lt;code&gt;false&lt;/code&gt;.
+     * @param group the group to test
+     * @return the result
+     */
+    protected boolean isInGroup( Group group )
+    {
+<span class="fc bfc" id="L144" title="All 2 branches covered.">        for ( Principal principal : getPrincipals() )</span>
+        {
+<span class="fc bfc" id="L146" title="All 4 branches covered.">          if ( isAuthenticated() &amp;&amp; group.isMember( principal ) )</span>
+          {
+<span class="fc" id="L148">              return true;</span>
+          }
+        }
+<span class="fc" id="L151">        return false;</span>
+    }
+
+    /**
+     * Private constructor to prevent WikiSession from being instantiated
+     * directly.
+     */
+    private WikiSession()
+<span class="fc" id="L159">    {</span>
+<span class="fc" id="L160">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the user is considered asserted via
+     * a session cookie; that is, the Subject contains the Principal
+     * Role.ASSERTED.
+     * @return Returns &lt;code&gt;true&lt;/code&gt; if the user is asserted
+     */
+    public boolean isAsserted()
+    {
+<span class="fc" id="L170">        return m_subject.getPrincipals().contains( Role.ASSERTED );</span>
+    }
+
+    /**
+     * Returns the authentication status of the user's session. The user is
+     * considered authenticated if the Subject contains the Principal
+     * Role.AUTHENTICATED. If this method determines that an earlier
+     * LoginModule did not inject Role.AUTHENTICATED, it will inject one
+     * if the user is not anonymous &lt;em&gt;and&lt;/em&gt; not asserted.
+     * @return Returns &lt;code&gt;true&lt;/code&gt; if the user is authenticated
+     */
+    public boolean isAuthenticated()
+    {
+        // If Role.AUTHENTICATED is in principals set, always return true.
+<span class="fc bfc" id="L184" title="All 2 branches covered.">        if ( m_subject.getPrincipals().contains( Role.AUTHENTICATED ) )</span>
+        {
+<span class="fc" id="L186">            return true;</span>
+        }
+
+        // With non-JSPWiki LoginModules, the role may not be there, so
+        // we need to add it if the user really is authenticated.
+<span class="pc bpc" id="L191" title="1 of 4 branches missed.">        if ( !isAnonymous() &amp;&amp; !isAsserted() )</span>
+        {
+            // Inject AUTHENTICATED role
+<span class="nc" id="L194">            m_subject.getPrincipals().add( Role.AUTHENTICATED );</span>
+<span class="nc" id="L195">            return true;</span>
+        }
+
+<span class="fc" id="L198">        return false;</span>
+    }
+
+    /**
+     * &lt;p&gt;Determines whether the current session is anonymous. This will be
+     * true if any of these conditions are true:&lt;/p&gt;
+     * &lt;ul&gt;
+     *   &lt;li&gt;The session's Principal set contains
+     *       {@link org.apache.wiki.auth.authorize.Role#ANONYMOUS}&lt;/li&gt;
+     *   &lt;li&gt;The session's Principal set contains
+     *       {@link org.apache.wiki.auth.WikiPrincipal#GUEST}&lt;/li&gt;
+     *   &lt;li&gt;The Principal returned by {@link #getUserPrincipal()} evaluates
+     *       to an IP address.&lt;/li&gt;
+     * &lt;/ul&gt;
+     * &lt;p&gt;The criteria above are listed in the order in which they are
+     * evaluated.&lt;/p&gt;
+     * @return whether the current user's identity is equivalent to an IP
+     * address
+     */
+    public boolean isAnonymous()
+    {
+<span class="fc" id="L219">        Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc bfc" id="L220" title="All 2 branches covered.">        return principals.contains( Role.ANONYMOUS ) ||</span>
+<span class="pc bpc" id="L221" title="1 of 2 branches missed.">                 principals.contains( WikiPrincipal.GUEST ) ||</span>
+<span class="pc bpc" id="L222" title="1 of 2 branches missed.">                 isIPV4Address( getUserPrincipal().getName() );</span>
+    }
+
+    /**
+     * &lt;p&gt; Returns the Principal used to log in to an authenticated session. The
+     * login principal is determined by examining the Subject's Principal set
+     * for PrincipalWrappers or WikiPrincipals with type designator
+     * &lt;code&gt;LOGIN_NAME&lt;/code&gt;; the first one found is the login principal.
+     * If one is not found, this method returns the first principal that isn't
+     * of type Role or GroupPrincipal. If neither of these conditions hold, this method returns
+     * {@link org.apache.wiki.auth.WikiPrincipal#GUEST}.
+     * @return the login Principal. If it is a PrincipalWrapper containing an
+     * externally-provided Principal, the object returned is the Principal, not
+     * the wrapper around it.
+     */
+    public Principal getLoginPrincipal()
+    {
+<span class="fc" id="L239">        return m_loginPrincipal;</span>
+    }
+
+    /**
+     * &lt;p&gt;Returns the primary user Principal associated with this session. The
+     * primary user principal is determined as follows:&lt;/p&gt; &lt;ol&gt; &lt;li&gt;If the
+     * Subject's Principal set contains WikiPrincipals, the first WikiPrincipal
+     * with type designator &lt;code&gt;WIKI_NAME&lt;/code&gt; or (alternatively)
+     * &lt;code&gt;FULL_NAME&lt;/code&gt; is the primary Principal.&lt;/li&gt;
+     *   &lt;li&gt;For all other cases, the first Principal in the Subject's principal
+     *       collection that that isn't of type Role or GroupPrincipal is the primary.&lt;/li&gt;
+     * &lt;/ol&gt;
+     * If no primary user Principal is found, this method returns
+     * {@link org.apache.wiki.auth.WikiPrincipal#GUEST}.
+     * @return the primary user Principal
+     */
+    public Principal getUserPrincipal()
+    {
+<span class="fc" id="L257">        return m_userPrincipal;</span>
+    }
+
+    /**
+     *  Returns a cached Locale object for this user.  It's better to use
+     *  WikiContext's corresponding getBundle() method, since that will actually
+     *  react if the user changes the locale in the middle, but if that's not
+     *  available (or, for some reason, you need the speed), this method can
+     *  also be used.  The Locale expires when the WikiSession expires, and
+     *  currently there is no way to reset the Locale.
+     *
+     *  @return A cached Locale object
+     *  @since 2.5.96
+     */
+    public Locale getLocale()
+    {
+<span class="fc" id="L273">        return m_cachedLocale;</span>
+    }
+
+    /**
+     * Adds a message to the generic list of messages associated with the
+     * session. These messages retain their order of insertion and remain until
+     * the {@link #clearMessages()} method is called.
+     * @param message the message to add; if &lt;code&gt;null&lt;/code&gt; it is ignored.
+     */
+    public void addMessage(String message)
+    {
+<span class="nc" id="L284">        addMessage( ALL, message );</span>
+<span class="nc" id="L285">    }</span>
+
+
+    /**
+     * Adds a message to the specific set of messages associated with the
+     * session. These messages retain their order of insertion and remain until
+     * the {@link #clearMessages()} method is called.
+     * @param topic the topic to associate the message to;
+     * @param message the message to add
+     */
+    public void addMessage(String topic, String message)
+    {
+<span class="pc bpc" id="L297" title="1 of 2 branches missed.">        if ( topic == null )</span>
+        {
+<span class="nc" id="L299">            throw new IllegalArgumentException( &quot;addMessage: topic cannot be null.&quot; );</span>
+        }
+<span class="fc" id="L301">        Set&lt;String&gt; messages = m_messages.get( topic );</span>
+<span class="fc bfc" id="L302" title="All 2 branches covered.">        if (messages == null )</span>
+        {
+<span class="fc" id="L304">            messages = new LinkedHashSet&lt;&gt;();</span>
+<span class="fc" id="L305">            m_messages.put( topic, messages );</span>
+        }
+<span class="fc" id="L307">        messages.add( StringUtils.defaultString( message ) );</span>
+<span class="fc" id="L308">    }</span>
+
+    /**
+     * Clears all messages associated with this session.
+     */
+    public void clearMessages()
+    {
+<span class="nc" id="L315">        m_messages.clear();</span>
+<span class="nc" id="L316">    }</span>
+
+    /**
+     * Clears all messages associated with a session topic.
+     * @param topic the topic whose messages should be cleared.
+     */
+    public void clearMessages( String topic )
+    {
+<span class="nc" id="L324">        Set&lt;String&gt; messages = m_messages.get( topic );</span>
+<span class="nc bnc" id="L325" title="All 2 branches missed.">        if ( messages != null )</span>
+        {
+<span class="nc" id="L327">            m_messages.clear();</span>
+        }
+<span class="nc" id="L329">    }</span>
+
+    /**
+     * Returns all generic messages associated with this session.
+     * The messages stored with the session persist throughout the
+     * session unless they have been reset with {@link #clearMessages()}.
+     * @return the current messages.
+     */
+    public String[] getMessages()
+    {
+<span class="nc" id="L339">        return getMessages( ALL );</span>
+    }
+
+    /**
+     * Returns all messages associated with a session topic.
+     * The messages stored with the session persist throughout the
+     * session unless they have been reset with {@link #clearMessages(String)}.
+     * @return the current messages.
+     * @param topic The topic
+     */
+    public String[] getMessages( String topic )
+    {
+<span class="nc" id="L351">        Set&lt;String&gt; messages = m_messages.get( topic );</span>
+<span class="nc bnc" id="L352" title="All 4 branches missed.">        if ( messages == null || messages.size() == 0 )</span>
+        {
+<span class="nc" id="L354">            return new String[0];</span>
+        }
+<span class="nc" id="L356">        return messages.toArray( new String[messages.size()] );</span>
+    }
+
+    /**
+     * Returns all user Principals associated with this session. User principals
+     * are those in the Subject's principal collection that aren't of type Role or
+     * of type GroupPrincipal. This is a defensive copy.
+     * @return Returns the user principal
+     * @see org.apache.wiki.auth.AuthenticationManager#isUserPrincipal(Principal)
+     */
+    public Principal[] getPrincipals()
+    {
+<span class="fc" id="L368">        ArrayList&lt;Principal&gt; principals = new ArrayList&lt;&gt;();</span>
+
+        // Take the first non Role as the main Principal
+<span class="fc bfc" id="L371" title="All 2 branches covered.">        for( Principal principal : m_subject.getPrincipals() )</span>
+        {
+<span class="fc bfc" id="L373" title="All 2 branches covered.">            if ( AuthenticationManager.isUserPrincipal( principal ) )</span>
+            {
+<span class="fc" id="L375">                principals.add( principal );</span>
+            }
+<span class="fc" id="L377">        }</span>
+
+<span class="fc" id="L379">        return principals.toArray( new Principal[principals.size()] );</span>
+    }
+
+    /**
+     * Returns an array of Principal objects that represents the groups and
+     * roles that the user associated with a WikiSession possesses. The array is
+     * built by iterating through the Subject's Principal set and extracting all
+     * Role and GroupPrincipal objects into a list. The list is returned as an
+     * array sorted in the natural order implied by each Principal's
+     * &lt;code&gt;getName&lt;/code&gt; method. Note that this method does &lt;em&gt;not&lt;/em&gt;
+     * consult the external Authorizer or GroupManager; it relies on the
+     * Principals that have been injected into the user's Subject at login time,
+     * or after group creation/modification/deletion.
+     * @return an array of Principal objects corresponding to the roles the
+     *         Subject possesses
+     */
+    public Principal[] getRoles()
+    {
+<span class="fc" id="L397">        Set&lt;Principal&gt; roles = new HashSet&lt;&gt;();</span>
+
+        // Add all of the Roles possessed by the Subject directly
+<span class="fc" id="L400">        roles.addAll( m_subject.getPrincipals( Role.class ) );</span>
+
+        // Add all of the GroupPrincipals possessed by the Subject directly
+<span class="fc" id="L403">        roles.addAll( m_subject.getPrincipals( GroupPrincipal.class ) );</span>
+
+        // Return a defensive copy
+<span class="fc" id="L406">        Principal[] roleArray = roles.toArray( new Principal[roles.size()] );</span>
+<span class="fc" id="L407">        Arrays.sort( roleArray, WikiPrincipal.COMPARATOR );</span>
+<span class="fc" id="L408">        return roleArray;</span>
+    }
+
+    /**
+     * Removes the wiki session associated with the user's HTTP request
+     * from the cache of wiki sessions, typically as part of a logout
+     * process.
+     * @param engine the wiki engine
+     * @param request the users's HTTP request
+     */
+    public static void removeWikiSession( WikiEngine engine, HttpServletRequest request )
+    {
+<span class="nc bnc" id="L420" title="All 4 branches missed.">        if ( engine == null || request == null )</span>
+        {
+<span class="nc" id="L422">            throw new IllegalArgumentException( &quot;Request or engine cannot be null.&quot; );</span>
+        }
+<span class="nc" id="L424">        SessionMonitor monitor = SessionMonitor.getInstance( engine );</span>
+<span class="nc" id="L425">        monitor.remove( request.getSession() );</span>
+<span class="nc" id="L426">    }</span>
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the WikiSession's Subject
+     * possess a supplied Principal. This method eliminates the need
+     * to externally request and inspect the JAAS subject.
+     * @param principal the Principal to test
+     * @return the result
+     */
+    public boolean hasPrincipal( Principal principal )
+    {
+<span class="fc" id="L437">        return m_subject.getPrincipals().contains( principal );</span>
+
+    }
+
+    /**
+     * Listens for WikiEvents generated by source objects such as the
+     * GroupManager. This method adds Principals to the private Subject managed
+     * by the WikiSession.
+     * @see org.apache.wiki.event.WikiEventListener#actionPerformed(org.apache.wiki.event.WikiEvent)
+     */
+    @Override
+    public void actionPerformed( WikiEvent event )
+    {
+<span class="pc bpc" id="L450" title="1 of 2 branches missed.">        if ( event instanceof WikiSecurityEvent )</span>
+        {
+<span class="fc" id="L452">            WikiSecurityEvent e = (WikiSecurityEvent)event;</span>
+<span class="pc bpc" id="L453" title="1 of 2 branches missed.">            if ( e.getTarget() != null )</span>
+            {
+<span class="pc bpc" id="L455" title="2 of 10 branches missed.">                switch (e.getType() )</span>
+                {
+                    case WikiSecurityEvent.GROUP_ADD:
+                    {
+<span class="fc" id="L459">                        Group group = (Group)e.getTarget();</span>
+<span class="fc bfc" id="L460" title="All 2 branches covered.">                        if ( isInGroup( group ) )</span>
+                        {
+<span class="fc" id="L462">                            m_subject.getPrincipals().add( group.getPrincipal() );</span>
+                        }
+                        break;
+                    }
+                    case WikiSecurityEvent.GROUP_REMOVE:
+                    {
+<span class="fc" id="L468">                        Group group = (Group)e.getTarget();</span>
+<span class="fc bfc" id="L469" title="All 2 branches covered.">                        if ( m_subject.getPrincipals().contains( group.getPrincipal() ) )</span>
+                        {
+<span class="fc" id="L471">                            m_subject.getPrincipals().remove( group.getPrincipal() );</span>
+                        }
+                        break;
+                    }
+                    case WikiSecurityEvent.GROUP_CLEAR_GROUPS:
+                    {
+<span class="nc" id="L477">                        m_subject.getPrincipals().removeAll( m_subject.getPrincipals( GroupPrincipal.class ) );</span>
+<span class="nc" id="L478">                        break;</span>
+                    }
+                    case WikiSecurityEvent.LOGIN_INITIATED:
+                    {
+                        // Do nothing
+                    }
+                    case WikiSecurityEvent.PRINCIPAL_ADD:
+                    {
+<span class="fc" id="L486">                        WikiSession target = (WikiSession)e.getTarget();</span>
+<span class="pc bpc" id="L487" title="1 of 4 branches missed.">                        if ( this.equals( target ) &amp;&amp; m_status == AUTHENTICATED )</span>
+                        {
+<span class="fc" id="L489">                            Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc" id="L490">                            principals.add( (Principal)e.getPrincipal());</span>
+<span class="fc" id="L491">                        }</span>
+                        break;
+                    }
+                    case WikiSecurityEvent.LOGIN_ANONYMOUS:
+                    {
+<span class="fc" id="L496">                        WikiSession target = (WikiSession)e.getTarget();</span>
+<span class="fc bfc" id="L497" title="All 2 branches covered.">                        if ( this.equals( target ) )</span>
+                        {
+<span class="fc" id="L499">                            m_status = ANONYMOUS;</span>
+                            
+                            // Set the login/user principals and login status
+<span class="fc" id="L502">                            Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc" id="L503">                            m_loginPrincipal = (Principal)e.getPrincipal();</span>
+<span class="fc" id="L504">                            m_userPrincipal = m_loginPrincipal;</span>
+                            
+                            // Add the login principal to the Subject, and set the built-in roles
+<span class="fc" id="L507">                            principals.clear();</span>
+<span class="fc" id="L508">                            principals.add( m_loginPrincipal );</span>
+<span class="fc" id="L509">                            principals.add( Role.ALL );</span>
+<span class="fc" id="L510">                            principals.add( Role.ANONYMOUS );</span>
+<span class="fc" id="L511">                        }</span>
+                        break;
+                    }
+                    case WikiSecurityEvent.LOGIN_ASSERTED:
+                    {
+<span class="fc" id="L516">                        WikiSession target = (WikiSession)e.getTarget();</span>
+<span class="fc bfc" id="L517" title="All 2 branches covered.">                        if ( this.equals( target ) )</span>
+                        {
+<span class="fc" id="L519">                            m_status = ASSERTED;</span>
+                            
+                            // Set the login/user principals and login status
+<span class="fc" id="L522">                            Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc" id="L523">                            m_loginPrincipal = (Principal)e.getPrincipal();</span>
+<span class="fc" id="L524">                            m_userPrincipal = m_loginPrincipal;</span>
+                            
+                            // Add the login principal to the Subject, and set the built-in roles
+<span class="fc" id="L527">                            principals.clear();</span>
+<span class="fc" id="L528">                            principals.add( m_loginPrincipal );</span>
+<span class="fc" id="L529">                            principals.add( Role.ALL );</span>
+<span class="fc" id="L530">                            principals.add( Role.ASSERTED );</span>
+<span class="fc" id="L531">                        }</span>
+                        break;
+                    }
+                    case WikiSecurityEvent.LOGIN_AUTHENTICATED:
+                    {
+<span class="fc" id="L536">                        WikiSession target = (WikiSession)e.getTarget();</span>
+<span class="fc bfc" id="L537" title="All 2 branches covered.">                        if ( this.equals( target ) )</span>
+                        {
+<span class="fc" id="L539">                            m_status = AUTHENTICATED;</span>
+                            
+                            // Set the login/user principals and login status
+<span class="fc" id="L542">                            Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc" id="L543">                            m_loginPrincipal = (Principal)e.getPrincipal();</span>
+<span class="fc" id="L544">                            m_userPrincipal = m_loginPrincipal;</span>
+                            
+                            // Add the login principal to the Subject, and set the built-in roles
+<span class="fc" id="L547">                            principals.clear();</span>
+<span class="fc" id="L548">                            principals.add( m_loginPrincipal );</span>
+<span class="fc" id="L549">                            principals.add( Role.ALL );</span>
+<span class="fc" id="L550">                            principals.add( Role.AUTHENTICATED );</span>
+                            
+                            // Add the user and group principals
+<span class="fc" id="L553">                            injectUserProfilePrincipals();  // Add principals for the user profile</span>
+<span class="fc" id="L554">                            injectGroupPrincipals();  // Inject group principals</span>
+<span class="fc" id="L555">                        }</span>
+                        break;
+                    }
+                    case WikiSecurityEvent.PROFILE_SAVE:
+                    {
+<span class="fc" id="L560">                        WikiSession source = e.getSrc();</span>
+<span class="pc bpc" id="L561" title="1 of 2 branches missed.">                        if ( this.equals( source ) )</span>
+                        {
+<span class="fc" id="L563">                            injectUserProfilePrincipals();  // Add principals for the user profile</span>
+<span class="fc" id="L564">                            injectGroupPrincipals();  // Inject group principals</span>
+                        }
+                        break;
+                    }
+                    case WikiSecurityEvent.PROFILE_NAME_CHANGED:
+                    {
+                        // Refresh user principals based on new user profile
+<span class="fc" id="L571">                        WikiSession source = e.getSrc();</span>
+<span class="pc bpc" id="L572" title="1 of 4 branches missed.">                        if ( this.equals( source ) &amp;&amp; m_status == AUTHENTICATED )</span>
+                        {
+                            // To prepare for refresh, set the new full name as the primary principal
+<span class="fc" id="L575">                            UserProfile[] profiles = (UserProfile[])e.getTarget();</span>
+<span class="fc" id="L576">                            UserProfile newProfile = profiles[1];</span>
+<span class="pc bpc" id="L577" title="1 of 2 branches missed.">                            if ( newProfile.getFullname() == null )</span>
+                            {
+<span class="nc" id="L579">                                throw new IllegalStateException( &quot;User profile FullName cannot be null.&quot; );</span>
+                            }
+                            
+<span class="fc" id="L582">                            Set&lt;Principal&gt; principals = m_subject.getPrincipals();</span>
+<span class="fc" id="L583">                            m_loginPrincipal = new WikiPrincipal( newProfile.getLoginName() );</span>
+                            
+                            // Add the login principal to the Subject, and set the built-in roles
+<span class="fc" id="L586">                            principals.clear();</span>
+<span class="fc" id="L587">                            principals.add( m_loginPrincipal );</span>
+<span class="fc" id="L588">                            principals.add( Role.ALL );</span>
+<span class="fc" id="L589">                            principals.add( Role.AUTHENTICATED );</span>
+                            
+                            // Add the user and group principals
+<span class="fc" id="L592">                            injectUserProfilePrincipals();  // Add principals for the user profile</span>
+<span class="fc" id="L593">                            injectGroupPrincipals();  // Inject group principals</span>
+<span class="fc" id="L594">                        }</span>
+                        break;
+                    }
+
+                    //
+                    //  No action, if the event is not recognized.
+                    //
+                    default:
+                        break;
+                }
+            }
+        }
+<span class="fc" id="L606">    }</span>
+
+    /**
+     * Invalidates the WikiSession and resets its Subject's
+     * Principals to the equivalent of a &quot;guest session&quot;.
+     */
+    public void invalidate()
+    {
+<span class="fc" id="L614">        m_subject.getPrincipals().clear();</span>
+<span class="fc" id="L615">        m_subject.getPrincipals().add( WikiPrincipal.GUEST );</span>
+<span class="fc" id="L616">        m_subject.getPrincipals().add( Role.ANONYMOUS );</span>
+<span class="fc" id="L617">        m_subject.getPrincipals().add( Role.ALL );</span>
+<span class="fc" id="L618">        m_userPrincipal = WikiPrincipal.GUEST;</span>
+<span class="fc" id="L619">        m_loginPrincipal = WikiPrincipal.GUEST;</span>
+<span class="fc" id="L620">    }</span>
+
+    /**
+     * Injects GroupPrincipal objects into the user's Principal set based on the
+     * groups the user belongs to. For Groups, the algorithm first calls the
+     * {@link GroupManager#getRoles()} to obtain the array of GroupPrincipals
+     * the authorizer knows about. Then, the method
+     * {@link GroupManager#isUserInRole(WikiSession, Principal)} is called for
+     * each Principal. If the user is a member of the group, an equivalent
+     * GroupPrincipal is injected into the user's principal set. Existing
+     * GroupPrincipals are flushed and replaced. This method should generally be
+     * called after a user's {@link org.apache.wiki.auth.user.UserProfile} is
+     * saved. If the wiki session is null, or there is no matching user profile,
+     * the method returns silently.
+     */
+    protected void injectGroupPrincipals()
+    {
+        // Flush the existing GroupPrincipals
+<span class="fc" id="L638">        m_subject.getPrincipals().removeAll( m_subject.getPrincipals(GroupPrincipal.class) );</span>
+        
+        // Get the GroupManager and test for each Group
+<span class="fc" id="L641">        GroupManager manager = m_engine.getGroupManager();</span>
+<span class="fc bfc" id="L642" title="All 2 branches covered.">        for ( Principal group : manager.getRoles() )</span>
+        {
+<span class="fc bfc" id="L644" title="All 2 branches covered.">            if ( manager.isUserInRole( this, group ) )</span>
+            {
+<span class="fc" id="L646">                m_subject.getPrincipals().add( group );</span>
+            }
+        }
+<span class="fc" id="L649">    }</span>
+
+    /**
+     * Adds Principal objects to the Subject that correspond to the
+     * logged-in user's profile attributes for the wiki name, full name
+     * and login name. These Principals will be WikiPrincipals, and they
+     * will replace all other WikiPrincipals in the Subject. &lt;em&gt;Note:
+     * this method is never called during anonymous or asserted sessions.&lt;/em&gt;
+     */
+    protected void injectUserProfilePrincipals()
+    {
+        // Search for the user profile
+<span class="fc" id="L661">        String searchId = m_loginPrincipal.getName();</span>
+<span class="pc bpc" id="L662" title="1 of 2 branches missed.">        if ( searchId == null )</span>
+        {
+            // Oh dear, this wasn't an authenticated user after all
+<span class="nc" id="L665">            log.info(&quot;Refresh principals failed because WikiSession had no user Principal; maybe not logged in?&quot;);</span>
+<span class="nc" id="L666">            return;</span>
+        }
+
+        // Look up the user and go get the new Principals
+<span class="fc" id="L670">        UserDatabase database = m_engine.getUserManager().getUserDatabase();</span>
+<span class="pc bpc" id="L671" title="1 of 2 branches missed.">        if ( database == null )</span>
+        {
+<span class="nc" id="L673">            throw new IllegalStateException( &quot;User database cannot be null.&quot; );</span>
+        }
+        try
+        {
+<span class="fc" id="L677">            UserProfile profile = database.find( searchId );</span>
+<span class="fc" id="L678">            Principal[] principals = database.getPrincipals( profile.getLoginName() );</span>
+<span class="fc bfc" id="L679" title="All 2 branches covered.">            for ( Principal principal : principals )</span>
+            {
+                // Add the Principal to the Subject
+<span class="fc" id="L682">                m_subject.getPrincipals().add( principal );</span>
+                
+                // Set the user principal if needed; we prefer FullName, but the WikiName will also work
+<span class="pc bpc" id="L685" title="1 of 4 branches missed.">                boolean isFullNamePrincipal = ( principal instanceof WikiPrincipal &amp;&amp; ((WikiPrincipal)principal).getType() == WikiPrincipal.FULL_NAME );</span>
+<span class="fc bfc" id="L686" title="All 2 branches covered.">                if ( isFullNamePrincipal )</span>
+                {
+<span class="fc" id="L688">                   m_userPrincipal = principal; </span>
+                }
+<span class="pc bpc" id="L690" title="1 of 2 branches missed.">                else if ( !( m_userPrincipal instanceof WikiPrincipal ) )</span>
+                {
+<span class="nc" id="L692">                    m_userPrincipal = principal; </span>
+                }
+            }
+        }
+<span class="nc" id="L696">        catch ( NoSuchPrincipalException e )</span>
+        {
+            // We will get here if the user has a principal but not a profile
+            // For example, it's a container-managed user who hasn't set up a profile yet
+<span class="nc" id="L700">            log.warn(&quot;User profile '&quot; + searchId + &quot;' not found. This is normal for container-auth users who haven't set up a profile yet.&quot;);</span>
+<span class="fc" id="L701">        }</span>
+<span class="fc" id="L702">    }</span>
+
+    /**
+     * &lt;p&gt;Returns the status of the wiki session as a text string. Valid values are:&lt;/p&gt;
+     * &lt;ul&gt;
+     *   &lt;li&gt;{@link #AUTHENTICATED}&lt;/li&gt;
+     *   &lt;li&gt;{@link #ASSERTED}&lt;/li&gt;
+     *   &lt;li&gt;{@link #ANONYMOUS}&lt;/li&gt;
+     * &lt;/ul&gt;
+     * @return the user's session status
+     */
+    public String getStatus()
+    {
+<span class="nc" id="L715">        return m_status;</span>
+    }
+
+    /**
+     * &lt;p&gt;Static factory method that returns the WikiSession object associated with
+     * the current HTTP request. This method looks up the associated HttpSession
+     * in an internal WeakHashMap and attempts to retrieve the WikiSession. If
+     * not found, one is created. This method is guaranteed to always return a
+     * WikiSession, although the authentication status is unpredictable until
+     * the user attempts to log in. If the servlet request parameter is
+     * &lt;code&gt;null&lt;/code&gt;, a synthetic {@link #guestSession(WikiEngine)}is returned.&lt;/p&gt;
+     * &lt;p&gt;When a session is created, this method attaches a WikiEventListener
+     * to the GroupManager so that changes to groups are detected automatically.&lt;/p&gt;
+     * @param engine the wiki engine
+     * @param request the servlet request object
+     * @return the existing (or newly created) wiki session
+     */
+    public static WikiSession getWikiSession( WikiEngine engine, HttpServletRequest request )
+    {
+        // If request is null, return guest session
+<span class="fc bfc" id="L735" title="All 2 branches covered.">        if ( request == null )</span>
+        {
+<span class="pc bpc" id="L737" title="1 of 2 branches missed.">            if ( log.isDebugEnabled() )</span>
+            {
+<span class="nc" id="L739">                log.debug( &quot;Looking up WikiSession for NULL HttpRequest: returning guestSession()&quot; );</span>
+            }
+<span class="fc" id="L741">            return staticGuestSession( engine );</span>
+        }
+
+        // Look for a WikiSession associated with the user's Http Session
+        // and create one if it isn't there yet.
+<span class="fc" id="L746">        HttpSession session = request.getSession();</span>
+<span class="fc" id="L747">        SessionMonitor monitor = SessionMonitor.getInstance( engine );</span>
+<span class="fc" id="L748">        WikiSession wikiSession = monitor.find( session );</span>
+
+        // Attach reference to wiki engine
+<span class="fc" id="L751">        wikiSession.m_engine = engine;</span>
+
+<span class="fc" id="L753">        wikiSession.m_cachedLocale = request.getLocale();</span>
+
+<span class="fc" id="L755">        return wikiSession;</span>
+    }
+
+    /**
+     * Static factory method that creates a new &quot;guest&quot; session containing a single
+     * user Principal {@link org.apache.wiki.auth.WikiPrincipal#GUEST},
+     * plus the role principals {@link Role#ALL} and
+     * {@link Role#ANONYMOUS}. This method also adds the session as a listener
+     * for GroupManager, AuthenticationManager and UserManager events.
+     * @param engine the wiki engine
+     * @return the guest wiki session
+     */
+    public static WikiSession guestSession( WikiEngine engine )
+    {
+<span class="fc" id="L769">        WikiSession session = new WikiSession();</span>
+<span class="fc" id="L770">        session.m_engine = engine;</span>
+<span class="fc" id="L771">        session.invalidate();</span>
+
+        // Add the session as listener for GroupManager, AuthManager, UserManager events
+<span class="fc" id="L774">        GroupManager groupMgr = engine.getGroupManager();</span>
+<span class="fc" id="L775">        AuthenticationManager authMgr = engine.getAuthenticationManager();</span>
+<span class="fc" id="L776">        UserManager userMgr = engine.getUserManager();</span>
+<span class="fc" id="L777">        groupMgr.addWikiEventListener( session );</span>
+<span class="fc" id="L778">        authMgr.addWikiEventListener( session );</span>
+<span class="fc" id="L779">        userMgr.addWikiEventListener( session );</span>
+
+<span class="fc" id="L781">        return session;</span>
+    }
+
+    /**
+     *  Returns a static guest session, which is available for this
+     *  thread only.  This guest session is used internally whenever
+     *  there is no HttpServletRequest involved, but the request is
+     *  done e.g. when embedding JSPWiki code.
+     *
+     *  @param engine WikiEngine for this session
+     *  @return A static WikiSession which is shared by all in this
+     *          same Thread.
+     */
+    // FIXME: Should really use WeakReferences to clean away unused sessions.
+
+    private static WikiSession staticGuestSession( WikiEngine engine )
+    {
+<span class="fc" id="L798">        WikiSession session = c_guestSession.get();</span>
+
+<span class="fc bfc" id="L800" title="All 2 branches covered.">        if( session == null )</span>
+        {
+<span class="fc" id="L802">            session = guestSession( engine );</span>
+
+<span class="fc" id="L804">            c_guestSession.set( session );</span>
+        }
+
+<span class="fc" id="L807">        return session;</span>
+    }
+
+    /**
+     * Returns the total number of active wiki sessions for a
+     * particular wiki. This method delegates to the wiki's
+     * {@link SessionMonitor#sessions()} method.
+     * @param engine the wiki session
+     * @return the number of sessions
+     */
+    public static int sessions( WikiEngine engine )
+    {
+<span class="nc" id="L819">        SessionMonitor monitor = SessionMonitor.getInstance( engine );</span>
+<span class="nc" id="L820">        return monitor.sessions();</span>
+    }
+
+    /**
+     * Returns Principals representing the current users known
+     * to a particular wiki. Each Principal will correspond to the
+     * value returned by each WikiSession's {@link #getUserPrincipal()}
+     * method. This method delegates to {@link SessionMonitor#userPrincipals()}.
+     * @param engine the wiki engine
+     * @return an array of Principal objects, sorted by name
+     */
+    public static Principal[] userPrincipals( WikiEngine engine )
+    {
+<span class="nc" id="L833">        SessionMonitor monitor = SessionMonitor.getInstance( engine );</span>
+<span class="nc" id="L834">        return monitor.userPrincipals();</span>
+    }
+
+    /**
+     * Wrapper for
+     * {@link javax.security.auth.Subject#doAsPrivileged(Subject, java.security.PrivilegedExceptionAction, java.security.AccessControlContext)}
+     * that executes an action with the privileges posssessed by a
+     * WikiSession's Subject. The action executes with a &lt;code&gt;null&lt;/code&gt;
+     * AccessControlContext, which has the effect of running it &quot;cleanly&quot;
+     * without the AccessControlContexts of the caller.
+     * @param session the wiki session
+     * @param action the privileged action
+     * @return the result of the privileged action; may be &lt;code&gt;null&lt;/code&gt;
+     * @throws java.security.AccessControlException if the action is not permitted
+     * by the security policy
+     */
+    public static Object doPrivileged( WikiSession session, PrivilegedAction&lt;?&gt; action ) throws AccessControlException
+    {
+<span class="fc" id="L852">        return Subject.doAsPrivileged( session.m_subject, action, null );</span>
+    }
+
+    /**
+     * Verifies whether a String represents an IPv4 address. The algorithm is
+     * extremely efficient and does not allocate any objects.
+     * @param name the address to test
+     * @return the result
+     */
+    protected static boolean isIPV4Address( String name )
+    {
+<span class="fc bfc" id="L863" title="All 4 branches covered.">        if ( name.charAt( 0 ) == DOT || name.charAt( name.length() - 1 ) == DOT )</span>
+        {
+<span class="fc" id="L865">            return false;</span>
+        }
+
+<span class="fc" id="L868">        int[] addr = new int[]</span>
+        { 0, 0, 0, 0 };
+<span class="fc" id="L870">        int currentOctet = 0;</span>
+<span class="fc bfc" id="L871" title="All 2 branches covered.">        for( int i = 0; i &lt; name.length(); i++ )</span>
+        {
+<span class="fc" id="L873">            int ch = name.charAt( i );</span>
+<span class="fc bfc" id="L874" title="All 4 branches covered.">            boolean isDigit = ch &gt;= ONE &amp;&amp; ch &lt;= NINE;</span>
+<span class="fc bfc" id="L875" title="All 2 branches covered.">            boolean isDot = ch == DOT;</span>
+<span class="fc bfc" id="L876" title="All 4 branches covered.">            if ( !isDigit &amp;&amp; !isDot )</span>
+            {
+<span class="fc" id="L878">                return false;</span>
+            }
+<span class="fc bfc" id="L880" title="All 2 branches covered.">            if ( isDigit )</span>
+            {
+<span class="fc" id="L882">                addr[currentOctet] = 10 * addr[currentOctet] + ( ch - ONE );</span>
+<span class="fc bfc" id="L883" title="All 2 branches covered.">                if ( addr[currentOctet] &gt; 255 )</span>
+                {
+<span class="fc" id="L885">                    return false;</span>
+                }
+            }
+<span class="fc bfc" id="L888" title="All 2 branches covered.">            else if ( name.charAt( i - 1 ) == DOT )</span>
+            {
+<span class="fc" id="L890">                return false;</span>
+            }
+            else
+            {
+<span class="fc" id="L894">                currentOctet++;</span>
+            }
+        }
+<span class="pc bpc" id="L897" title="1 of 2 branches missed.">        return  currentOctet == 3;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

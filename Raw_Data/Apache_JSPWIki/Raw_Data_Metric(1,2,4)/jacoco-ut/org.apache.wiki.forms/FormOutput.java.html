@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormOutput.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormOutput.java</span></div><h1>FormOutput.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.forms;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.engine.PluginManager;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.plugin.DefaultPluginManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.FormUtil;
+
+import java.text.MessageFormat;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+/**
+ */
+<span class="nc" id="L36">public class FormOutput</span>
+        extends FormElement
+{
+    /**
+     * Executes the FormHandler specified in a Form 'output' plugin,
+     * using entries provided in the HttpRequest as FormHandler
+     * parameters.
+     * &lt;p&gt;
+     * If the parameter 'populate' was given, the WikiPlugin it names
+     * is used to get default values. (It probably makes a lot of
+     * sense for this to be the same plugin as the handler.) 
+     * Information for the populator can be given with the FormSet
+     * plugin. If 'populate' is not specified, the form is not
+     * displayed.
+     * &lt;p&gt;
+     * Should there be no HTTP request associated with this request,
+     * the method will return immediately with an empty string.
+     * 
+     * @param ctx {@inheritDoc}
+     * @param params {@inheritDoc}
+     * @return {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params )
+        throws PluginException
+    {
+        //
+        //  If there is no HTTP request, returns immediately.
+        //
+<span class="nc bnc" id="L64" title="All 2 branches missed.">        if( ctx.getHttpRequest() == null )</span>
+        {
+<span class="nc" id="L66">            return &quot;&quot;;</span>
+        }
+<span class="nc" id="L68">        ResourceBundle rb = Preferences.getBundle( ctx, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+        
+        // If we are NOT here due to this form being submitted, we do nothing.
+        // The submitted form MUST have parameter 'formname' equal to the name
+        // parameter of this Form plugin.
+
+<span class="nc" id="L74">        String formName   = params.get( PARAM_FORM );</span>
+<span class="nc" id="L75">        String submitForm = ctx.getHttpParameter( PARAM_FORMNAMEHIDDEN );</span>
+<span class="nc" id="L76">        String populator  = params.get( PARAM_POPULATE );</span>
+
+<span class="nc bnc" id="L78" title="All 4 branches missed.">        if( submitForm == null || formName == null || </span>
+<span class="nc bnc" id="L79" title="All 2 branches missed.">            !formName.equals( submitForm ) )</span>
+        {
+            // No submitForm -&gt; this was not a submission from the
+            // generated form.  If populate is specified, we'll go
+            // ahead and let the handler (populator) put stuff into
+            // the context, otherwise we'll just hide.
+<span class="nc bnc" id="L85" title="All 4 branches missed.">            if( populator == null || !PARAM_HANDLER.equals( populator ) )</span>
+<span class="nc" id="L86">                return &quot;&quot;;</span>
+            // If population was allowed, we should first  
+        }
+
+<span class="nc" id="L90">        String handler = params.get( PARAM_HANDLER );</span>
+<span class="nc bnc" id="L91" title="All 4 branches missed.">        if( handler == null || handler.length() == 0 )</span>
+        {
+            // Need to print out an error here as this form is misconfigured
+<span class="nc" id="L94">            return &quot;&lt;p class=\&quot;error\&quot;&gt;&quot; + MessageFormat.format( rb.getString( &quot;formoutput.missingargument&quot; ), PARAM_HANDLER ) + &quot;&lt;/p&gt;&quot;;</span>
+        }
+
+<span class="nc" id="L97">        String sourcePage = ctx.getPage().getName();</span>
+<span class="nc" id="L98">        String submitServlet = ctx.getURL( WikiContext.VIEW, sourcePage );</span>
+
+        // If there is previous FormInfo available - say, from a
+        // FormSet plugin - use it.
+<span class="nc" id="L102">        FormInfo info = getFormInfo( ctx );</span>
+<span class="nc bnc" id="L103" title="All 2 branches missed.">        if( info == null )</span>
+        {
+            // Reconstruct the form info from post data
+<span class="nc" id="L106">            info = new FormInfo();</span>
+<span class="nc" id="L107">            info.setName( formName );</span>
+        }
+        // Force override of handler and submit.
+<span class="nc" id="L110">        info.setHandler( handler );</span>
+<span class="nc" id="L111">        info.setAction( submitServlet );</span>
+
+        // Sift out all extra parameters, leaving only those submitted
+        // in the HTML FORM.
+<span class="nc" id="L115">        Map&lt; String, String &gt; handlerParams = FormUtil.requestToMap( ctx.getHttpRequest(), </span>
+                                                                     HANDLERPARAM_PREFIX );
+        // Previous submission info may be available from FormSet
+        // plugin - add, don't replace.
+<span class="nc" id="L119">        info.addSubmission( handlerParams );</span>
+
+        // Pass the _body parameter from FormOutput on to the handler
+<span class="nc" id="L122">        info.getSubmission().put( DefaultPluginManager.PARAM_BODY, </span>
+<span class="nc" id="L123">                                  params.get(DefaultPluginManager.PARAM_BODY)); </span>
+
+<span class="nc" id="L125">        String handlerOutput = null;</span>
+<span class="nc" id="L126">        String error = null;</span>
+        try
+        {
+            // The plugin _can_ modify the parameters, so we make sure
+            // they stay with us.
+<span class="nc" id="L131">            PluginManager pm = ctx.getEngine().getPluginManager();</span>
+<span class="nc" id="L132">            handlerOutput = pm.execute( ctx, handler, info.getSubmission() );</span>
+<span class="nc" id="L133">            info.setResult( handlerOutput );</span>
+<span class="nc" id="L134">            info.setStatus( FormInfo.EXECUTED );</span>
+        }
+<span class="nc" id="L136">        catch( PluginException pe )</span>
+        {
+<span class="nc" id="L138">            error = &quot;&lt;p class=\&quot;error\&quot;&gt;&quot; + pe.getMessage() + &quot;&lt;/p&gt;&quot;;</span>
+<span class="nc" id="L139">            info.setError( error );</span>
+<span class="nc" id="L140">            info.setStatus( FormInfo.ERROR );</span>
+<span class="nc" id="L141">        }</span>
+
+        // We store the forminfo, so following Form plugin invocations on this
+        // page can decide what to do based on its values.
+<span class="nc" id="L145">        storeFormInfo( ctx, info );</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if( error != null )</span>
+<span class="nc" id="L148">            return error;</span>
+
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        return handlerOutput != null ? handlerOutput : &quot;&quot;;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

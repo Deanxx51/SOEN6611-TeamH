@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ParamTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">ParamTag.java</span></div><h1>ParamTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import javax.servlet.jsp.tagext.BodyContent;
+import javax.servlet.jsp.tagext.BodyTagSupport;
+import javax.servlet.jsp.tagext.Tag;
+
+/**
+ * ParamTag submits name-value pairs to the first enclosing 
+ * ParamHandler instance. Name and value are strings, and can
+ * be given as tag attributes, or alternatively the value can be 
+ * given as the body contents of this tag. 
+ * &lt;p&gt;
+ * The name-value pair is passed to the closest containing 
+ * ancestor tag that implements ParamHandler. 
+ */
+<span class="nc" id="L34">public class ParamTag </span>
+    extends BodyTagSupport
+{
+
+    private static final long serialVersionUID = -4671059568218551633L;
+    private String m_name;
+    private String m_value;
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public void release() 
+    {
+<span class="nc" id="L48">        m_name = m_value = null;</span>
+<span class="nc" id="L49">    }</span>
+    
+    /**
+     *  Set the name of the parameter to transfer.
+     *  
+     *  @param s The name.
+     */
+    public void setName( String s ) 
+    {
+<span class="nc" id="L58">        m_name = s;</span>
+<span class="nc" id="L59">    }</span>
+    
+    /**
+     *  Set the value of the parameter to transfer.
+     *  
+     *  @param s The value.
+     */
+    public void setValue( String s ) 
+    {
+<span class="nc" id="L68">        m_value = s;</span>
+<span class="nc" id="L69">    }</span>
+    
+    /**
+     *  {@inheritDoc}
+     */
+    @Override
+    public int doEndTag()
+    {
+<span class="nc" id="L77">        Tag t = null;</span>
+        do
+        {
+<span class="nc" id="L80">            t = getParent();</span>
+<span class="nc bnc" id="L81" title="All 4 branches missed.">        } while (t != null &amp;&amp; !(t instanceof ParamHandler));</span>
+
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if( t != null )</span>
+        {
+<span class="nc" id="L85">            String val = m_value;</span>
+<span class="nc bnc" id="L86" title="All 2 branches missed.">            if( val == null )</span>
+            {
+<span class="nc" id="L88">                BodyContent bc = getBodyContent();</span>
+<span class="nc bnc" id="L89" title="All 2 branches missed.">                if( bc != null ) </span>
+                {
+<span class="nc" id="L91">                    val = bc.getString();</span>
+                }
+            }
+<span class="nc bnc" id="L94" title="All 2 branches missed.">            if( val != null ) </span>
+            {
+<span class="nc" id="L96">                ((ParamHandler)t).setContainedParameter( m_name, val );</span>
+            }
+        }
+        
+        
+<span class="nc" id="L101">        return EVAL_PAGE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

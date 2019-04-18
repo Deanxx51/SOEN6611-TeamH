@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WeblogArchivePlugin.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">WeblogArchivePlugin.java</span></div><h1>WeblogArchivePlugin.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.plugin;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Creates a list of all weblog entries on a monthly basis.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;page&lt;/b&gt; - the page name&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 1.9.21
+ */
+<span class="nc" id="L51">public class WeblogArchivePlugin implements WikiPlugin</span>
+{
+<span class="nc" id="L53">    private static Logger     log = Logger.getLogger(WeblogArchivePlugin.class);</span>
+
+    /** Parameter name for setting the page.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_PAGE = &quot;page&quot;;
+
+    private SimpleDateFormat m_monthUrlFormat;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L66">        WikiEngine engine = context.getEngine();</span>
+
+        //
+        //  Parameters
+        //
+<span class="nc" id="L71">        String weblogName = params.get( PARAM_PAGE );</span>
+
+<span class="nc bnc" id="L73" title="All 2 branches missed.">        if( weblogName == null ) weblogName = context.getPage().getName();</span>
+
+
+<span class="nc" id="L76">        m_monthUrlFormat = new SimpleDateFormat(&quot;'&quot;+</span>
+<span class="nc" id="L77">                                                context.getURL( WikiContext.VIEW, weblogName,</span>
+                                                                &quot;weblog.startDate='ddMMyy'&amp;amp;weblog.days=%d&quot;)+&quot;'&quot;);
+
+<span class="nc" id="L80">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc" id="L82">        sb.append( &quot;&lt;div class=\&quot;weblogarchive\&quot;&gt;\n&quot; );</span>
+
+
+        //
+        //  Collect months that have blog entries
+        //
+
+        try
+        {
+<span class="nc" id="L91">            Collection&lt; Calendar &gt; months = collectMonths( engine, weblogName );</span>
+<span class="nc" id="L92">            int year = 0;</span>
+
+            //
+            //  Output proper HTML.
+            //
+
+<span class="nc" id="L98">            sb.append( &quot;&lt;ul&gt;\n&quot; );</span>
+
+<span class="nc bnc" id="L100" title="All 2 branches missed.">            if( months.size() &gt; 0 )</span>
+            {
+<span class="nc" id="L102">                year = (months.iterator().next()).get( Calendar.YEAR );</span>
+
+<span class="nc" id="L104">                sb.append( &quot;&lt;li class=\&quot;archiveyear\&quot;&gt;&quot;+year+&quot;&lt;/li&gt;\n&quot; );</span>
+            }
+
+<span class="nc bnc" id="L107" title="All 2 branches missed.">            for( Iterator&lt; Calendar &gt; i = months.iterator(); i.hasNext(); )</span>
+            {
+<span class="nc" id="L109">                Calendar cal = i.next();</span>
+
+<span class="nc bnc" id="L111" title="All 2 branches missed.">                if( cal.get( Calendar.YEAR ) != year )</span>
+                {
+<span class="nc" id="L113">                    year = cal.get( Calendar.YEAR );</span>
+
+<span class="nc" id="L115">                    sb.append( &quot;&lt;li class=\&quot;archiveyear\&quot;&gt;&quot;+year+&quot;&lt;/li&gt;\n&quot; );</span>
+                }
+
+<span class="nc" id="L118">                sb.append( &quot;  &lt;li&gt;&quot; );</span>
+
+<span class="nc" id="L120">                sb.append( getMonthLink( cal ) );</span>
+
+<span class="nc" id="L122">                sb.append( &quot;&lt;/li&gt;\n&quot; );</span>
+<span class="nc" id="L123">            }</span>
+
+<span class="nc" id="L125">            sb.append( &quot;&lt;/ul&gt;\n&quot; );</span>
+        }
+<span class="nc" id="L127">        catch( ProviderException ex )</span>
+        {
+<span class="nc" id="L129">            log.info( &quot;Cannot get archive&quot;, ex );</span>
+<span class="nc" id="L130">            sb.append(&quot;Cannot get archive: &quot;+ex.getMessage());</span>
+<span class="nc" id="L131">        }</span>
+
+<span class="nc" id="L133">        sb.append( &quot;&lt;/div&gt;\n&quot; );</span>
+
+<span class="nc" id="L135">        return sb.toString();</span>
+    }
+
+    private SortedSet&lt; Calendar &gt; collectMonths( WikiEngine engine, String page )
+        throws ProviderException
+    {
+<span class="nc" id="L141">        Comparator&lt; Calendar &gt; comp = new ArchiveComparator();</span>
+<span class="nc" id="L142">        TreeSet&lt;Calendar&gt; res = new TreeSet&lt;Calendar&gt;( comp );</span>
+
+<span class="nc" id="L144">        WeblogPlugin pl = new WeblogPlugin();</span>
+
+<span class="nc" id="L146">        List&lt; WikiPage &gt; blogEntries = pl.findBlogEntries( engine, page, new Date(0L), new Date() );</span>
+
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        for( Iterator&lt; WikiPage &gt; i = blogEntries.iterator(); i.hasNext(); )</span>
+        {
+<span class="nc" id="L150">            WikiPage p = i.next();</span>
+
+            // FIXME: Not correct, should parse page creation time.
+
+<span class="nc" id="L154">            Date d = p.getLastModified();</span>
+<span class="nc" id="L155">            Calendar cal = Calendar.getInstance();</span>
+<span class="nc" id="L156">            cal.setTime( d );</span>
+<span class="nc" id="L157">            res.add( cal );</span>
+<span class="nc" id="L158">        }</span>
+
+<span class="nc" id="L160">        return res;</span>
+    }
+
+    private String getMonthLink( Calendar day )
+    {
+<span class="nc" id="L165">        SimpleDateFormat monthfmt = new SimpleDateFormat( &quot;MMMM&quot; );</span>
+        String result;
+
+<span class="nc bnc" id="L168" title="All 2 branches missed.">        if( m_monthUrlFormat == null )</span>
+        {
+<span class="nc" id="L170">            result = monthfmt.format( day.getTime() );</span>
+        }
+        else
+        {
+<span class="nc" id="L174">            Calendar cal = (Calendar)day.clone();</span>
+<span class="nc" id="L175">            int firstDay = cal.getActualMinimum( Calendar.DATE );</span>
+<span class="nc" id="L176">            int lastDay  = cal.getActualMaximum( Calendar.DATE );</span>
+
+<span class="nc" id="L178">            cal.set( Calendar.DATE, lastDay );</span>
+<span class="nc" id="L179">            String url = m_monthUrlFormat.format( cal.getTime() );</span>
+
+<span class="nc" id="L181">            url = TextUtil.replaceString( url, &quot;%d&quot;, Integer.toString( lastDay-firstDay+1 ) );</span>
+
+<span class="nc" id="L183">            result = &quot;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;+monthfmt.format(cal.getTime())+&quot;&lt;/a&gt;&quot;;</span>
+        }
+
+<span class="nc" id="L186">        return result;</span>
+
+    }
+
+
+    /**
+     * This is a simple comparator for ordering weblog archive entries.
+     * Two dates in the same month are considered equal.
+     */
+    private static class ArchiveComparator implements Comparator&lt; Calendar &gt; {
+
+        public int compare( Calendar a, Calendar b )
+        {
+<span class="nc bnc" id="L199" title="All 4 branches missed.">            if( a == null || b == null )</span>
+            {
+<span class="nc" id="L201">                throw new ClassCastException( &quot;Invalid calendar supplied for comparison.&quot; );</span>
+            }
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">            if( a.get( Calendar.YEAR ) == b.get( Calendar.YEAR ) &amp;&amp;</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">                a.get( Calendar.MONTH ) == b.get( Calendar.MONTH ) )</span>
+            {
+<span class="nc" id="L207">                return 0;</span>
+            }
+
+            //sort recent dates first
+<span class="nc bnc" id="L211" title="All 2 branches missed.">            return b.getTime().before( a.getTime() ) ? -1 : 1;</span>
+        }
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

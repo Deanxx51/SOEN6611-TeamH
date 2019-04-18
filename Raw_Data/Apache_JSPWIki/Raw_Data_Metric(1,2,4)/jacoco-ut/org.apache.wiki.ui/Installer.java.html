@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Installer.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.ui</a> &gt; <span class="el_source">Installer.java</span></div><h1>Installer.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.ui;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.text.MessageFormat;
+import java.util.Properties;
+import java.util.ResourceBundle;
+import java.util.Set;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.authorize.Group;
+import org.apache.wiki.auth.authorize.GroupManager;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.providers.BasicAttachmentProvider;
+import org.apache.wiki.providers.FileSystemProvider;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ * Manages JSPWiki installation on behalf of &lt;code&gt;admin/Install.jsp&lt;/code&gt;.
+ * The contents of this class were previously part of &lt;code&gt;Install.jsp&lt;/code&gt;.
+ *
+ * @since 2.4.20
+ */
+public class Installer
+{
+    public static final String ADMIN_ID = &quot;admin&quot;;
+    public static final String ADMIN_NAME = &quot;Administrator&quot;;
+    public static final String INSTALL_INFO = &quot;Installer.Info&quot;;
+    public static final String INSTALL_ERROR = &quot;Installer.Error&quot;;
+    public static final String INSTALL_WARNING = &quot;Installer.Warning&quot;;
+    public static final String APP_NAME = WikiEngine.PROP_APPNAME;
+    public static final String STORAGE_DIR = BasicAttachmentProvider.PROP_STORAGEDIR;
+    public static final String PAGE_DIR = FileSystemProvider.PROP_PAGEDIR;
+    public static final String WORK_DIR = WikiEngine.PROP_WORKDIR;
+    public static final String ADMIN_GROUP = &quot;Admin&quot;;
+    public static final String PROPFILENAME = &quot;jspwiki-custom.properties&quot; ;
+<span class="nc" id="L68">    public static final String TMP_DIR = System.getProperty(&quot;java.io.tmpdir&quot;);</span>
+    private final WikiSession m_session;
+    private final File m_propertyFile;
+    private final Properties m_props;
+    private final WikiEngine m_engine;
+    private HttpServletRequest m_request;
+    private boolean m_validated;
+    
+<span class="nc" id="L76">    public Installer( HttpServletRequest request, ServletConfig config ) throws IOException {</span>
+        // Get wiki session for this user
+<span class="nc" id="L78">        m_engine = WikiEngine.getInstance( config );</span>
+<span class="nc" id="L79">        m_session = WikiSession.getWikiSession( m_engine, request );</span>
+        
+        // Get the file for properties
+<span class="nc" id="L82">        m_propertyFile = new File(TMP_DIR, PROPFILENAME);</span>
+<span class="nc" id="L83">        m_props = new Properties();</span>
+        
+        // Stash the request
+<span class="nc" id="L86">        m_request = request;</span>
+<span class="nc" id="L87">        m_validated = false;</span>
+<span class="nc" id="L88">    }</span>
+    
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the administrative user had
+     * been created previously.
+     * @return the result
+     */
+    public boolean adminExists()
+    {
+        // See if the admin user exists already
+<span class="nc" id="L98">        UserManager userMgr = m_engine.getUserManager();</span>
+<span class="nc" id="L99">        UserDatabase userDb = userMgr.getUserDatabase();</span>
+        
+        try
+        {
+<span class="nc" id="L103">            userDb.findByLoginName( ADMIN_ID );</span>
+<span class="nc" id="L104">            return true;</span>
+        }
+<span class="nc" id="L106">        catch ( NoSuchPrincipalException e )</span>
+        {
+<span class="nc" id="L108">            return false;</span>
+        }
+    }
+    
+    /**
+     * Creates an administrative user and returns the new password.
+     * If the admin user exists, the password will be &lt;code&gt;null&lt;/code&gt;.
+     * @return the password
+     * @throws WikiSecurityException
+     */
+    public String createAdministrator() throws WikiSecurityException
+    {
+<span class="nc bnc" id="L120" title="All 2 branches missed.">        if ( !m_validated )</span>
+        {
+<span class="nc" id="L122">            throw new WikiSecurityException( &quot;Cannot create administrator because one or more of the installation settings are invalid.&quot; );</span>
+        }
+        
+<span class="nc bnc" id="L125" title="All 2 branches missed.">        if ( adminExists() )</span>
+        {
+<span class="nc" id="L127">            return null;</span>
+        }
+        
+        // See if the admin user exists already
+<span class="nc" id="L131">        UserManager userMgr = m_engine.getUserManager();</span>
+<span class="nc" id="L132">        UserDatabase userDb = userMgr.getUserDatabase();</span>
+<span class="nc" id="L133">        String password = null;</span>
+        
+        try
+        {
+<span class="nc" id="L137">            userDb.findByLoginName( ADMIN_ID );</span>
+        }
+<span class="nc" id="L139">        catch ( NoSuchPrincipalException e )</span>
+        {
+            // Create a random 12-character password
+<span class="nc" id="L142">            password = TextUtil.generateRandomPassword();</span>
+<span class="nc" id="L143">            UserProfile profile = userDb.newProfile();</span>
+<span class="nc" id="L144">            profile.setLoginName( ADMIN_ID );</span>
+<span class="nc" id="L145">            profile.setFullname( ADMIN_NAME );</span>
+<span class="nc" id="L146">            profile.setPassword( password );</span>
+<span class="nc" id="L147">            userDb.save( profile );</span>
+<span class="nc" id="L148">        }</span>
+        
+        // Create a new admin group
+<span class="nc" id="L151">        GroupManager groupMgr = m_engine.getGroupManager();</span>
+<span class="nc" id="L152">        Group group = null;</span>
+        try
+        {
+<span class="nc" id="L155">            group = groupMgr.getGroup( ADMIN_GROUP );</span>
+<span class="nc" id="L156">            group.add( new WikiPrincipal( ADMIN_NAME ) );</span>
+        }
+<span class="nc" id="L158">        catch ( NoSuchPrincipalException e )</span>
+        {
+<span class="nc" id="L160">            group = groupMgr.parseGroup( ADMIN_GROUP, ADMIN_NAME, true );</span>
+<span class="nc" id="L161">        }</span>
+<span class="nc" id="L162">        groupMgr.setGroup( m_session, group );</span>
+        
+<span class="nc" id="L164">        return password;</span>
+    }
+    
+    /**
+     * Returns the properties as a &quot;key=value&quot; string separated by newlines
+     * @return the string
+     */
+    public String getPropertiesList()
+    {
+<span class="nc" id="L173">        StringBuilder result = new StringBuilder();</span>
+<span class="nc" id="L174">        Set&lt;String&gt; keys = m_props.stringPropertyNames();</span>
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        for (String key:keys) {</span>
+<span class="nc" id="L176">            result.append(key + &quot; = &quot; + m_props.getProperty(key) + &quot;\n&quot;);</span>
+<span class="nc" id="L177">        }</span>
+<span class="nc" id="L178">        return result.toString();</span>
+    }
+
+    public String getPropertiesPath()
+    {
+<span class="nc" id="L183">        return m_propertyFile.getAbsolutePath();</span>
+    }
+
+    /**
+     * Returns a property from the WikiEngine's properties.
+     * @param key the property key
+     * @return the property value
+     */
+    public String getProperty( String key )
+    {
+<span class="nc" id="L193">        return m_props.getProperty( key );</span>
+    }
+    
+    public void parseProperties () throws Exception
+    {
+<span class="nc" id="L198">        ResourceBundle rb = ResourceBundle.getBundle( InternationalizationManager.CORE_BUNDLE,</span>
+<span class="nc" id="L199">                                                      m_session.getLocale() );</span>
+<span class="nc" id="L200">        m_validated = false;</span>
+        
+
+        // Get application name
+<span class="nc" id="L204">        String nullValue = m_props.getProperty( APP_NAME, rb.getString( &quot;install.installer.default.appname&quot; ) );</span>
+<span class="nc" id="L205">        parseProperty( APP_NAME, nullValue );</span>
+
+        // Get/sanitize page directory
+<span class="nc" id="L208">        nullValue = m_props.getProperty( PAGE_DIR, rb.getString( &quot;install.installer.default.pagedir&quot; ) );</span>
+<span class="nc" id="L209">        parseProperty( PAGE_DIR, nullValue );</span>
+<span class="nc" id="L210">        sanitizePath( PAGE_DIR );</span>
+
+        // Get/sanitize work directory
+<span class="nc" id="L213">        nullValue = m_props.getProperty( WORK_DIR, TMP_DIR );</span>
+<span class="nc" id="L214">        parseProperty( WORK_DIR, nullValue );</span>
+<span class="nc" id="L215">        sanitizePath( WORK_DIR );</span>
+        
+        // Set a few more default properties, for easy setup
+<span class="nc" id="L218">        m_props.setProperty( STORAGE_DIR, m_props.getProperty( PAGE_DIR ) );</span>
+<span class="nc" id="L219">        m_props.setProperty( PageManager.PROP_PAGEPROVIDER, &quot;VersioningFileProvider&quot; );</span>
+<span class="nc" id="L220">    }</span>
+    
+    public void saveProperties()
+    {
+<span class="nc" id="L224">        ResourceBundle rb = ResourceBundle.getBundle( InternationalizationManager.CORE_BUNDLE, m_session.getLocale() );</span>
+        // Write the file back to disk
+        try
+        {
+<span class="nc" id="L228">            OutputStream out = null;</span>
+            try
+            {
+<span class="nc" id="L231">                out = new FileOutputStream( m_propertyFile );</span>
+<span class="nc" id="L232">                m_props.store( out, null );</span>
+            }
+            finally
+            {
+<span class="nc bnc" id="L236" title="All 2 branches missed.">                if ( out != null )</span>
+                {
+<span class="nc" id="L238">                    out.close();</span>
+                }
+            }
+<span class="nc" id="L241">            m_session.addMessage( INSTALL_INFO, MessageFormat.format(rb.getString(&quot;install.installer.props.saved&quot;), m_propertyFile) );</span>
+        }
+<span class="nc" id="L243">        catch( IOException e )</span>
+        {
+<span class="nc" id="L245">            Object[] args = { e.getMessage(), m_props.toString() };</span>
+<span class="nc" id="L246">            m_session.addMessage( INSTALL_ERROR, MessageFormat.format( rb.getString( &quot;install.installer.props.notsaved&quot; ), args ) );</span>
+<span class="nc" id="L247">        }</span>
+<span class="nc" id="L248">    }</span>
+    
+    public boolean validateProperties() throws Exception
+    {
+<span class="nc" id="L252">        ResourceBundle rb = ResourceBundle.getBundle( InternationalizationManager.CORE_BUNDLE, m_session.getLocale() );</span>
+<span class="nc" id="L253">        m_session.clearMessages( INSTALL_ERROR );</span>
+<span class="nc" id="L254">        parseProperties();</span>
+<span class="nc" id="L255">        validateNotNull( PAGE_DIR, rb.getString( &quot;install.installer.validate.pagedir&quot; ) );</span>
+<span class="nc" id="L256">        validateNotNull( APP_NAME, rb.getString( &quot;install.installer.validate.appname&quot; ) );</span>
+<span class="nc" id="L257">        validateNotNull( WORK_DIR, rb.getString( &quot;install.installer.validate.workdir&quot; ) );</span>
+
+<span class="nc bnc" id="L259" title="All 2 branches missed.">        if ( m_session.getMessages( INSTALL_ERROR ).length == 0 )</span>
+        {
+<span class="nc" id="L261">            m_validated = true;</span>
+        }
+<span class="nc" id="L263">        return m_validated;</span>
+    }
+        
+    /**
+     * Sets a property based on the value of an HTTP request parameter.
+     * If the parameter is not found, a default value is used instead.
+     * @param param the parameter containing the value we will extract
+     * @param defaultValue the default to use if the parameter was not passed
+     * in the request
+     */
+    private void parseProperty( String param, String defaultValue )
+    {
+<span class="nc" id="L275">        String value = m_request.getParameter( param );</span>
+<span class="nc bnc" id="L276" title="All 2 branches missed.">        if ( value == null )</span>
+        {
+<span class="nc" id="L278">            value = defaultValue;</span>
+        }
+<span class="nc" id="L280">        m_props.put(param, value);</span>
+<span class="nc" id="L281">    }</span>
+    
+    /**
+     * Simply sanitizes any path which contains backslashes (sometimes Windows
+     * users may have them) by expanding them to double-backslashes
+     * @param key the key of the property to sanitize
+     */
+    private void sanitizePath( String key )
+    {
+<span class="nc" id="L290">        String s = m_props.getProperty( key );</span>
+<span class="nc" id="L291">        s = TextUtil.replaceString(s, &quot;\\&quot;, &quot;\\\\&quot; );</span>
+<span class="nc" id="L292">        s = s.trim();</span>
+<span class="nc" id="L293">        m_props.put( key, s );</span>
+<span class="nc" id="L294">    }</span>
+    
+    private void validateNotNull( String key, String message )
+    {
+<span class="nc" id="L298">        String value = m_props.getProperty( key );</span>
+<span class="nc bnc" id="L299" title="All 4 branches missed.">        if ( value == null || value.length() == 0 )</span>
+        {
+<span class="nc" id="L301">            m_session.addMessage( INSTALL_ERROR, message );</span>
+        }
+<span class="nc" id="L303">    }</span>
+    
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

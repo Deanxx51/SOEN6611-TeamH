@@ -1,0 +1,894 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiContext.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">WikiContext.java</span></div><h1>WikiContext.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki;
+
+import java.security.Permission;
+import java.security.Principal;
+import java.util.HashMap;
+import java.util.PropertyPermission;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpSession;
+import javax.servlet.jsp.PageContext;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.permissions.AllPermission;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.tags.WikiTagBase;
+import org.apache.wiki.ui.Command;
+import org.apache.wiki.ui.CommandResolver;
+import org.apache.wiki.ui.GroupCommand;
+import org.apache.wiki.ui.Installer;
+import org.apache.wiki.ui.PageCommand;
+import org.apache.wiki.ui.WikiCommand;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  &lt;p&gt;Provides state information throughout the processing of a page.  A
+ *  WikiContext is born when the JSP pages that are the main entry
+ *  points, are invoked.  The JSPWiki engine creates the new
+ *  WikiContext, which basically holds information about the page, the
+ *  handling engine, and in which context (view, edit, etc) the
+ *  call was done.&lt;/p&gt;
+ *  &lt;p&gt;A WikiContext also provides request-specific variables, which can
+ *  be used to communicate between plugins on the same page, or
+ *  between different instances of the same plugin.  A WikiContext
+ *  variable is valid until the processing of the page has ended.  For
+ *  an example, please see the Counter plugin.&lt;/p&gt;
+ *  &lt;p&gt;When a WikiContext is created, it automatically associates a
+ *  {@link WikiSession} object with the user's HttpSession. The
+ *  WikiSession contains information about the user's authentication
+ *  status, and is consulted by {@link #getCurrentUser()}.
+ *  object&lt;/p&gt;
+ *  &lt;p&gt;Do not cache the page object that you get from the WikiContext; always
+ *  use getPage()!&lt;/p&gt;
+ *
+ *  @see org.apache.wiki.plugin.Counter
+ *
+ */
+public class WikiContext
+    implements Cloneable, Command
+{
+<span class="fc" id="L71">    private    Command m_command = null;</span>
+
+    private    WikiPage   m_page;
+    private    WikiPage   m_realPage;
+    private    WikiEngine m_engine;
+<span class="fc" id="L76">    private    String     m_template = &quot;default&quot;;</span>
+    
+<span class="fc" id="L78">    private    HashMap&lt;String,Object&gt; m_variableMap = new HashMap&lt;&gt;();</span>
+
+    /** Stores the HttpServletRequest.  May be null, if the request did not come from a servlet. */
+<span class="fc" id="L81">    protected  HttpServletRequest m_request = null;</span>
+
+<span class="fc" id="L83">    private    WikiSession m_session = null;</span>
+    
+    /** User is administering JSPWiki (Install, SecurityConfig). */
+<span class="fc" id="L86">    public static final String INSTALL = WikiCommand.INSTALL.getRequestContext();</span>
+
+    /** The VIEW context - the user just wants to view the page contents. */
+<span class="fc" id="L89">    public static final String VIEW = PageCommand.VIEW.getRequestContext();</span>
+
+    /** User wants to view or administer workflows. */
+<span class="fc" id="L92">    public static final String WORKFLOW = WikiCommand.WORKFLOW.getRequestContext();</span>
+
+    /** The EDIT context - the user is editing the page. */
+<span class="fc" id="L95">    public static final String EDIT = PageCommand.EDIT.getRequestContext();</span>
+
+    /** User is preparing for a login/authentication. */
+<span class="fc" id="L98">    public static final String LOGIN = WikiCommand.LOGIN.getRequestContext();</span>
+
+    /** User is preparing to log out. */
+<span class="fc" id="L101">    public static final String LOGOUT = WikiCommand.LOGOUT.getRequestContext();</span>
+
+    /** JSPWiki wants to display a message. */
+<span class="fc" id="L104">    public static final String MESSAGE = WikiCommand.MESSAGE.getRequestContext();</span>
+
+    /** User is viewing a DIFF between the two versions of the page. */
+<span class="fc" id="L107">    public static final String DIFF = PageCommand.DIFF.getRequestContext();</span>
+
+    /** User is viewing page history. */
+<span class="fc" id="L110">    public static final String INFO = PageCommand.INFO.getRequestContext();</span>
+
+    /** User is previewing the changes he just made. */
+<span class="fc" id="L113">    public static final String PREVIEW = PageCommand.PREVIEW.getRequestContext();</span>
+
+    /** User has an internal conflict, and does quite not know what to
+        do. Please provide some counseling. */
+<span class="fc" id="L117">    public static final String CONFLICT = PageCommand.CONFLICT.getRequestContext();</span>
+
+    /** An error has been encountered and the user needs to be informed. */
+<span class="fc" id="L120">    public static final String ERROR = WikiCommand.ERROR.getRequestContext();</span>
+
+    /** User is uploading something. */
+<span class="fc" id="L123">    public static final String UPLOAD = PageCommand.UPLOAD.getRequestContext();</span>
+
+    /** User is commenting something. */
+<span class="fc" id="L126">    public static final String COMMENT = PageCommand.COMMENT.getRequestContext();</span>
+
+    /** User is searching for content. */
+<span class="fc" id="L129">    public static final String FIND = WikiCommand.FIND.getRequestContext();</span>
+
+    /** User wishes to create a new group */
+<span class="fc" id="L132">    public static final String CREATE_GROUP = WikiCommand.CREATE_GROUP.getRequestContext();</span>
+
+    /** User is deleting an existing group. */
+<span class="fc" id="L135">    public static final String DELETE_GROUP = GroupCommand.DELETE_GROUP.getRequestContext();</span>
+
+    /** User is editing an existing group. */
+<span class="fc" id="L138">    public static final String EDIT_GROUP = GroupCommand.EDIT_GROUP.getRequestContext();</span>
+
+    /** User is viewing an existing group */
+<span class="fc" id="L141">    public static final String VIEW_GROUP = GroupCommand.VIEW_GROUP.getRequestContext();</span>
+
+    /** User is editing preferences */
+<span class="fc" id="L144">    public static final String PREFS = WikiCommand.PREFS.getRequestContext();</span>
+
+    /** User is renaming a page. */
+<span class="fc" id="L147">    public static final String RENAME = PageCommand.RENAME.getRequestContext();</span>
+
+    /** User is deleting a page or an attachment. */
+<span class="fc" id="L150">    public static final String DELETE = PageCommand.DELETE.getRequestContext();</span>
+
+    /** User is downloading an attachment. */
+<span class="fc" id="L153">    public static final String ATTACH = PageCommand.ATTACH.getRequestContext();</span>
+
+    /** RSS feed is being generated. */
+<span class="fc" id="L156">    public static final String RSS = PageCommand.RSS.getRequestContext();</span>
+
+    /** This is not a JSPWiki context, use it to access static files. */
+<span class="fc" id="L159">    public static final String NONE = PageCommand.NONE.getRequestContext();</span>
+
+    /** Same as NONE; this is just a clarification. */
+<span class="fc" id="L162">    public static final String OTHER = PageCommand.OTHER.getRequestContext();</span>
+
+    /** User is doing administrative things. */
+<span class="fc" id="L165">    public static final String ADMIN = WikiCommand.ADMIN.getRequestContext();</span>
+
+<span class="fc" id="L167">    private static final Logger log = Logger.getLogger( WikiContext.class );</span>
+
+<span class="fc" id="L169">    private static final Permission DUMMY_PERMISSION = new PropertyPermission( &quot;os.name&quot;, &quot;read&quot; );</span>
+
+    /**
+     *  Create a new WikiContext for the given WikiPage. Delegates to
+     * {@link #WikiContext(WikiEngine, HttpServletRequest, WikiPage)}.
+     *  @param engine The WikiEngine that is handling the request.
+     *  @param page   The WikiPage.  If you want to create a
+     *  WikiContext for an older version of a page, you must use this
+     *  constructor.
+     */
+    public WikiContext( WikiEngine engine, WikiPage page )
+    {
+<span class="fc" id="L181">        this( engine, null, findCommand( engine, null, page ) );</span>
+<span class="fc" id="L182">    }</span>
+
+    /**
+     * &lt;p&gt;
+     * Creates a new WikiContext for the given WikiEngine, Command and
+     * HttpServletRequest.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * This constructor will also look up the HttpSession associated with the
+     * request, and determine if a WikiSession object is present. If not, a new
+     * one is created.
+     * &lt;/p&gt;
+     * @param engine The WikiEngine that is handling the request
+     * @param request The HttpServletRequest that should be associated with this
+     *            context. This parameter may be &lt;code&gt;null&lt;/code&gt;.
+     * @param command the command
+     * @throws IllegalArgumentException if &lt;code&gt;engine&lt;/code&gt; or
+     *             &lt;code&gt;command&lt;/code&gt; are &lt;code&gt;null&lt;/code&gt;
+     */
+    public WikiContext( WikiEngine engine, HttpServletRequest request, Command command )
+        throws IllegalArgumentException
+    {
+<span class="fc" id="L204">        super();</span>
+<span class="pc bpc" id="L205" title="2 of 4 branches missed.">        if ( engine == null || command == null )</span>
+        {
+<span class="nc" id="L207">            throw new IllegalArgumentException( &quot;Parameter engine and command must not be null.&quot; );</span>
+        }
+
+<span class="fc" id="L210">        m_engine = engine;</span>
+<span class="fc" id="L211">        m_request = request;</span>
+<span class="fc" id="L212">        m_session = WikiSession.getWikiSession( engine, request );</span>
+<span class="fc" id="L213">        m_command = command;</span>
+
+        // If PageCommand, get the WikiPage
+<span class="pc bpc" id="L216" title="1 of 2 branches missed.">        if( command instanceof PageCommand )</span>
+        {
+<span class="fc" id="L218">            m_page = (WikiPage)((PageCommand)command).getTarget();</span>
+        }
+
+        // If page not supplied, default to front page to avoid NPEs
+<span class="fc bfc" id="L222" title="All 2 branches covered.">        if( m_page == null )</span>
+        {
+<span class="fc" id="L224">            m_page = m_engine.getPage( m_engine.getFrontPage() );</span>
+
+            // Front page does not exist?
+<span class="pc bpc" id="L227" title="1 of 2 branches missed.">            if( m_page == null )</span>
+            {
+<span class="fc" id="L229">                m_page = new WikiPage( m_engine, m_engine.getFrontPage() );</span>
+            }
+        }
+
+<span class="fc" id="L233">        m_realPage = m_page;</span>
+
+        // Special case: retarget any empty 'view' PageCommands to the front page
+<span class="pc bpc" id="L236" title="1 of 4 branches missed.">        if ( PageCommand.VIEW.equals( command ) &amp;&amp; command.getTarget() == null )</span>
+        {
+<span class="fc" id="L238">            m_command = command.targetedCommand( m_page );</span>
+        }
+
+        // Debugging...
+<span class="pc bpc" id="L242" title="1 of 2 branches missed.">        if( log.isDebugEnabled() )</span>
+        {
+<span class="nc bnc" id="L244" title="All 2 branches missed.">            HttpSession session = ( request == null ) ? null : request.getSession( false );</span>
+<span class="nc bnc" id="L245" title="All 2 branches missed.">            String sid = ( session == null ) ? &quot;(null)&quot; : session.getId();</span>
+<span class="nc" id="L246">            log.debug( &quot;Creating WikiContext for session ID=&quot; + sid + &quot;; target=&quot; + getName() );</span>
+        }
+
+        // Figure out what template to use
+<span class="fc" id="L250">        setDefaultTemplate( request );</span>
+<span class="fc" id="L251">    }</span>
+
+    /**
+     * Creates a new WikiContext for the given WikiEngine, WikiPage and
+     * HttpServletRequest. This method simply looks up the appropriate Command
+     * using {@link #findCommand(WikiEngine, HttpServletRequest, WikiPage)} and
+     * delegates to
+     * {@link #WikiContext(WikiEngine, HttpServletRequest, Command)}.
+     * @param engine The WikiEngine that is handling the request
+     * @param request The HttpServletRequest that should be associated with this
+     *            context. This parameter may be &lt;code&gt;null&lt;/code&gt;.
+     * @param page The WikiPage. If you want to create a WikiContext for an
+     *            older version of a page, you must supply this parameter
+     */
+    public WikiContext(WikiEngine engine, HttpServletRequest request, WikiPage page)
+    {
+<span class="fc" id="L267">        this( engine, request, findCommand( engine, request, page ) );</span>
+<span class="fc" id="L268">    }</span>
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.ui.Command#getContentTemplate()
+     */
+    @Override
+	public String getContentTemplate()
+    {
+<span class="nc" id="L277">        return m_command.getContentTemplate();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.ui.Command#getJSP()
+     */
+    @Override
+	public String getJSP()
+    {
+<span class="nc" id="L287">        return m_command.getContentTemplate();</span>
+    }
+
+    /**
+     *  Sets a reference to the real page whose content is currently being
+     *  rendered.
+     *  &lt;p&gt;
+     *  Sometimes you may want to render the page using some other page's context.
+     *  In those cases, it is highly recommended that you set the setRealPage()
+     *  to point at the real page you are rendering.  Please see InsertPageTag
+     *  for an example.
+     *  &lt;p&gt;
+     *  Also, if your plugin e.g. does some variable setting, be aware that if it
+     *  is embedded in the LeftMenu or some other page added with InsertPageTag,
+     *  you should consider what you want to do - do you wish to really reference
+     *  the &quot;master&quot; page or the included page.
+     *
+     *  @param page  The real page which is being rendered.
+     *  @return The previous real page
+     *  @since 2.3.14
+     *  @see org.apache.wiki.tags.InsertPageTag
+     */
+    public WikiPage setRealPage( WikiPage page )
+    {
+<span class="nc" id="L311">        WikiPage old = m_realPage;</span>
+<span class="nc" id="L312">        m_realPage = page;</span>
+<span class="nc" id="L313">        updateCommand( m_command.getRequestContext() );</span>
+<span class="nc" id="L314">        return old;</span>
+    }
+
+    /**
+     *  Gets a reference to the real page whose content is currently being rendered.
+     *  If your plugin e.g. does some variable setting, be aware that if it
+     *  is embedded in the LeftMenu or some other page added with InsertPageTag,
+     *  you should consider what you want to do - do you wish to really reference
+     *  the &quot;master&quot; page or the included page.
+     *  &lt;p&gt;
+     *  For example, in the default template, there is a page called &quot;LeftMenu&quot;.
+     *  Whenever you access a page, e.g. &quot;Main&quot;, the master page will be Main, and
+     *  that's what the getPage() will return - regardless of whether your plugin
+     *  resides on the LeftMenu or on the Main page.  However, getRealPage()
+     *  will return &quot;LeftMenu&quot;.
+     *
+     *  @return A reference to the real page.
+     *  @see org.apache.wiki.tags.InsertPageTag
+     *  @see org.apache.wiki.parser.JSPWikiMarkupParser
+     */
+    public WikiPage getRealPage()
+    {
+<span class="fc" id="L336">        return m_realPage;</span>
+    }
+
+    /**
+     *  Figure out to which page we are really going to.  Considers
+     *  special page names from the jspwiki.properties, and possible aliases.
+     *  This method forwards requests to
+     *  {@link org.apache.wiki.ui.CommandResolver#getSpecialPageReference(String)}.
+     *  @return A complete URL to the new page to redirect to
+     *  @since 2.2
+     */
+
+    public String getRedirectURL()
+    {
+<span class="nc" id="L350">        String pagename = m_page.getName();</span>
+<span class="nc" id="L351">        String redirURL = m_engine.getCommandResolver().getSpecialPageReference( pagename );</span>
+
+<span class="nc bnc" id="L353" title="All 2 branches missed.">        if( redirURL == null )</span>
+        {
+<span class="nc" id="L355">            String alias = (String)m_page.getAttribute( WikiPage.ALIAS );</span>
+
+<span class="nc bnc" id="L357" title="All 2 branches missed.">            if( alias != null )</span>
+            {
+<span class="nc" id="L359">                redirURL = getViewURL( alias );</span>
+            }
+            else
+            {
+<span class="nc" id="L363">                redirURL = (String)m_page.getAttribute( WikiPage.REDIRECT );</span>
+            }
+        }
+
+<span class="nc" id="L367">        return redirURL;</span>
+    }
+
+    /**
+     *  Returns the handling engine.
+     *
+     *  @return The wikiengine owning this context.
+     */
+    public WikiEngine getEngine()
+    {
+<span class="fc" id="L377">        return m_engine;</span>
+    }
+
+    /**
+     *  Returns the page that is being handled.
+     *
+     *  @return the page which was fetched.
+     */
+    public WikiPage getPage()
+    {
+<span class="fc" id="L387">        return m_page;</span>
+    }
+
+    /**
+     *  Sets the page that is being handled.
+     *
+     *  @param page The wikipage
+     *  @since 2.1.37.
+     */
+    public void setPage( WikiPage page )
+    {
+<span class="fc" id="L398">        m_page = page;</span>
+<span class="fc" id="L399">        updateCommand( m_command.getRequestContext() );</span>
+<span class="fc" id="L400">    }</span>
+
+    /**
+     *  Returns the request context.
+     *  @return The name of the request context (e.g. VIEW).
+     */
+    @Override
+	public String getRequestContext()
+    {
+<span class="fc" id="L409">        return m_command.getRequestContext();</span>
+    }
+
+    /**
+     *  Sets the request context.  See above for the different
+     *  request contexts (VIEW, EDIT, etc.)
+     *
+     *  @param arg The request context (one of the predefined contexts.)
+     */
+    public void setRequestContext( String arg )
+    {
+<span class="fc" id="L420">        updateCommand( arg );</span>
+<span class="fc" id="L421">    }</span>
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.ui.Command#getTarget()
+     */
+    @Override
+	public Object getTarget()
+    {
+<span class="nc" id="L430">        return m_command.getTarget();</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     * @see org.apache.wiki.ui.Command#getURLPattern()
+     */
+    @Override
+	public String getURLPattern()
+    {
+<span class="nc" id="L440">        return m_command.getURLPattern();</span>
+    }
+
+    /**
+     *  Gets a previously set variable.
+     *
+     *  @param key The variable name.
+     *  @return The variable contents.
+     */
+    public Object getVariable( String key )
+    {
+<span class="fc" id="L451">        return m_variableMap.get( key );</span>
+    }
+
+    /**
+     *  Sets a variable.  The variable is valid while the WikiContext is valid,
+     *  i.e. while page processing continues.  The variable data is discarded
+     *  once the page processing is finished.
+     *
+     *  @param key The variable name.
+     *  @param data The variable value.
+     */
+    public void setVariable( String key, Object data )
+    {
+<span class="fc" id="L464">        m_variableMap.put( key, data );</span>
+<span class="fc" id="L465">        updateCommand( m_command.getRequestContext() );</span>
+<span class="fc" id="L466">    }</span>
+
+    /**
+     * This is just a simple helper method which will first check the context
+     * if there is already an override in place, and if there is not,
+     * it will then check the given properties.
+     *
+     * @param key      What key are we searching for?
+     * @param defValue Default value for the boolean
+     * @return  {@code true} or {@code false}.
+     */
+    public boolean getBooleanWikiProperty( final String key, final boolean defValue ) {
+<span class="fc" id="L478">        Object bool = getVariable( key );</span>
+<span class="pc bpc" id="L479" title="1 of 2 branches missed.">        if( bool != null ) {</span>
+<span class="nc" id="L480">            return TextUtil.isPositive( (String) bool );</span>
+        }
+
+<span class="fc" id="L483">        return TextUtil.getBooleanProperty( getEngine().getWikiProperties(), key, defValue );</span>
+    }
+
+    /**
+     *  This method will safely return any HTTP parameters that
+     *  might have been defined.  You should use this method instead
+     *  of peeking directly into the result of getHttpRequest(), since
+     *  this method is smart enough to do all of the right things,
+     *  figure out UTF-8 encoded parameters, etc.
+     *
+     *  @since 2.0.13.
+     *  @param paramName Parameter name to look for.
+     *  @return HTTP parameter, or null, if no such parameter existed.
+     */
+    public String getHttpParameter( String paramName )
+    {
+<span class="fc" id="L499">        String result = null;</span>
+
+<span class="pc bpc" id="L501" title="1 of 2 branches missed.">        if( m_request != null )</span>
+        {
+<span class="fc" id="L503">            result = m_request.getParameter( paramName );</span>
+        }
+
+<span class="fc" id="L506">        return result;</span>
+    }
+
+    /**
+     *  If the request did originate from a HTTP request,
+     *  then the HTTP request can be fetched here.  However, it the request
+     *  did NOT originate from a HTTP request, then this method will
+     *  return null, and YOU SHOULD CHECK FOR IT!
+     *
+     *  @return Null, if no HTTP request was done.
+     *  @since 2.0.13.
+     */
+    public HttpServletRequest getHttpRequest()
+    {
+<span class="fc" id="L520">        return m_request;</span>
+    }
+
+    /**
+     *  Sets the template to be used for this request.
+     *
+     *  @param dir The template name
+     *  @since 2.1.15.
+     */
+    public void setTemplate( String dir )
+    {
+<span class="fc" id="L531">        m_template = dir;</span>
+<span class="fc" id="L532">    }</span>
+
+    /**
+     * Returns the target of this wiki context: a page, group name or JSP. If
+     * the associated Command is a PageCommand, this method returns the page's
+     * name. Otherwise, this method delegates to the associated Command's
+     * {@link org.apache.wiki.ui.Command#getName()} method. Calling classes
+     * can rely on the results of this method for looking up canonically-correct
+     * page or group names. Because it does not automatically assume that the
+     * wiki context is a PageCommand, calling this method is inherently safer
+     * than calling &lt;code&gt;getPage().getName()&lt;/code&gt;.
+     * @return the name of the target of this wiki context
+     * @see org.apache.wiki.ui.PageCommand#getName()
+     * @see org.apache.wiki.ui.GroupCommand#getName()
+     */
+    @Override
+	public String getName()
+    {
+<span class="pc bpc" id="L550" title="1 of 2 branches missed.">        if ( m_command instanceof PageCommand )</span>
+        {
+<span class="pc bpc" id="L552" title="1 of 2 branches missed.">            return m_page != null ? m_page.getName() : &quot;&lt;no page&gt;&quot;;</span>
+        }
+<span class="nc" id="L554">        return m_command.getName();</span>
+    }
+
+    /**
+     *  Gets the template that is to be used throughout this request.
+     *  @since 2.1.15.
+     *  @return template name
+     */
+    public String getTemplate()
+    {
+<span class="nc" id="L564">        return m_template;</span>
+    }
+
+    /**
+     *  Convenience method that gets the current user. Delegates the
+     *  lookup to the WikiSession associated with this WikiContect.
+     *  May return null, in case the current
+     *  user has not yet been determined; or this is an internal system.
+     *  If the WikiSession has not been set, &lt;em&gt;always&lt;/em&gt; returns null.
+     *
+     *  @return The current user; or maybe null in case of internal calls.
+     */
+    public Principal getCurrentUser()
+    {
+<span class="pc bpc" id="L578" title="1 of 2 branches missed.">        if (m_session == null)</span>
+        {
+            // This shouldn't happen, really...
+<span class="nc" id="L581">            return WikiPrincipal.GUEST;</span>
+        }
+<span class="fc" id="L583">        return m_session.getUserPrincipal();</span>
+    }
+
+    /**
+     *  A shortcut to generate a VIEW url.
+     *
+     *  @param page The page to which to link.
+     *  @return An URL to the page.  This honours the current absolute/relative setting.
+     */
+    public String getViewURL( String page )
+    {
+<span class="fc" id="L594">        return getURL( VIEW, page, null );</span>
+    }
+
+    /**
+     *  Creates an URL for the given request context.
+     *
+     *  @param context e.g. WikiContext.EDIT
+     *  @param page The page to which to link
+     *  @return An URL to the page, honours the absolute/relative setting in jspwiki.properties
+     */
+    public String getURL( String context,
+                          String page )
+    {
+<span class="fc" id="L607">        return getURL( context, page, null );</span>
+    }
+
+    /**
+     *  Returns an URL from a page. It this WikiContext instance was constructed
+     *  with an actual HttpServletRequest, we will attempt to construct the
+     *  URL using HttpUtil, which preserves the HTTPS portion if it was used.
+     *
+     *  @param context The request context (e.g. WikiContext.UPLOAD)
+     *  @param page    The page to which to link
+     *  @param params  A list of parameters, separated with &quot;&amp;amp;&quot;
+     *
+     *  @return An URL to the given context and page.
+     */
+    public String getURL( String context,
+                          String page,
+                          String params )
+    {
+<span class="fc" id="L625">        boolean absolute = &quot;absolute&quot;.equals(m_engine.getVariable( this, WikiEngine.PROP_REFSTYLE ));</span>
+
+        // FIXME: is rather slow
+<span class="fc" id="L628">        return m_engine.getURL( context,</span>
+                                page,
+                                params,
+                                absolute );
+
+    }
+
+    /**
+     * Returns the Command associated with this WikiContext.
+     * @return the command
+     */
+    public Command getCommand()
+    {
+<span class="nc" id="L641">        return m_command;</span>
+    }
+
+    /**
+     *  Returns a shallow clone of the WikiContext.
+     *
+     *  @since 2.1.37.
+     *  @return A shallow clone of the WikiContext
+     */
+    @Override
+	public Object clone()
+    {
+        try
+        {
+            // super.clone() must always be called to make sure that inherited objects
+            // get the right type
+<span class="fc" id="L657">            WikiContext copy = (WikiContext)super.clone();</span>
+
+<span class="fc" id="L659">            copy.m_engine = m_engine;</span>
+<span class="fc" id="L660">            copy.m_command = m_command;</span>
+
+<span class="fc" id="L662">            copy.m_template    = m_template;</span>
+<span class="fc" id="L663">            copy.m_variableMap = m_variableMap;</span>
+<span class="fc" id="L664">            copy.m_request     = m_request;</span>
+<span class="fc" id="L665">            copy.m_session     = m_session;</span>
+<span class="fc" id="L666">            copy.m_page        = m_page;</span>
+<span class="fc" id="L667">            copy.m_realPage    = m_realPage;</span>
+<span class="fc" id="L668">            return copy;</span>
+        }
+<span class="nc" id="L670">        catch( CloneNotSupportedException e ){} // Never happens</span>
+
+<span class="nc" id="L672">        return null;</span>
+    }
+
+    /**
+     *  Creates a deep clone of the WikiContext.  This is useful when you want
+     *  to be sure that you don't accidentally mess with page attributes, etc.
+     *
+     *  @since  2.8.0
+     *  @return A deep clone of the WikiContext.
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public WikiContext deepClone()
+    {
+        try
+        {
+            // super.clone() must always be called to make sure that inherited objects
+            // get the right type
+<span class="nc" id="L689">            WikiContext copy = (WikiContext)super.clone();</span>
+
+            //  No need to deep clone these
+<span class="nc" id="L692">            copy.m_engine  = m_engine;</span>
+<span class="nc" id="L693">            copy.m_command = m_command; // Static structure</span>
+
+<span class="nc" id="L695">            copy.m_template    = m_template;</span>
+<span class="nc" id="L696">            copy.m_variableMap = (HashMap&lt;String,Object&gt;)m_variableMap.clone();</span>
+<span class="nc" id="L697">            copy.m_request     = m_request;</span>
+<span class="nc" id="L698">            copy.m_session     = m_session;</span>
+<span class="nc" id="L699">            copy.m_page        = (WikiPage)m_page.clone();</span>
+<span class="nc" id="L700">            copy.m_realPage    = (WikiPage)m_realPage.clone();</span>
+<span class="nc" id="L701">            return copy;</span>
+        }
+<span class="nc" id="L703">        catch( CloneNotSupportedException e ){} // Never happens</span>
+
+<span class="nc" id="L705">        return null;</span>
+    }
+
+    /**
+     *  Returns the WikiSession associated with the context.
+     *  This method is guaranteed to always return a valid WikiSession.
+     *  If this context was constructed without an associated
+     *  HttpServletRequest, it will return {@link WikiSession#guestSession(WikiEngine)}.
+     *
+     *  @return The WikiSession associate with this context.
+     */
+    public WikiSession getWikiSession()
+    {
+<span class="fc" id="L718">        return m_session;</span>
+    }
+
+    /**
+     *  This method can be used to find the WikiContext programmatically
+     *  from a JSP PageContext. We check the request context.
+     *  The wiki context, if it exists,
+     *  is looked up using the key
+     *  {@link org.apache.wiki.tags.WikiTagBase#ATTR_CONTEXT}.
+     *
+     *  @since 2.4
+     *  @param pageContext the JSP page context
+     *  @return Current WikiContext, or null, of no context exists.
+     */
+    public static WikiContext findContext( PageContext pageContext )
+    {
+<span class="nc" id="L734">        HttpServletRequest request = (HttpServletRequest) pageContext.getRequest();</span>
+<span class="nc" id="L735">        WikiContext context = (WikiContext)request.getAttribute( WikiTagBase.ATTR_CONTEXT );</span>
+<span class="nc" id="L736">        return context;</span>
+    }
+
+    /**
+     * Returns the permission required to successfully execute this context.
+     * For example, the a wiki context of VIEW for a certain page means that
+     * the PagePermission &quot;view&quot; is required for the page. In some cases, no
+     * particular permission is required, in which case a dummy permission will
+     * be returned ({@link java.util.PropertyPermission}&lt;code&gt; &quot;os.name&quot;,
+     * &quot;read&quot;&lt;/code&gt;). This method is guaranteed to always return a valid,
+     * non-null permission.
+     * @return the permission
+     * @since 2.4
+     */
+    @Override
+	public Permission requiredPermission()
+    {
+        // This is a filthy rotten hack -- absolutely putrid
+<span class="nc bnc" id="L754" title="All 2 branches missed.">        if ( WikiCommand.INSTALL.equals( m_command ) )</span>
+        {
+            // See if admin users exists
+            try
+            {
+<span class="nc" id="L759">                UserManager userMgr = m_engine.getUserManager();</span>
+<span class="nc" id="L760">                UserDatabase userDb = userMgr.getUserDatabase();</span>
+<span class="nc" id="L761">                userDb.findByLoginName( Installer.ADMIN_ID );</span>
+            }
+<span class="nc" id="L763">            catch ( NoSuchPrincipalException e )</span>
+            {
+<span class="nc" id="L765">                return DUMMY_PERMISSION;</span>
+<span class="nc" id="L766">            }</span>
+<span class="nc" id="L767">            return new AllPermission( m_engine.getApplicationName() );</span>
+        }
+
+        // TODO: we should really break the contract so that this
+        // method returns null, but until then we will use this hack
+<span class="nc bnc" id="L772" title="All 2 branches missed.">        if ( m_command.requiredPermission() == null )</span>
+        {
+<span class="nc" id="L774">            return DUMMY_PERMISSION;</span>
+        }
+
+<span class="nc" id="L777">        return m_command.requiredPermission();</span>
+    }
+
+    /**
+     * Associates a target with the current Command and returns
+     * the new targeted Command. If the Command associated with this
+     * WikiContext is already &quot;targeted&quot;, it is returned instead.
+     * @see org.apache.wiki.ui.Command#targetedCommand(java.lang.Object)
+     *
+     * {@inheritDoc}
+     */
+    @Override
+	public Command targetedCommand( Object target )
+    {
+<span class="nc bnc" id="L791" title="All 2 branches missed.">        if ( m_command.getTarget() == null )</span>
+        {
+<span class="nc" id="L793">            return m_command.targetedCommand( target );</span>
+        }
+<span class="nc" id="L795">        return m_command;</span>
+    }
+
+    /**
+     *  Returns true, if the current user has administrative permissions (i.e. the omnipotent
+     *  AllPermission).
+     *
+     *  @since 2.4.46
+     *  @return true, if the user has all permissions.
+     */
+    public boolean hasAdminPermissions() {
+<span class="nc" id="L806">        return m_engine.getAuthorizationManager().checkPermission( getWikiSession(), new AllPermission(m_engine.getApplicationName()) );</span>
+    }
+
+    /**
+     * Figures out which template a new WikiContext should be using.
+     * @param request the HTTP request
+     */
+    protected void setDefaultTemplate( HttpServletRequest request )
+    {
+<span class="fc" id="L815">        String defaultTemplate = m_engine.getTemplateDir();</span>
+
+        //  Figure out which template we should be using for this page.
+<span class="fc" id="L818">        String template = null;</span>
+<span class="fc bfc" id="L819" title="All 2 branches covered.">        if ( request != null )</span>
+        {
+<span class="fc" id="L821">            template = request.getParameter( &quot;skin&quot; );</span>
+        }
+
+        // If request doesn't supply the value, extract from wiki page
+<span class="pc bpc" id="L825" title="1 of 2 branches missed.">        if( template == null )</span>
+        {
+<span class="fc" id="L827">            WikiPage page = getPage();</span>
+<span class="pc bpc" id="L828" title="1 of 2 branches missed.">            if ( page != null )</span>
+            {
+<span class="fc" id="L830">                template = (String)page.getAttribute( WikiEngine.PROP_TEMPLATEDIR );</span>
+            }
+
+        }
+
+        // If something over-wrote the default, set the new value.
+<span class="pc bpc" id="L836" title="1 of 2 branches missed.">        if ( template != null )</span>
+        {
+<span class="nc" id="L838">            setTemplate( template );</span>
+        }
+        else
+        {
+<span class="fc" id="L842">            setTemplate( defaultTemplate );</span>
+        }
+<span class="fc" id="L844">    }</span>
+
+    /**
+     * Looks up and returns a PageCommand based on a supplied WikiPage and HTTP
+     * request. First, the appropriate Command is obtained by examining the HTTP
+     * request; the default is {@link PageCommand#VIEW}. If the Command is a
+     * PageCommand (and it should be, in most cases), a targeted Command is
+     * created using the (non-&lt;code&gt;null&lt;/code&gt;) WikiPage as target.
+     * @param engine the wiki engine
+     * @param request the HTTP request
+     * @param page the wiki page
+     * @return the correct command
+     */
+    protected static Command findCommand( WikiEngine engine, HttpServletRequest request, WikiPage page )
+    {
+<span class="fc" id="L859">        String defaultContext = PageCommand.VIEW.getRequestContext();</span>
+<span class="fc" id="L860">        Command command = engine.getCommandResolver().findCommand( request, defaultContext );</span>
+<span class="pc bpc" id="L861" title="1 of 4 branches missed.">        if ( command instanceof PageCommand &amp;&amp; page != null )</span>
+        {
+<span class="fc" id="L863">            command = command.targetedCommand( page );</span>
+        }
+<span class="fc" id="L865">        return command;</span>
+    }
+
+    /**
+     * Protected method that updates the internally cached Command.
+     * Will always be called when the page name, request context, or variable
+     * changes.
+     * @param requestContext the desired request context
+     * @since 2.4
+     */
+    protected void updateCommand( String requestContext )
+    {
+<span class="pc bpc" id="L877" title="1 of 2 branches missed.">        if ( requestContext == null )</span>
+        {
+<span class="nc" id="L879">            m_command = PageCommand.NONE;</span>
+        }
+        else
+        {
+<span class="fc" id="L883">            CommandResolver resolver = m_engine.getCommandResolver();</span>
+<span class="fc" id="L884">            m_command = resolver.findCommand( m_request, requestContext );</span>
+        }
+
+<span class="pc bpc" id="L887" title="1 of 4 branches missed.">        if ( m_command instanceof PageCommand &amp;&amp; m_page != null )</span>
+        {
+<span class="fc" id="L889">            m_command = m_command.targetedCommand( m_page );</span>
+        }
+<span class="fc" id="L891">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

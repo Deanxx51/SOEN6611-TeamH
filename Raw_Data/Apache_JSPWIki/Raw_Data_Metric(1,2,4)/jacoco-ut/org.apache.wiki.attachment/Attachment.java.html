@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Attachment.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.attachment</a> &gt; <span class="el_source">Attachment.java</span></div><h1>Attachment.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.     
+ */
+package org.apache.wiki.attachment;
+
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+
+/**
+ *  Describes an attachment.  Attachments are actually derivatives of
+ *  a WikiPage, since they do actually have a WikiName as well.
+ *
+ */
+public class Attachment
+    extends WikiPage
+{
+    private String m_fileName;
+    private String m_parentName;
+<span class="fc" id="L34">    private boolean m_cacheable = true;</span>
+
+    /**
+     *  Creates a new attachment.  The final name of the attachment will be 
+     *  a synthesis of the parent page name and the file name.
+     *  
+     *  @param engine     The WikiEngine which is hosting this attachment.
+     *  @param parentPage The page which will contain this attachment.
+     *  @param fileName   The file name for the attachment.
+     */
+    public Attachment( WikiEngine engine, String parentPage, String fileName )
+    {
+<span class="fc" id="L46">        super( engine, parentPage+&quot;/&quot;+fileName );</span>
+
+<span class="fc" id="L48">        m_parentName = parentPage;</span>
+<span class="fc" id="L49">        m_fileName   = fileName;</span>
+<span class="fc" id="L50">    }</span>
+
+    /**
+     *  Returns a human-readable, only-debugging-suitable description.
+     *  
+     *  @return A debugging string
+     */
+    public String toString()
+    {
+<span class="nc" id="L59">        return &quot;Attachment [&quot;+getName()+&quot;;mod=&quot;+getLastModified()+&quot;]&quot;;</span>
+    }
+
+    /**
+     *  Returns the file name of the attachment.
+     *  
+     *  @return A String with the file name.
+     */
+    public String getFileName()
+    {
+<span class="fc" id="L69">        return m_fileName;</span>
+    }
+
+    /**
+     *  Sets the file name of this attachment. 
+     *  
+     *  @param name The name of the attachment.  Must be a legal file name without
+     *              the path.
+     */
+    public void setFileName( String name )
+    {
+<span class="nc" id="L80">        m_fileName = name;</span>
+<span class="nc" id="L81">    }</span>
+
+    /**
+     *  Returns the name of the parent of this Attachment, i.e. the page
+     *  which contains this attachment.
+     *  
+     *  @return String depicting the parent of the attachment.
+     */
+    public String getParentName()
+    {
+<span class="fc" id="L91">        return m_parentName;</span>
+    }
+
+    /**
+     *  Returns true, if this attachment can be cached by the user agent.  By default
+     *  attachments are cacheable.
+     *  
+     *  @return False, if the attachment should not be cached by the user agent.
+     *  @since 2.5.34
+     */
+    public boolean isCacheable()
+    {
+<span class="nc" id="L103">        return m_cacheable;</span>
+    }
+
+    /**
+     *  Sets this attachment to be cacheable or not.  This mostly concerns things
+     *  like DynamicAttachments, but it may be useful for certain AttachmentProviders
+     *  as well.
+     *  
+     *  @param value True or false, depending on whether you want this attachment
+     *               to be cacheable or not.
+     *  @since 2.5.34
+     */
+    public void setCacheable(boolean value)
+    {
+<span class="nc" id="L117">        m_cacheable = value;</span>
+<span class="nc" id="L118">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

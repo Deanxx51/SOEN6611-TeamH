@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ContextualDiffProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.diff</a> &gt; <span class="el_source">ContextualDiffProvider.java</span></div><h1>ContextualDiffProvider.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+*/
+
+package org.apache.wiki.diff;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.StringTokenizer;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.util.TextUtil;
+import org.suigeneris.jrcs.diff.Diff;
+import org.suigeneris.jrcs.diff.DifferentiationFailedException;
+import org.suigeneris.jrcs.diff.Revision;
+import org.suigeneris.jrcs.diff.RevisionVisitor;
+import org.suigeneris.jrcs.diff.delta.AddDelta;
+import org.suigeneris.jrcs.diff.delta.ChangeDelta;
+import org.suigeneris.jrcs.diff.delta.Chunk;
+import org.suigeneris.jrcs.diff.delta.DeleteDelta;
+import org.suigeneris.jrcs.diff.delta.Delta;
+import org.suigeneris.jrcs.diff.myers.MyersDiff;
+
+
+/**
+ * A seriously better diff provider, which highlights changes word-by-word using
+ * CSS.
+ *
+ * Suggested by John Volkar.
+ *
+ */
+public class ContextualDiffProvider implements DiffProvider {
+
+<span class="fc" id="L54">    private static final Logger log = Logger.getLogger( ContextualDiffProvider.class );</span>
+
+    /**
+     *  A jspwiki.properties value to define how many characters are shown around the change context.
+     *  The current value is &lt;tt&gt;{@value}&lt;/tt&gt;.
+     */
+    public static final String PROP_UNCHANGED_CONTEXT_LIMIT = &quot;jspwiki.contextualDiffProvider.unchangedContextLimit&quot;;
+
+    //TODO all of these publics can become jspwiki.properties entries...
+    //TODO span title= can be used to get hover info...
+
+<span class="fc" id="L65">    public boolean m_emitChangeNextPreviousHyperlinks = true;</span>
+
+    //Don't use spans here the deletion and insertions are nested in this...
+<span class="fc" id="L68">    public String m_changeStartHtml    = &quot;&quot;; //This could be a image '&gt;' for a start marker</span>
+<span class="fc" id="L69">    public String m_changeEndHtml      = &quot;&quot;; //and an image for an end '&lt;' marker</span>
+<span class="fc" id="L70">    public String m_diffStart          = &quot;&lt;div class=\&quot;diff-wikitext\&quot;&gt;&quot;;</span>
+<span class="fc" id="L71">    public String m_diffEnd            = &quot;&lt;/div&gt;&quot;;</span>
+
+    // Unfortunately we need to do dumb HTML here for RSS feeds.
+
+<span class="fc" id="L75">    public String m_insertionStartHtml = &quot;&lt;font color=\&quot;#8000FF\&quot;&gt;&lt;span class=\&quot;diff-insertion\&quot;&gt;&quot;;</span>
+<span class="fc" id="L76">    public String m_insertionEndHtml   = &quot;&lt;/span&gt;&lt;/font&gt;&quot;;</span>
+<span class="fc" id="L77">    public String m_deletionStartHtml  = &quot;&lt;strike&gt;&lt;font color=\&quot;red\&quot;&gt;&lt;span class=\&quot;diff-deletion\&quot;&gt;&quot;;</span>
+<span class="fc" id="L78">    public String m_deletionEndHtml    = &quot;&lt;/span&gt;&lt;/font&gt;&lt;/strike&gt;&quot;;</span>
+<span class="fc" id="L79">    private String m_anchorPreIndex    = &quot;&lt;a name=\&quot;change-&quot;;</span>
+<span class="fc" id="L80">    private String m_anchorPostIndex   = &quot;\&quot; /&gt;&quot;;</span>
+<span class="fc" id="L81">    private String m_backPreIndex      = &quot;&lt;a class=\&quot;diff-nextprev\&quot; title=\&quot;Go to previous change\&quot; href=\&quot;#change-&quot;;</span>
+<span class="fc" id="L82">    private String m_backPostIndex     = &quot;\&quot;&gt;&amp;lt;&amp;lt;&lt;/a&gt;&quot;;</span>
+<span class="fc" id="L83">    private String m_forwardPreIndex   = &quot;&lt;a class=\&quot;diff-nextprev\&quot; title=\&quot;Go to next change\&quot; href=\&quot;#change-&quot;;</span>
+<span class="fc" id="L84">    private String m_forwardPostIndex  = &quot;\&quot;&gt;&amp;gt;&amp;gt;&lt;/a&gt;&quot;;</span>
+<span class="fc" id="L85">    public String m_elidedHeadIndicatorHtml = &quot;&lt;br/&gt;&lt;br/&gt;&lt;b&gt;...&lt;/b&gt;&quot;;</span>
+<span class="fc" id="L86">    public String m_elidedTailIndicatorHtml = &quot;&lt;b&gt;...&lt;/b&gt;&lt;br/&gt;&lt;br/&gt;&quot;;</span>
+<span class="fc" id="L87">    public String m_lineBreakHtml = &quot;&lt;br /&gt;&quot;;</span>
+<span class="fc" id="L88">    public String m_alternatingSpaceHtml = &quot;&amp;nbsp;&quot;;</span>
+
+    // This one, I will make property file based...
+    private static final int LIMIT_MAX_VALUE = (Integer.MAX_VALUE /2) - 1;
+<span class="fc" id="L92">    private int m_unchangedContextLimit = LIMIT_MAX_VALUE;</span>
+
+
+    /**
+     *  Constructs this provider.
+     */
+    public ContextualDiffProvider()
+<span class="fc" id="L99">    {}</span>
+
+    /**
+     * @see org.apache.wiki.WikiProvider#getProviderInfo()
+     * 
+     * {@inheritDoc}
+     */
+    public String getProviderInfo()
+    {
+<span class="nc" id="L108">        return &quot;ContextualDiffProvider&quot;;</span>
+    }
+
+    /**
+     * @see org.apache.wiki.WikiProvider#initialize(org.apache.wiki.WikiEngine,
+     *      java.util.Properties)
+     *      
+     * {@inheritDoc}
+     */
+    public void initialize(WikiEngine engine, Properties properties) throws NoRequiredPropertyException, IOException
+    {
+<span class="fc" id="L119">        String configuredLimit = properties.getProperty(PROP_UNCHANGED_CONTEXT_LIMIT, </span>
+<span class="fc" id="L120">                                                        Integer.toString(LIMIT_MAX_VALUE));</span>
+<span class="fc" id="L121">        int limit = LIMIT_MAX_VALUE;</span>
+        try
+        {
+<span class="fc" id="L124">            limit = Integer.parseInt(configuredLimit);</span>
+        }
+<span class="fc" id="L126">        catch (NumberFormatException e)</span>
+        {
+<span class="fc" id="L128">            log.warn(&quot;Failed to parseInt &quot; + PROP_UNCHANGED_CONTEXT_LIMIT + &quot;=&quot; + configuredLimit</span>
+                + &quot;   Will use a huge number as limit.&quot;, e);
+<span class="fc" id="L130">        }</span>
+<span class="fc" id="L131">        m_unchangedContextLimit = limit;</span>
+<span class="fc" id="L132">    }</span>
+
+
+
+    /**
+     * Do a colored diff of the two regions. This. is. serious. fun. ;-)
+     *
+     * @see org.apache.wiki.diff.DiffProvider#makeDiffHtml(WikiContext, String, String)
+     * 
+     * {@inheritDoc}
+     */
+    public synchronized String makeDiffHtml( WikiContext ctx, String wikiOld, String wikiNew )
+    {
+        //
+        // Sequencing handles lineterminator to &lt;br /&gt; and every-other consequtive space to a &amp;nbsp;
+        //
+<span class="fc" id="L148">        String[] alpha = sequence( TextUtil.replaceEntities( wikiOld ) );</span>
+<span class="fc" id="L149">        String[] beta  = sequence( TextUtil.replaceEntities( wikiNew ) );</span>
+
+<span class="fc" id="L151">        Revision rev = null;</span>
+        try
+        {
+<span class="fc" id="L154">            rev = Diff.diff( alpha, beta, new MyersDiff() );</span>
+        }
+<span class="nc" id="L156">        catch( DifferentiationFailedException dfe )</span>
+        {
+<span class="nc" id="L158">            log.error( &quot;Diff generation failed&quot;, dfe );</span>
+<span class="nc" id="L159">            return &quot;Error while creating version diff.&quot;;</span>
+<span class="fc" id="L160">        }</span>
+
+<span class="fc" id="L162">        int revSize = rev.size();</span>
+
+<span class="fc" id="L164">        StringBuffer sb = new StringBuffer();</span>
+
+<span class="fc" id="L166">        sb.append( m_diffStart );</span>
+
+        //
+        // The MyersDiff is a bit dumb by converting a single line multi-word diff into a series
+        // of Changes. The ChangeMerger pulls them together again...
+        //
+<span class="fc" id="L172">        ChangeMerger cm = new ChangeMerger( sb, alpha, revSize );</span>
+
+<span class="fc" id="L174">        rev.accept( cm );</span>
+
+<span class="fc" id="L176">        cm.shutdown();</span>
+
+<span class="fc" id="L178">        sb.append( m_diffEnd );</span>
+
+<span class="fc" id="L180">        return sb.toString();</span>
+    }
+
+    /**
+     * Take the string and create an array from it, split it first on newlines, making
+     * sure to preserve the newlines in the elements, split each resulting element on
+     * spaces, preserving the spaces.
+     *
+     * All this preseving of newlines and spaces is so the wikitext when diffed will have fidelity
+     * to it's original form.  As a side affect we see edits of purely whilespace.
+     */
+    private String[] sequence( String wikiText )
+    {
+<span class="fc" id="L193">        String[] linesArray = Diff.stringToArray( wikiText );</span>
+
+<span class="fc" id="L195">        List&lt;String&gt; list = new ArrayList&lt;String&gt;();</span>
+
+<span class="fc bfc" id="L197" title="All 2 branches covered.">        for( int i = 0; i &lt; linesArray.length; i++ )</span>
+        {
+<span class="fc" id="L199">            String line = linesArray[i];</span>
+
+<span class="fc" id="L201">            String lastToken = null;</span>
+<span class="fc" id="L202">            String token = null;</span>
+            // StringTokenizer might be discouraged but it still is perfect here...
+<span class="fc bfc" id="L204" title="All 2 branches covered.">            for (StringTokenizer st = new StringTokenizer( line, &quot; &quot;, true ); st.hasMoreTokens();)</span>
+            {
+<span class="fc" id="L206">                token = st.nextToken();</span>
+
+<span class="fc bfc" id="L208" title="All 4 branches covered.">                if(&quot; &quot;.equals( lastToken) &amp;&amp; &quot; &quot;.equals( token ))</span>
+<span class="fc" id="L209">                    token = m_alternatingSpaceHtml;</span>
+
+<span class="fc" id="L211">                list.add(token);</span>
+<span class="fc" id="L212">                lastToken = token;</span>
+            }
+
+<span class="fc" id="L215">            list.add(m_lineBreakHtml); // Line Break</span>
+        }
+
+<span class="fc" id="L218">        return list.toArray( new String[0] );</span>
+    }
+
+    /**
+     * This helper class does the housekeeping for merging
+     * our various changes down and also makes sure that the
+     * whole change process is threadsafe by encapsulating
+     * all necessary variables.
+     */
+    private final class ChangeMerger implements RevisionVisitor
+    {
+<span class="fc" id="L229">        private StringBuffer m_sb = null;</span>
+
+        /** Keeping score of the original lines to process */
+<span class="fc" id="L232">        private int m_max = -1;</span>
+
+<span class="fc" id="L234">        private int m_index = 0;</span>
+
+        /** Index of the next element to be copied into the output. */
+<span class="fc" id="L237">        private int m_firstElem = 0;</span>
+
+        /** Link Anchor counter */
+<span class="fc" id="L240">        private int m_count = 1;</span>
+
+        /** State Machine Mode */
+<span class="fc" id="L243">        private int m_mode = -1; /* -1: Unset, 0: Add, 1: Del, 2: Change mode */</span>
+
+        /** Buffer to coalesce the changes together */
+<span class="fc" id="L246">        private StringBuffer m_origBuf = null;</span>
+
+<span class="fc" id="L248">        private StringBuffer m_newBuf = null;</span>
+
+        /** Reference to the source string array */
+<span class="fc" id="L251">        private String[] m_origStrings = null;</span>
+
+        private ChangeMerger( final StringBuffer sb, final String[] origStrings, final int max )
+<span class="fc" id="L254">        {</span>
+<span class="fc" id="L255">            m_sb = sb;</span>
+<span class="pc bpc" id="L256" title="1 of 2 branches missed.">            m_origStrings = origStrings != null ? origStrings.clone() : null;</span>
+<span class="fc" id="L257">            m_max = max;</span>
+
+<span class="fc" id="L259">            m_origBuf = new StringBuffer();</span>
+<span class="fc" id="L260">            m_newBuf = new StringBuffer();</span>
+<span class="fc" id="L261">        }</span>
+
+        private void updateState( Delta delta )
+        {
+<span class="fc" id="L265">            m_index++;</span>
+
+<span class="fc" id="L267">            Chunk orig = delta.getOriginal();</span>
+
+<span class="fc bfc" id="L269" title="All 2 branches covered.">            if (orig.first() &gt; m_firstElem)</span>
+            {
+                // We &quot;skip&quot; some lines in the output.
+                // So flush out the last Change, if one exists.
+<span class="fc" id="L273">                flushChanges();</span>
+
+                // Allow us to &quot;skip&quot; large swaths of unchanged text, show a &quot;limited&quot; amound of
+                // unchanged context so the changes are shown in
+<span class="fc bfc" id="L277" title="All 2 branches covered.">                if ((orig.first() - m_firstElem) &gt; 2 * m_unchangedContextLimit)</span>
+                {
+<span class="fc bfc" id="L279" title="All 2 branches covered.">                    if (m_firstElem &gt; 0)</span>
+                    {
+<span class="fc" id="L281">                        int endIndex = Math.min( m_firstElem + m_unchangedContextLimit, m_origStrings.length -1 );</span>
+
+<span class="fc bfc" id="L283" title="All 2 branches covered.">                        for (int j = m_firstElem; j &lt; endIndex; j++)</span>
+<span class="fc" id="L284">                            m_sb.append(m_origStrings[j]);</span>
+
+<span class="fc" id="L286">                        m_sb.append(m_elidedTailIndicatorHtml);</span>
+                    }
+
+<span class="fc" id="L289">                    m_sb.append(m_elidedHeadIndicatorHtml);</span>
+
+<span class="fc" id="L291">                    int startIndex = Math.max(orig.first() - m_unchangedContextLimit, 0);</span>
+<span class="fc bfc" id="L292" title="All 2 branches covered.">                    for (int j = startIndex; j &lt; orig.first(); j++)</span>
+<span class="fc" id="L293">                        m_sb.append(m_origStrings[j]);</span>
+
+<span class="fc" id="L295">                }</span>
+                else
+                {
+                    // No need to skip anything, just output the whole range...
+<span class="fc bfc" id="L299" title="All 2 branches covered.">                    for (int j = m_firstElem; j &lt; orig.first(); j++)</span>
+<span class="fc" id="L300">                    m_sb.append( m_origStrings[j] );</span>
+                }
+            }
+<span class="fc" id="L303">            m_firstElem = orig.last() + 1;</span>
+<span class="fc" id="L304">        }</span>
+
+        public void visit( Revision rev )
+        {
+            // GNDN (Goes nowhere, does nothing)
+<span class="fc" id="L309">        }</span>
+
+        public void visit( AddDelta delta )
+        {
+<span class="fc" id="L313">            updateState( delta );</span>
+
+            // We have run Deletes up to now. Flush them out.
+<span class="pc bpc" id="L316" title="1 of 2 branches missed.">            if( m_mode == 1 )</span>
+            {
+<span class="nc" id="L318">                flushChanges();</span>
+<span class="nc" id="L319">                m_mode = -1;</span>
+            }
+            // We are in &quot;neutral mode&quot;. Start a new Change
+<span class="pc bpc" id="L322" title="1 of 2 branches missed.">            if( m_mode == -1 )</span>
+            {
+<span class="fc" id="L324">                m_mode = 0;</span>
+            }
+
+            // We are in &quot;add mode&quot;.
+<span class="pc bpc" id="L328" title="3 of 4 branches missed.">            if( m_mode == 0 || m_mode == 2 )</span>
+            {
+<span class="fc" id="L330">                addNew( delta.getRevised() );</span>
+<span class="fc" id="L331">                m_mode = 1;</span>
+            }
+<span class="fc" id="L333">        }</span>
+
+        public void visit( ChangeDelta delta )
+        {
+<span class="fc" id="L337">            updateState( delta );</span>
+
+            // We are in &quot;neutral mode&quot;. A Change might be merged with an add or delete.
+<span class="pc bpc" id="L340" title="1 of 2 branches missed.">            if( m_mode == -1 )</span>
+            {
+<span class="fc" id="L342">                m_mode = 2;</span>
+            }
+
+            // Add the Changes to the buffers.
+<span class="fc" id="L346">            addOrig( delta.getOriginal() );</span>
+<span class="fc" id="L347">            addNew( delta.getRevised() );</span>
+<span class="fc" id="L348">        }</span>
+
+        public void visit( DeleteDelta delta )
+        {
+<span class="fc" id="L352">            updateState( delta );</span>
+
+            // We have run Adds up to now. Flush them out.
+<span class="pc bpc" id="L355" title="1 of 2 branches missed.">            if( m_mode == 0 )</span>
+            {
+<span class="nc" id="L357">                flushChanges();</span>
+<span class="nc" id="L358">                m_mode = -1;</span>
+            }
+            // We are in &quot;neutral mode&quot;. Start a new Change
+<span class="pc bpc" id="L361" title="1 of 2 branches missed.">            if( m_mode == -1 )</span>
+            {
+<span class="fc" id="L363">                m_mode = 1;</span>
+            }
+
+            // We are in &quot;delete mode&quot;.
+<span class="pc bpc" id="L367" title="3 of 4 branches missed.">            if( m_mode == 1 || m_mode == 2 )</span>
+            {
+<span class="fc" id="L369">                addOrig( delta.getOriginal() );</span>
+<span class="fc" id="L370">                m_mode = 1;</span>
+            }
+<span class="fc" id="L372">        }</span>
+
+        public void shutdown()
+        {
+<span class="fc" id="L376">            m_index = m_max + 1; // Make sure that no hyperlink gets created</span>
+<span class="fc" id="L377">            flushChanges();</span>
+
+<span class="fc bfc" id="L379" title="All 2 branches covered.">            if (m_firstElem &lt; m_origStrings.length)</span>
+            {
+                // If there's more than the limit of the orginal left just emit limit and elided...
+<span class="fc bfc" id="L382" title="All 2 branches covered.">                if ((m_origStrings.length - m_firstElem) &gt; m_unchangedContextLimit)</span>
+                {
+<span class="fc" id="L384">                    int endIndex = Math.min( m_firstElem + m_unchangedContextLimit, m_origStrings.length -1 );</span>
+
+<span class="fc bfc" id="L386" title="All 2 branches covered.">                    for (int j = m_firstElem; j &lt; endIndex; j++)</span>
+<span class="fc" id="L387">                    m_sb.append( m_origStrings[j] );</span>
+
+<span class="fc" id="L389">                    m_sb.append(m_elidedTailIndicatorHtml);</span>
+<span class="fc" id="L390">                }</span>
+                else
+                // emit entire tail of original...
+                {
+<span class="fc bfc" id="L394" title="All 2 branches covered.">                    for (int j = m_firstElem; j &lt; m_origStrings.length; j++)</span>
+<span class="fc" id="L395">                        m_sb.append(m_origStrings[j]);</span>
+                }
+            }
+<span class="fc" id="L398">        }</span>
+
+        private void addOrig( Chunk chunk )
+        {
+<span class="pc bpc" id="L402" title="1 of 2 branches missed.">            if( chunk != null )</span>
+            {
+<span class="fc" id="L404">                chunk.toString( m_origBuf );</span>
+            }
+<span class="fc" id="L406">        }</span>
+
+        private void addNew( Chunk chunk )
+        {
+<span class="pc bpc" id="L410" title="1 of 2 branches missed.">            if( chunk != null )</span>
+            {
+<span class="fc" id="L412">                chunk.toString( m_newBuf );</span>
+            }
+<span class="fc" id="L414">        }</span>
+
+
+
+        private void flushChanges()
+        {
+
+<span class="fc bfc" id="L421" title="All 2 branches covered.">            if( m_newBuf.length() + m_origBuf.length() &gt; 0 )</span>
+            {
+                // This is the span element which encapsulates anchor and the change itself
+<span class="fc" id="L424">                m_sb.append( m_changeStartHtml );</span>
+
+                // Do we want to have a &quot;back link&quot;?
+<span class="pc bpc" id="L427" title="3 of 4 branches missed.">                if( m_emitChangeNextPreviousHyperlinks &amp;&amp; m_count &gt; 1 )</span>
+                {
+<span class="nc" id="L429">                    m_sb.append( m_backPreIndex );</span>
+<span class="nc" id="L430">                    m_sb.append( m_count - 1 );</span>
+<span class="nc" id="L431">                    m_sb.append( m_backPostIndex );</span>
+                }
+
+                // An anchor for the change.
+<span class="pc bpc" id="L435" title="1 of 2 branches missed.">                if (m_emitChangeNextPreviousHyperlinks)</span>
+                {
+<span class="nc" id="L437">                    m_sb.append( m_anchorPreIndex );</span>
+<span class="nc" id="L438">                    m_sb.append( m_count++ );</span>
+<span class="nc" id="L439">                    m_sb.append( m_anchorPostIndex );</span>
+                }
+
+                // ... has been added
+<span class="fc bfc" id="L443" title="All 2 branches covered.">                if( m_newBuf.length() &gt; 0 )</span>
+                {
+<span class="fc" id="L445">                    m_sb.append( m_insertionStartHtml );</span>
+<span class="fc" id="L446">                    m_sb.append( m_newBuf );</span>
+<span class="fc" id="L447">                    m_sb.append( m_insertionEndHtml );</span>
+                }
+
+                // .. has been removed
+<span class="fc bfc" id="L451" title="All 2 branches covered.">                if( m_origBuf.length() &gt; 0 )</span>
+                {
+<span class="fc" id="L453">                    m_sb.append( m_deletionStartHtml );</span>
+<span class="fc" id="L454">                    m_sb.append( m_origBuf );</span>
+<span class="fc" id="L455">                    m_sb.append( m_deletionEndHtml );</span>
+                }
+
+                // Do we want a &quot;forward&quot; link?
+<span class="pc bpc" id="L459" title="3 of 4 branches missed.">                if( m_emitChangeNextPreviousHyperlinks &amp;&amp; (m_index &lt; m_max) )</span>
+                {
+<span class="nc" id="L461">                    m_sb.append( m_forwardPreIndex );</span>
+<span class="nc" id="L462">                    m_sb.append( m_count ); // Has already been incremented.</span>
+<span class="nc" id="L463">                    m_sb.append( m_forwardPostIndex );</span>
+                }
+
+<span class="fc" id="L466">                m_sb.append( m_changeEndHtml );</span>
+
+                // Nuke the buffers.
+<span class="fc" id="L469">                m_origBuf = new StringBuffer();</span>
+<span class="fc" id="L470">                m_newBuf = new StringBuffer();</span>
+            }
+
+            // After a flush, everything is reset.
+<span class="fc" id="L474">            m_mode = -1;</span>
+<span class="fc" id="L475">        }</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Feed.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.rss</a> &gt; <span class="el_source">Feed.java</span></div><h1>Feed.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.rss;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.servlet.ServletContext;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.NoSuchVariableException;
+
+/**
+ * Represents an abstract feed.
+ */
+public abstract class Feed {
+<span class="fc" id="L35">    protected List&lt;Entry&gt; m_entries = new ArrayList&lt;Entry&gt;();</span>
+
+    protected String m_feedURL;
+    protected String m_channelTitle;
+    protected String m_channelDescription;
+    protected String m_channelLanguage;
+
+    protected WikiContext m_wikiContext;
+
+<span class="fc" id="L44">    protected String m_mode = RSSGenerator.MODE_WIKI;</span>
+
+    /**
+     * Wiki variable storing the blog's name.
+     */
+    public static final String VAR_BLOGNAME = &quot;blogname&quot;;
+
+    /**
+     * Figure out a site name for a feed.
+     *
+     * @param context the wiki context
+     * @return the site name
+     */
+    public static String getSiteName(WikiContext context) {
+<span class="nc" id="L58">        WikiEngine engine = context.getEngine();</span>
+
+<span class="nc" id="L60">        String blogname = null;</span>
+
+        try {
+<span class="nc" id="L63">            blogname = engine.getVariableManager().getValue(context, VAR_BLOGNAME);</span>
+<span class="nc" id="L64">        } catch (NoSuchVariableException e) {</span>
+<span class="nc" id="L65">        }</span>
+
+<span class="nc bnc" id="L67" title="All 2 branches missed.">        if (blogname == null) {</span>
+<span class="nc" id="L68">            blogname = engine.getApplicationName() + &quot;: &quot; + context.getPage().getName();</span>
+        }
+
+<span class="nc" id="L71">        return blogname;</span>
+    }
+
+    /**
+     * Create a new Feed for a particular WikiContext.
+     *
+     * @param context The WikiContext.
+     */
+<span class="fc" id="L79">    public Feed(WikiContext context) {</span>
+<span class="fc" id="L80">        m_wikiContext = context;</span>
+<span class="fc" id="L81">    }</span>
+
+    /**
+     * Set the mode of the Feed.  It can be any of the following:
+     * &lt;ul&gt;
+     * &lt;li&gt;{@link RSSGenerator#MODE_WIKI} - to create a wiki diff list per page.&lt;/li&gt;
+     * &lt;li&gt;{@link RSSGenerator#MODE_BLOG} - to assume that the Entries are blog entries.&lt;/li&gt;
+     * &lt;li&gt;{@link RSSGenerator#MODE_FULL} - to create a wiki diff list for the entire blog.&lt;/li&gt;
+     * &lt;/ul&gt;
+     * As the Entry list itself is generated elsewhere, this mostly just affects the way
+     * that the layout and metadata for each entry is generated.
+     *
+     * @param mode As defined in RSSGenerator.
+     */
+    public void setMode(String mode) {
+<span class="nc" id="L96">        m_mode = mode;</span>
+<span class="nc" id="L97">    }</span>
+
+    /**
+     * Adds a new Entry to the Feed, at the end of the list.
+     *
+     * @param e The Entry to add.
+     */
+    public void addEntry(Entry e) {
+<span class="fc" id="L105">        m_entries.add(e);</span>
+<span class="fc" id="L106">    }</span>
+
+    /**
+     * Returns the XML for the feed contents in a String format.  All subclasses must implement.
+     *
+     * @return valid XML, ready to be shoved out.
+     */
+    public abstract String getString();
+
+    /**
+     * @return Returns the m_channelDescription.
+     */
+    public String getChannelDescription() {
+<span class="fc" id="L119">        return m_channelDescription;</span>
+    }
+
+    /**
+     * @param description The m_channelDescription to set.
+     */
+    public void setChannelDescription(String description) {
+<span class="fc" id="L126">        m_channelDescription = description;</span>
+<span class="fc" id="L127">    }</span>
+
+    /**
+     * @return Returns the m_channelLanguage.
+     */
+    public String getChannelLanguage() {
+<span class="fc" id="L133">        return m_channelLanguage;</span>
+    }
+
+    /**
+     * @param language The m_channelLanguage to set.
+     */
+    public void setChannelLanguage(String language) {
+<span class="fc" id="L140">        m_channelLanguage = language;</span>
+<span class="fc" id="L141">    }</span>
+
+    /**
+     * @return Returns the m_channelTitle.
+     */
+    public String getChannelTitle() {
+<span class="fc" id="L147">        return m_channelTitle;</span>
+    }
+
+    /**
+     * @param title The m_channelTitle to set.
+     */
+    public void setChannelTitle(String title) {
+<span class="fc" id="L154">        m_channelTitle = title;</span>
+<span class="fc" id="L155">    }</span>
+
+    /**
+     * @return Returns the m_feedURL.
+     */
+    public String getFeedURL() {
+<span class="nc" id="L161">        return m_feedURL;</span>
+    }
+
+    /**
+     * @param feedurl The m_feedURL to set.
+     */
+    public void setFeedURL(String feedurl) {
+<span class="fc" id="L168">        m_feedURL = feedurl;</span>
+<span class="fc" id="L169">    }</span>
+
+    /**
+     * A helper method for figuring out the MIME type for an enclosure.
+     *
+     * @param c    A ServletContext
+     * @param name The filename
+     * @return Something sane for a MIME type.
+     */
+    protected String getMimeType(ServletContext c, String name) {
+<span class="nc" id="L179">        String type = c.getMimeType(name);</span>
+
+<span class="nc bnc" id="L181" title="All 2 branches missed.">        if (type == null) {</span>
+<span class="nc" id="L182">            type = &quot;application/octet-stream&quot;;</span>
+        }
+
+<span class="nc" id="L185">        return type;</span>
+    }
+
+    /**
+     * Does the required formatting and entity replacement for XML.
+     *
+     * @param s The String to format. Null is safe.
+     * @return A formatted string.
+     */
+    public static String format( String s ) {
+<span class="nc" id="L195">        return StringEscapeUtils.escapeXml( s );</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

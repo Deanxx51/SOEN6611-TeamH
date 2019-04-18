@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TranslateTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">TranslateTag.java</span></div><h1>TranslateTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.tagext.BodyContent;
+import javax.servlet.jsp.tagext.BodyTagSupport;
+
+import org.apache.wiki.WikiContext;
+
+import org.apache.log4j.Logger;
+
+/**
+ *  Converts the body text into HTML content.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L35">public class TranslateTag</span>
+    extends BodyTagSupport
+{
+    private static final long serialVersionUID = 0L;
+    
+<span class="nc" id="L40">    static    Logger    log = Logger.getLogger( TranslateTag.class );</span>
+
+    public final int doAfterBody()
+        throws JspException
+    {
+        try
+        {
+<span class="nc" id="L47">            WikiContext context = (WikiContext) pageContext.getAttribute( WikiTagBase.ATTR_CONTEXT,</span>
+                                                                          PageContext.REQUEST_SCOPE );
+
+            //
+            //  Because the TranslateTag should not affect any of the real page attributes
+            //  we have to make a clone here.
+            //
+            
+<span class="nc" id="L55">            context = context.deepClone();</span>
+            
+            //
+            //  Get the page data.
+            //
+<span class="nc" id="L60">            BodyContent bc = getBodyContent();</span>
+<span class="nc" id="L61">            String wikiText = bc.getString();</span>
+<span class="nc" id="L62">            bc.clearBody();</span>
+
+<span class="nc bnc" id="L64" title="All 2 branches missed.">            if( wikiText != null )</span>
+            {
+<span class="nc" id="L66">                wikiText = wikiText.trim();</span>
+            
+<span class="nc" id="L68">                String result = context.getEngine().textToHTML( context, wikiText );</span>
+
+<span class="nc" id="L70">                getPreviousOut().write( result );</span>
+            }
+        }
+<span class="nc" id="L73">        catch( Exception e )</span>
+        {
+<span class="nc" id="L75">            log.error( &quot;Tag failed&quot;, e );</span>
+<span class="nc" id="L76">            throw new JspException( &quot;Tag failed, check logs: &quot;+e.getMessage() );</span>
+<span class="nc" id="L77">        }</span>
+
+<span class="nc" id="L79">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

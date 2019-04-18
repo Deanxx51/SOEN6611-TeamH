@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AclEntryImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.acl</a> &gt; <span class="el_source">AclEntryImpl.java</span></div><h1>AclEntryImpl.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.acl;
+
+import java.io.Serializable;
+import java.security.Permission;
+import java.security.Principal;
+import java.util.Enumeration;
+import java.util.Vector;
+
+import org.apache.wiki.auth.permissions.PagePermission;
+
+/**
+ * Implementation of a JSPWiki AclEntry.
+ *
+ * @since 2.3
+ */
+public class AclEntryImpl implements AclEntry, Serializable
+{
+    private static final long serialVersionUID = 1L;
+<span class="fc" id="L37">    private Vector&lt;Permission&gt;    m_permissions = new Vector&lt;Permission&gt;();</span>
+    private Principal m_principal;
+
+    /**
+     * Constructs a new AclEntryImpl instance.
+     */
+    public AclEntryImpl()
+<span class="fc" id="L44">    {</span>
+<span class="fc" id="L45">    }</span>
+
+    /**
+     * Adds the specified permission to this ACL entry. The permission
+     * &lt;em&gt;must&lt;/em&gt; be of type
+     * {@link org.apache.wiki.auth.permissions.PagePermission}. Note: An entry
+     * can have multiple permissions.
+     * @param permission the permission to be associated with the principal in
+     *            this entry
+     * @return &lt;code&gt;true&lt;/code&gt; if the permission was added, 
+     *         &lt;code&gt;false&lt;/code&gt; if the permission was
+     *         already part of this entry's permission set, and &lt;code&gt;false&lt;/code&gt; if
+     *         the permission is not of type PagePermission
+     */
+    public synchronized boolean addPermission( Permission permission )
+    {
+<span class="pc bpc" id="L61" title="1 of 4 branches missed.">        if ( permission instanceof PagePermission &amp;&amp; findPermission( permission ) == null )</span>
+        {
+<span class="fc" id="L63">            m_permissions.add( permission );</span>
+<span class="fc" id="L64">            return true;</span>
+        }
+
+<span class="fc" id="L67">        return false;</span>
+    }
+
+    /**
+     * Checks if the specified permission is part of the permission set in this
+     * entry.
+     * @param permission the permission to be checked for.
+     * @return true if the permission is part of the permission set in this entry,
+     *         false otherwise.
+     */
+    public boolean checkPermission( Permission permission )
+    {
+<span class="fc bfc" id="L79" title="All 2 branches covered.">        return findPermission( permission ) != null;</span>
+    }
+
+    /**
+     * Returns the principal for which permissions are granted by this
+     * ACL entry. Returns null if there is no principal set for this entry yet.
+     * @return the principal associated with this entry.
+     */
+    public synchronized Principal getPrincipal()
+    {
+<span class="fc" id="L89">        return m_principal;</span>
+    }
+
+    /**
+     * Returns an enumeration of the permissions in this ACL entry.
+     * @return an enumeration of the permissions
+     */
+    public Enumeration&lt; Permission &gt; permissions()
+    {
+<span class="fc" id="L98">        return m_permissions.elements();</span>
+    }
+
+    /**
+     * Removes the specified permission from this ACL entry.
+     * @param permission the permission to be removed from this entry.
+     * @return true if the permission is removed, false if the permission was not
+     *         part of this entry's permission set.
+     */
+    public synchronized boolean removePermission( Permission permission )
+    {
+<span class="fc" id="L109">        Permission p = findPermission( permission );</span>
+
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">        if ( p != null )</span>
+        {
+<span class="fc" id="L113">            m_permissions.remove( p );</span>
+<span class="fc" id="L114">            return true;</span>
+        }
+
+<span class="nc" id="L117">        return false;</span>
+    }
+
+    /**
+     * Specifies the principal for which permissions are granted or denied by
+     * this ACL entry. If a principal was already set for this ACL entry, false
+     * is returned, otherwise true is returned.
+     * @param user the principal to be set for this entry
+     * @return true if the principal is set, false if there was already a
+     *         principal set for this entry
+     */
+    public synchronized boolean setPrincipal( Principal user )
+    {
+<span class="pc bpc" id="L130" title="2 of 4 branches missed.">        if ( m_principal != null || user == null )</span>
+<span class="nc" id="L131">            return false;</span>
+
+<span class="fc" id="L133">        m_principal = user;</span>
+
+<span class="fc" id="L135">        return true;</span>
+    }
+
+    /**
+     * Returns a string representation of the contents of this ACL entry.
+     * @return a string representation of the contents.
+     */
+    public String toString()
+    {
+<span class="nc" id="L144">    	StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc" id="L146">        Principal p = getPrincipal();</span>
+
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        sb.append( &quot;[AclEntry ALLOW &quot; + ( p != null ? p.getName() : &quot;null&quot; ) );</span>
+<span class="nc" id="L149">        sb.append( &quot; &quot; );</span>
+
+<span class="nc bnc" id="L151" title="All 2 branches missed.">        for( Permission pp : m_permissions )</span>
+        {
+<span class="nc" id="L153">            sb.append( pp.toString() );</span>
+<span class="nc" id="L154">            sb.append( &quot;,&quot; );</span>
+<span class="nc" id="L155">        }</span>
+
+<span class="nc" id="L157">        sb.append( &quot;]&quot; );</span>
+
+<span class="nc" id="L159">        return sb.toString();</span>
+    }
+
+    /**
+     * Looks through the permission list and finds a permission that matches the
+     * permission.
+     */
+    private Permission findPermission( Permission p )
+    {
+<span class="fc bfc" id="L168" title="All 2 branches covered.">        for( Permission pp : m_permissions )</span>
+        {
+<span class="fc bfc" id="L170" title="All 2 branches covered.">            if ( pp.implies( p ) )</span>
+            {
+<span class="fc" id="L172">                return pp;</span>
+            }
+<span class="fc" id="L174">        }</span>
+
+<span class="fc" id="L176">        return null;</span>
+    }
+}
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

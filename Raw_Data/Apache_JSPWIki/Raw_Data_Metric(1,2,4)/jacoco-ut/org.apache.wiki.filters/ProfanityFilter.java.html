@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ProfanityFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.filters</a> &gt; <span class="el_source">ProfanityFilter.java</span></div><h1>ProfanityFilter.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.filters;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  This class is an example of how to have a simple filter.  It removes
+ *  all nasty words located at &lt;code&gt;profanity.properties&lt;/code&gt; file, inside 
+ *  &lt;code&gt;org/apache/wiki/filters&lt;/code&gt; package. The search of profanities
+ *  is case unsensitive.
+ *
+ */
+<span class="fc" id="L41">public class ProfanityFilter extends BasicPageFilter {</span>
+	
+<span class="fc" id="L43">    private static final Logger log = Logger.getLogger( ProfanityFilter.class );</span>
+    
+    private static final String PROPERTYFILE = &quot;org/apache/wiki/filters/profanity.properties&quot;;
+<span class="fc" id="L46">    private static String[] c_profanities = new String[0];</span>
+    
+    static {
+<span class="fc" id="L49">    	BufferedReader br = null;</span>
+<span class="fc" id="L50">    	InputStream in = null;</span>
+        try {
+<span class="fc" id="L52">            ClassLoader loader = ProfanityFilter.class.getClassLoader();</span>
+<span class="fc" id="L53">            in = loader.getResourceAsStream( PROPERTYFILE );</span>
+            
+<span class="pc bpc" id="L55" title="1 of 2 branches missed.">            if( in == null ) {</span>
+<span class="nc" id="L56">                throw new IOException( &quot;No property file found! (Check the installation, it should be there.)&quot; );</span>
+            }
+            
+<span class="fc" id="L59">            br = new BufferedReader( new InputStreamReader( in ) );</span>
+<span class="fc" id="L60">            List&lt; String &gt; profs = new ArrayList&lt; String &gt;();</span>
+            
+            String str;
+<span class="fc bfc" id="L63" title="All 2 branches covered.">            while ( ( str = br.readLine() ) != null ) {</span>
+<span class="fc bfc" id="L64" title="All 4 branches covered.">                if( str.length() &gt; 0 &amp;&amp; !str.startsWith( &quot;#&quot; ) ) { // allow comments on profanities file</span>
+<span class="fc" id="L65">                    profs.add( str );</span>
+                }
+            }
+<span class="fc" id="L68">            c_profanities = profs.toArray( new String[0] );</span>
+<span class="nc" id="L69">        } catch( IOException e ) {</span>
+<span class="nc" id="L70">            log.error( &quot;Unable to load profanities from &quot; + PROPERTYFILE, e );</span>
+<span class="nc" id="L71">        } catch( Exception e ) {</span>
+<span class="nc" id="L72">            log.error( &quot;Unable to initialize Profanity Filter&quot;, e );</span>
+        } finally {
+<span class="fc" id="L74">        	IOUtils.closeQuietly( br );</span>
+<span class="fc" id="L75">        	IOUtils.closeQuietly( in );</span>
+        }
+<span class="fc" id="L77">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String preTranslate( WikiContext context, String content ) {
+<span class="fc bfc" id="L83" title="All 2 branches covered.">        for( int i = 0; i &lt; c_profanities.length; i++ ) {</span>
+<span class="fc" id="L84">            String word = c_profanities[ i ];</span>
+<span class="fc" id="L85">            String replacement = word.charAt( 0 ) + &quot;*&quot; + word.charAt( word.length() - 1 );</span>
+
+<span class="fc" id="L87">            content = TextUtil.replaceStringCaseUnsensitive( content, word, replacement );</span>
+        }
+
+<span class="fc" id="L90">        return content;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

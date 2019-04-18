@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AclImpl.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.acl</a> &gt; <span class="el_source">AclImpl.java</span></div><h1>AclImpl.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.acl;
+
+import java.io.Serializable;
+import java.security.Permission;
+import java.security.Principal;
+import java.util.Enumeration;
+import java.util.Vector;
+
+/**
+ *  JSPWiki implementation of an Access Control List.
+ *
+ *  @since 2.3
+ */
+public class AclImpl implements Acl, Serializable
+{
+    private static final long serialVersionUID = 1L;
+<span class="fc" id="L35">    private final Vector&lt;AclEntry&gt; m_entries = new Vector&lt;AclEntry&gt;();</span>
+
+    /**
+     * Constructs a new AclImpl instance.
+     */
+    public AclImpl()
+<span class="fc" id="L41">    {</span>
+<span class="fc" id="L42">    }</span>
+    
+    /**
+     * Returns all Principal objects assigned a given Permission in the access
+     * control list. The Principals returned are those that have been granted
+     * either the supplied permission, or a permission implied by the supplied
+     * permission. Principals are not &quot;expanded&quot; if they are a role or group.
+     * @param permission the permission to search for
+     * @return an array of Principals possessing the permission
+     */
+    public Principal[] findPrincipals( Permission permission )
+    {
+<span class="fc" id="L54">        Vector&lt;Principal&gt; principals = new Vector&lt;Principal&gt;();</span>
+<span class="fc" id="L55">        Enumeration&lt;AclEntry&gt; entries = entries();</span>
+        
+<span class="fc bfc" id="L57" title="All 2 branches covered.">        while (entries.hasMoreElements()) </span>
+        {
+<span class="fc" id="L59">            AclEntry entry = entries.nextElement();</span>
+<span class="fc" id="L60">            Enumeration&lt;Permission&gt; permissions = entry.permissions();</span>
+<span class="fc bfc" id="L61" title="All 2 branches covered.">            while ( permissions.hasMoreElements() ) </span>
+            {
+<span class="fc" id="L63">                Permission perm = permissions.nextElement();</span>
+<span class="fc bfc" id="L64" title="All 2 branches covered.">                if ( perm.implies( permission ) ) </span>
+                {
+<span class="fc" id="L66">                    principals.add( entry.getPrincipal() );</span>
+                }
+<span class="fc" id="L68">            }</span>
+<span class="fc" id="L69">        }</span>
+<span class="fc" id="L70">        return principals.toArray( new Principal[principals.size()] );</span>
+    }
+  
+    private boolean hasEntry( AclEntry entry )
+    {
+<span class="pc bpc" id="L75" title="1 of 2 branches missed.">        if( entry == null )</span>
+        {
+<span class="nc" id="L77">            return false;</span>
+        }
+
+<span class="fc bfc" id="L80" title="All 2 branches covered.">        for( AclEntry e : m_entries )</span>
+        {
+<span class="fc" id="L82">            Principal ep     = e.getPrincipal();</span>
+<span class="fc" id="L83">            Principal entryp = entry.getPrincipal();</span>
+
+<span class="pc bpc" id="L85" title="2 of 4 branches missed.">            if( ep == null || entryp == null )</span>
+            {
+<span class="nc" id="L87">                throw new IllegalArgumentException( &quot;Entry is null; check code, please (entry=&quot;+entry+&quot;; e=&quot;+e+&quot;)&quot; );</span>
+            }
+            
+<span class="fc bfc" id="L90" title="All 2 branches covered.">            if( ep.getName().equals( entryp.getName() ) )</span>
+            {
+<span class="fc" id="L92">                return true;</span>
+            }
+<span class="fc" id="L94">        }</span>
+
+<span class="fc" id="L96">        return false;</span>
+    }
+
+    /**
+     * Adds an ACL entry to this ACL. An entry associates a principal (e.g., an
+     * individual or a group) with a set of permissions. Each principal can have
+     * at most one positive ACL entry, specifying permissions to be granted to
+     * the principal. If there is already an ACL entry already in the ACL, false
+     * is returned.
+     * @param entry - the ACL entry to be added to this ACL
+     * @return true on success, false if an entry of the same type (positive or
+     *         negative) for the same principal is already present in this ACL
+     */
+    public synchronized boolean addEntry( AclEntry entry )
+    {
+<span class="pc bpc" id="L111" title="1 of 2 branches missed.">        if( entry.getPrincipal() == null )</span>
+        {
+<span class="nc" id="L113">            throw new IllegalArgumentException( &quot;Entry principal cannot be null&quot; );</span>
+        }
+
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        if( hasEntry( entry ) )</span>
+        {
+<span class="fc" id="L118">            return false;</span>
+        }
+        
+<span class="fc" id="L121">        m_entries.add( entry );</span>
+
+<span class="fc" id="L123">        return true;</span>
+    }
+
+    /**
+     * Removes an ACL entry from this ACL.
+     * @param entry the ACL entry to be removed from this ACL
+     * @return true on success, false if the entry is not part of this ACL
+     */
+    public synchronized boolean removeEntry( AclEntry entry )
+    {
+<span class="fc" id="L133">        return m_entries.remove( entry );</span>
+    }
+
+    /**
+     * Returns an enumeration of the entries in this ACL. Each element in the
+     * enumeration is of type AclEntry.
+     * @return an enumeration of the entries in this ACL.
+     */
+    public Enumeration&lt; AclEntry &gt; entries()
+    {
+<span class="fc" id="L143">        return m_entries.elements();</span>
+    }
+
+    /**
+     * Returns an AclEntry for a supplied Principal, or &lt;code&gt;null&lt;/code&gt; if
+     * the Principal does not have a matching AclEntry.
+     * @param principal the principal to search for
+     * @return the AclEntry associated with the principal, or &lt;code&gt;null&lt;/code&gt;
+     */
+    public AclEntry getEntry( Principal principal )
+    {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">        for( AclEntry entry : m_entries )</span>
+        {
+<span class="fc bfc" id="L156" title="All 2 branches covered.">            if( entry.getPrincipal().getName().equals( principal.getName() ) )</span>
+            {
+<span class="fc" id="L158">                return entry;</span>
+            }
+<span class="fc" id="L160">        }</span>
+
+<span class="fc" id="L162">        return null;</span>
+    }
+
+    /**
+     * Returns a string representation of the contents of this Acl.
+     * @return the string representation
+     */
+    public String toString()
+    {
+<span class="fc" id="L171">    	StringBuilder sb = new StringBuilder();</span>
+
+<span class="fc bfc" id="L173" title="All 2 branches covered.">        for( AclEntry entry : m_entries )</span>
+        {
+<span class="fc" id="L175">            Principal pal = entry.getPrincipal();</span>
+
+<span class="pc bpc" id="L177" title="1 of 2 branches missed.">            if( pal != null )</span>
+<span class="fc" id="L178">                sb.append( &quot;  user = &quot;+pal.getName()+&quot;: &quot; );</span>
+            else
+<span class="nc" id="L180">                sb.append( &quot;  user = null: &quot; );</span>
+
+<span class="fc" id="L182">            sb.append( &quot;(&quot; );</span>
+<span class="fc bfc" id="L183" title="All 2 branches covered.">            for( Enumeration&lt;Permission&gt; perms = entry.permissions(); perms.hasMoreElements(); )</span>
+            {
+<span class="fc" id="L185">                Permission perm = perms.nextElement();</span>
+<span class="fc" id="L186">                sb.append( perm.toString() );</span>
+<span class="fc" id="L187">            }</span>
+<span class="fc" id="L188">            sb.append( &quot;)\n&quot; );</span>
+<span class="fc" id="L189">        }</span>
+
+<span class="fc" id="L191">        return sb.toString();</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt;, if this Acl is empty.
+     * @return the result
+     * @since 2.4.68
+     */
+    public boolean isEmpty()
+    {
+<span class="fc" id="L201">        return m_entries.isEmpty();</span>
+    }
+
+}
+    
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

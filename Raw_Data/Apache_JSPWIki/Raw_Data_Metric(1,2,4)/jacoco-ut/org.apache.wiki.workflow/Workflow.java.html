@@ -1,0 +1,852 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Workflow.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">Workflow.java</span></div><h1>Workflow.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.io.Serializable;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WorkflowEvent;
+
+/**
+ * &lt;p&gt;
+ * Sequence of {@link Step} objects linked together. Workflows are always
+ * initialized with a message key that denotes the name of the Workflow, and a
+ * Principal that represents its owner.
+ * &lt;/p&gt;
+ * &lt;h2&gt;Workflow lifecycle&lt;/h2&gt;
+ * A Workflow's state (obtained by {@link #getCurrentState()}) will be one of the
+ * following:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;strong&gt;{@link #CREATED}&lt;/strong&gt;: after the Workflow has been
+ * instantiated, but before it has been started using the {@link #start()}
+ * method.&lt;/li&gt;
+ * &lt;li&gt;&lt;strong&gt;{@link #RUNNING}&lt;/strong&gt;: after the Workflow has been started
+ * using the {@link #start()} method, but before it has finished processing all
+ * Steps. Note that a Workflow can only be started once; attempting to start it
+ * again results in an IllegalStateException. Callers can place the Workflow
+ * into the WAITING state by calling {@link #waitstate()}.&lt;/li&gt;
+ * &lt;li&gt;&lt;strong&gt;{@link #WAITING}&lt;/strong&gt;: when the Workflow has temporarily
+ * paused, for example because of a pending Decision. Once the responsible actor
+ * decides what to do, the caller can change the Workflow back to the RUNNING
+ * state by calling the {@link #restart()} method (this is done automatically by
+ * the Decision class, for instance, when the {@link Decision#decide(Outcome)}
+ * method is invoked)&lt;/li&gt;
+ * &lt;li&gt;&lt;strong&gt;{@link #COMPLETED}&lt;/strong&gt;: after the Workflow has finished
+ * processing all Steps, without errors.&lt;/li&gt;
+ * &lt;li&gt;&lt;strong&gt;{@link #ABORTED}&lt;/strong&gt;: if a Step has elected to abort the
+ * Workflow.&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;h2&gt;Steps and processing algorithm&lt;/h2&gt;
+ * &lt;p&gt;
+ * Workflow Step objects can be of type {@link Decision}, {@link Task} or other
+ * Step subclasses. Decisions require user input, while Tasks do not. See the
+ * {@link Step} class for more details.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * After instantiating a new Workflow (but before telling it to {@link #start()}),
+ * calling classes should specify the first Step by executing the
+ * {@link #setFirstStep(Step)} method. Additional Steps can be chained by
+ * invoking the first step's {@link Step#addSuccessor(Outcome, Step)} method.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * When a Workflow's &lt;code&gt;start&lt;/code&gt; method is invoked, the Workflow
+ * retrieves the first Step and processes it. This Step, and subsequent ones,
+ * are processed as follows:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;The Step's {@link Step#start()} method executes, which sets the start
+ * time.&lt;/li&gt;
+ * &lt;li&gt;The Step's {@link Step#execute()} method is called to begin processing,
+ * which will return an Outcome to indicate completion, continuation or errors:&lt;/li&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;{@link Outcome#STEP_COMPLETE} indicates that the execution method ran
+ * without errors, and that the Step should be considered &quot;completed.&quot;&lt;/li&gt;
+ * &lt;li&gt;{@link Outcome#STEP_CONTINUE} indicates that the execution method ran
+ * without errors, but that the Step is not &quot;complete&quot; and should be put into
+ * the WAITING state.&lt;/li&gt;
+ * &lt;li&gt;{@link Outcome#STEP_ABORT} indicates that the execution method
+ * encountered errors, and should abort the Step &lt;em&gt;and&lt;/em&gt; the Workflow as
+ * a whole. When this happens, the Workflow will set the current Step's Outcome
+ * to {@link Outcome#STEP_ABORT} and invoke the Workflow's {@link #abort()}
+ * method. The Step's processing errors, if any, can be retrieved by
+ * {@link Step#getErrors()}.&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;li&gt;The Outcome of the &lt;code&gt;execute&lt;/code&gt; method also affects what
+ * happens next. Depending on the result (and assuming the Step did not abort),
+ * the Workflow will either move on to the next Step or put the Workflow into
+ * the {@link Workflow#WAITING} state:&lt;/li&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;If the Outcome denoted &quot;completion&quot; (&lt;em&gt;i.e.&lt;/em&gt;, its
+ * {@link Step#isCompleted()} method returns &lt;code&gt;true&lt;/code&gt;) then the Step
+ * is considered complete; the Workflow looks up the next Step by calling the
+ * current Step's {@link Step#getSuccessor(Outcome)} method. If
+ * &lt;code&gt;successor()&lt;/code&gt; returns a non-&lt;code&gt;null&lt;/code&gt; Step, the
+ * return value is marked as the current Step and added to the Workflow's Step
+ * history. If &lt;code&gt;successor()&lt;/code&gt; returns &lt;code&gt;null&lt;/code&gt;, then the
+ * Workflow has no more Steps and it enters the {@link #COMPLETED} state.&lt;/li&gt;
+ * &lt;li&gt;If the Outcome did not denote &quot;completion&quot; (&lt;em&gt;i.e.&lt;/em&gt;, its
+ * {@link Step#isCompleted()} method returns &lt;code&gt;false&lt;/code&gt;), then the
+ * Step still has further work to do. The Workflow enters the {@link #WAITING}
+ * state and stops further processing until a caller restarts it.&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;/ul&gt;
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * The currently executing Step can be obtained by {@link #getCurrentStep()}. The
+ * actor for the current Step is returned by {@link #getCurrentActor()}.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * To provide flexibility for specific implementations, the Workflow class
+ * provides two additional features that enable Workflow participants (&lt;em&gt;i.e.&lt;/em&gt;,
+ * Workflow subclasses and Step/Task/Decision subclasses) to share context and
+ * state information. These two features are &lt;em&gt;named attributes&lt;/em&gt; and
+ * &lt;em&gt;message arguments&lt;/em&gt;:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;&lt;strong&gt;Named attributes&lt;/strong&gt; are simple key-value pairs that
+ * Workflow participants can get or set. Keys are Strings; values can be any
+ * Object. Named attributes are set with {@link #setAttribute(String, Object)}
+ * and retrieved with {@link #getAttribute(String)}.&lt;/li&gt;
+ * &lt;li&gt;&lt;strong&gt;Message arguments&lt;/strong&gt; are used in combination with
+ * JSPWiki's {@link org.apache.wiki.i18n.InternationalizationManager} to
+ * create language-independent user interface messages. The message argument
+ * array is retrieved via {@link #getMessageArguments()}; the first two array
+ * elements will always be these: a String representing work flow owner's name,
+ * and a String representing the current actor's name. Workflow participants
+ * can add to this array by invoking {@link #addMessageArgument(Serializable)}.&lt;/li&gt;
+ * &lt;/ul&gt;
+ * &lt;h2&gt;Example&lt;/h2&gt;
+ * &lt;p&gt;
+ * Workflow Steps can be very powerful when linked together. JSPWiki provides
+ * two abstract subclasses classes that you can use to build your own Workflows:
+ * Tasks and Decisions. As noted, Tasks are Steps that execute without user
+ * intervention, while Decisions require actors (&lt;em&gt;aka&lt;/em&gt; Principals) to
+ * take action. Decisions and Tasks can be mixed freely to produce some highly
+ * elaborate branching structures.
+ * &lt;/p&gt;
+ * &lt;p&gt;
+ * Here is a simple case. For example, suppose you would like to create a
+ * Workflow that (a) executes a initialization Task, (b) pauses to obtain an
+ * approval Decision from a user in the Admin group, and if approved, (c)
+ * executes a &quot;finish&quot; Task. Here's sample code that illustrates how to do it:
+ * &lt;/p&gt;
+ *
+ * &lt;pre&gt;
+ *    // Create workflow; owner is current user
+ * 1  Workflow workflow = new Workflow(&amp;quot;workflow.myworkflow&amp;quot;, context.getCurrentUser());
+ *
+ *    // Create custom initialization task
+ * 2  Step initTask = new InitTask(this);
+ *
+ *    // Create finish task
+ * 3  Step finishTask = new FinishTask(this);
+ *
+ *    // Create an intermediate decision step
+ * 4  Principal actor = new GroupPrincipal(&amp;quot;Admin&amp;quot;);
+ * 5  Step decision = new SimpleDecision(this, &amp;quot;decision.AdminDecision&amp;quot;, actor);
+ *
+ *    // Hook the steps together
+ * 6  initTask.addSuccessor(Outcome.STEP_COMPLETE, decision);
+ * 7  decision.addSuccessor(Outcome.DECISION_APPROVE, finishTask);
+ *
+ *    // Set workflow's first step
+ * 8  workflow.setFirstStep(initTask);
+ * &lt;/pre&gt;
+ *
+ * &lt;p&gt;
+ * Some comments on the source code:
+ * &lt;/p&gt;
+ * &lt;ul&gt;
+ * &lt;li&gt;Line 1 instantiates the workflow with a sample message key and
+ * designated owner Principal, in this case the current wiki user&lt;/li&gt;
+ * &lt;li&gt;Lines 2 and 3 instantiate the custom Task subclasses, which contain the
+ * business logic&lt;/li&gt;
+ * &lt;li&gt;Line 4 creates the relevant GroupPrincipal for the &lt;code&gt;Admin&lt;/code&gt;
+ * group, who will be the actor in the Decision step&lt;/li&gt;
+ * &lt;li&gt;Line 5 creates the Decision step, passing the Workflow, sample message
+ * key, and actor in the constructor&lt;/li&gt;
+ * &lt;li&gt;Line 6 specifies that if the InitTask's Outcome signifies &quot;normal
+ * completion&quot; (STEP_COMPLETE), the SimpleDecision step should be invoked next&lt;/li&gt;
+ * &lt;li&gt;Line 7 specifies that if the actor (anyone possessing the
+ * &lt;code&gt;Admin&lt;/code&gt; GroupPrincipal) selects DECISION_APPROVE, the FinishTask
+ * step should be invoked&lt;/li&gt;
+ * &lt;li&gt;Line 8 adds the InitTask (and all of its successor Steps, nicely wired
+ * together) to the workflow&lt;/li&gt;
+ * &lt;/ul&gt;
+ *
+ */
+public class Workflow implements Serializable
+{
+    private static final long serialVersionUID = 5228149040690660032L;
+
+    /** Time value: the start or end time has not been set. */
+<span class="fc" id="L210">    public static final Date TIME_NOT_SET = new Date( 0 );</span>
+
+    /** ID value: the workflow ID has not been set. */
+    public static final int ID_NOT_SET = 0;
+
+    /** State value: Workflow completed all Steps without errors. */
+    public static final int COMPLETED = 50;
+
+    /** State value: Workflow aborted before completion. */
+    public static final int ABORTED = 40;
+
+    /**
+     * State value: Workflow paused, typically because a Step returned an
+     * Outcome that doesn't signify &quot;completion.&quot;
+     */
+    public static final int WAITING = 30;
+
+    /** State value: Workflow started, and is running. */
+    public static final int RUNNING = -1;
+
+    /** State value: Workflow instantiated, but not started. */
+    public static final int CREATED = -2;
+
+    /** Lazily-initialized attribute map. */
+    private Map&lt;String, Object&gt; m_attributes;
+
+    /** The initial Step for this Workflow. */
+    private Step m_firstStep;
+
+    /** Flag indicating whether the Workflow has started yet. */
+    private boolean m_started;
+
+    private final LinkedList&lt;Step&gt; m_history;
+
+    private int m_id;
+
+    private final String m_key;
+
+    private final Principal m_owner;
+
+    private final List&lt;Serializable&gt; m_messageArgs;
+
+    private int m_state;
+
+    private Step m_currentStep;
+
+    private WorkflowManager m_manager;
+
+    /**
+     * Constructs a new Workflow object with a supplied message key, owner
+     * Principal, and undefined unique identifier {@link #ID_NOT_SET}. Once
+     * instantiated the Workflow is considered to be in the {@link #CREATED}
+     * state; a caller must explicitly invoke the {@link #start()} method to
+     * begin processing.
+     *
+     * @param messageKey
+     *            the message key used to construct a localized workflow name,
+     *            such as &lt;code&gt;workflow.saveWikiPage&lt;/code&gt;
+     * @param owner
+     *            the Principal who owns the Workflow. Typically, this is the
+     *            user who created and submitted it
+     */
+    public Workflow(String messageKey, Principal owner)
+    {
+<span class="fc" id="L274">        super();</span>
+<span class="fc" id="L275">        m_attributes = null;</span>
+<span class="fc" id="L276">        m_currentStep = null;</span>
+<span class="fc" id="L277">        m_history = new LinkedList&lt;Step&gt;();</span>
+<span class="fc" id="L278">        m_id = ID_NOT_SET;</span>
+<span class="fc" id="L279">        m_key = messageKey;</span>
+<span class="fc" id="L280">        m_manager = null;</span>
+<span class="fc" id="L281">        m_messageArgs = new ArrayList&lt;Serializable&gt;();</span>
+<span class="fc" id="L282">        m_owner = owner;</span>
+<span class="fc" id="L283">        m_started = false;</span>
+<span class="fc" id="L284">        m_state = CREATED;</span>
+<span class="fc" id="L285">    }</span>
+
+    /**
+     * Aborts the Workflow by setting the current Step's Outcome to
+     * {@link Outcome#STEP_ABORT}, and the Workflow's overall state to
+     * {@link #ABORTED}. It also appends the aborted Step into the workflow
+     * history, and sets the current step to &lt;code&gt;null&lt;/code&gt;. If the Step
+     * is a Decision, it is removed from the DecisionQueue. This method
+     * can be called at any point in the lifecycle prior to completion, but it
+     * cannot be called twice. It finishes by calling the {@link #cleanup()}
+     * method to flush retained objects. If the Workflow had been previously
+     * aborted, this method throws an IllegalStateException.
+     */
+    public final synchronized void abort()
+    {
+        // Check corner cases: previous abort or completion
+<span class="pc bpc" id="L301" title="1 of 2 branches missed.">        if ( m_state == ABORTED )</span>
+        {
+<span class="nc" id="L303">            throw new IllegalStateException( &quot;The workflow has already been aborted.&quot; );</span>
+        }
+<span class="fc bfc" id="L305" title="All 2 branches covered.">        if ( m_state == COMPLETED )</span>
+        {
+<span class="fc" id="L307">            throw new IllegalStateException( &quot;The workflow has already completed.&quot; );</span>
+        }
+
+<span class="fc bfc" id="L310" title="All 2 branches covered.">        if ( m_currentStep != null )</span>
+        {
+<span class="pc bpc" id="L312" title="1 of 4 branches missed.">            if ( m_manager != null &amp;&amp; m_currentStep instanceof Decision )</span>
+            {
+<span class="nc" id="L314">                Decision d = (Decision)m_currentStep;</span>
+<span class="nc" id="L315">                m_manager.getDecisionQueue().remove( d );</span>
+            }
+<span class="fc" id="L317">            m_currentStep.setOutcome( Outcome.STEP_ABORT );</span>
+<span class="fc" id="L318">            m_history.addLast( m_currentStep );</span>
+        }
+<span class="fc" id="L320">        m_state = ABORTED;</span>
+<span class="fc" id="L321">        fireEvent( WorkflowEvent.ABORTED );</span>
+<span class="fc" id="L322">        cleanup();</span>
+<span class="fc" id="L323">    }</span>
+
+    /**
+     * Appends a message argument object to the array returned by
+     * {@link #getMessageArguments()}. The object &lt;em&gt;must&lt;/em&gt; be an type
+     * used by the {@link java.text.MessageFormat}: String, Date, or Number
+     * (BigDecimal, BigInteger, Byte, Double, Float, Integer, Long, Short).
+     * If the object is not of type String, Number or Date, this method throws
+     * an IllegalArgumentException.
+     * @param obj the object to add
+     */
+    public final void addMessageArgument( Serializable obj )
+    {
+<span class="fc bfc" id="L336" title="All 6 branches covered.">        if ( obj instanceof String || obj instanceof Date || obj instanceof Number )</span>
+        {
+<span class="fc" id="L338">            m_messageArgs.add( obj );</span>
+<span class="fc" id="L339">            return;</span>
+        }
+<span class="fc" id="L341">        throw new IllegalArgumentException( &quot;Message arguments must be of type String, Date or Number.&quot; );</span>
+    }
+
+    /**
+     * Returns the actor Principal responsible for the current Step. If there is
+     * no current Step, this method returns &lt;code&gt;null&lt;/code&gt;.
+     *
+     * @return the current actor
+     */
+    public final synchronized Principal getCurrentActor()
+    {
+<span class="fc bfc" id="L352" title="All 2 branches covered.">        if ( m_currentStep == null )</span>
+        {
+<span class="fc" id="L354">            return null;</span>
+        }
+<span class="fc" id="L356">        return m_currentStep.getActor();</span>
+    }
+
+    /**
+     * Returns the workflow state: {@link #CREATED}, {@link #RUNNING},
+     * {@link #WAITING}, {@link #COMPLETED} or {@link #ABORTED}.
+     *
+     * @return the workflow state
+     */
+    public final int getCurrentState()
+    {
+<span class="fc" id="L367">        return m_state;</span>
+    }
+
+    /**
+     * Returns the current Step, or &lt;code&gt;null&lt;/code&gt; if the workflow has not
+     * started or already completed.
+     *
+     * @return the current step
+     */
+    public final Step getCurrentStep()
+    {
+<span class="fc" id="L378">        return m_currentStep;</span>
+    }
+
+    /**
+     * Retrieves a named Object associated with this Workflow. If the Workflow
+     * has completed or aborted, this method always returns &lt;code&gt;null&lt;/code&gt;.
+     *
+     * @param attr
+     *            the name of the attribute
+     * @return the value
+     */
+    public final synchronized Object getAttribute( String attr )
+    {
+<span class="fc bfc" id="L391" title="All 2 branches covered.">        if ( m_attributes == null )</span>
+        {
+<span class="fc" id="L393">            return null;</span>
+        }
+<span class="fc" id="L395">        return m_attributes.get( attr );</span>
+    }
+
+    /**
+     * The end time for this Workflow, expressed as a system time number. This
+     * value is equal to the end-time value returned by the final Step's
+     * {@link Step#getEndTime()} method, if the workflow has completed.
+     * Otherwise, this method returns {@link #TIME_NOT_SET}.
+     *
+     * @return the end time
+     */
+    public final Date getEndTime()
+    {
+<span class="fc bfc" id="L408" title="All 2 branches covered.">        if ( isCompleted() )</span>
+        {
+<span class="fc" id="L410">            Step last = m_history.getLast();</span>
+<span class="pc bpc" id="L411" title="1 of 2 branches missed.">            if ( last != null )</span>
+            {
+<span class="fc" id="L413">                return last.getEndTime();</span>
+            }
+        }
+<span class="fc" id="L416">        return TIME_NOT_SET;</span>
+    }
+
+    /**
+     * Returns the unique identifier for this Workflow. If not set, this method
+     * returns ID_NOT_SET ({@value #ID_NOT_SET}).
+     *
+     * @return the unique identifier
+     */
+    public final synchronized int getId()
+    {
+<span class="fc" id="L427">        return m_id;</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns an array of message arguments, used by
+     * {@link java.text.MessageFormat} to create localized messages. The first
+     * two array elements will always be these:
+     * &lt;/p&gt;
+     * &lt;ul&gt;
+     * &lt;li&gt;String representing the name of the workflow owner (&lt;em&gt;i.e.&lt;/em&gt;,{@link #getOwner()})&lt;/li&gt;
+     * &lt;li&gt;String representing the name of the current actor (&lt;em&gt;i.e.&lt;/em&gt;,{@link #getCurrentActor()}).
+     * If the current step is &lt;code&gt;null&lt;/code&gt; because the workflow hasn't started or has already
+     * finished, the value of this argument will be a dash character (&lt;code&gt;-&lt;/code&gt;)&lt;/li&gt;
+     * &lt;/ul&gt;
+     * &lt;p&gt;
+     * Workflow and Step subclasses are free to append items to this collection
+     * with {@link #addMessageArgument(Serializable)}.
+     * &lt;/p&gt;
+     *
+     * @return the array of message arguments
+     */
+    public final Serializable[] getMessageArguments()
+    {
+<span class="fc" id="L451">        List&lt;Serializable&gt; args = new ArrayList&lt;Serializable&gt;();</span>
+<span class="fc" id="L452">        args.add( m_owner.getName() );</span>
+<span class="fc" id="L453">        Principal actor = getCurrentActor();</span>
+<span class="fc bfc" id="L454" title="All 2 branches covered.">        args.add( actor == null ? &quot;-&quot; : actor.getName() );</span>
+<span class="fc" id="L455">        args.addAll( m_messageArgs );</span>
+<span class="fc" id="L456">        return args.toArray( new Serializable[args.size()] );</span>
+    }
+
+    /**
+     * Returns an i18n message key for the name of this workflow; for example,
+     * &lt;code&gt;workflow.saveWikiPage&lt;/code&gt;.
+     *
+     * @return the name
+     */
+    public final String getMessageKey()
+    {
+<span class="fc" id="L467">        return m_key;</span>
+    }
+
+    /**
+     * The owner Principal on whose behalf this Workflow is being executed; that
+     * is, the user who created the workflow.
+     *
+     * @return the name of the Principal who owns this workflow
+     */
+    public final Principal getOwner()
+    {
+<span class="fc" id="L478">        return m_owner;</span>
+    }
+
+    /**
+     * The start time for this Workflow, expressed as a system time number. This
+     * value is equal to the start-time value returned by the first Step's
+     * {@link Step#getStartTime()} method, if the workflow has started already.
+     * Otherwise, this method returns {@link #TIME_NOT_SET}.
+     *
+     * @return the start time
+     */
+    public final Date getStartTime()
+    {
+<span class="fc bfc" id="L491" title="All 2 branches covered.">        return isStarted() ? m_firstStep.getStartTime() : TIME_NOT_SET;</span>
+    }
+
+    /**
+     * Returns the WorkflowManager that contains this Workflow.
+     *
+     * @return the workflow manager
+     */
+    public final synchronized WorkflowManager getWorkflowManager()
+    {
+<span class="fc" id="L501">        return m_manager;</span>
+    }
+
+    /**
+     * Returns a Step history for this Workflow as a List, chronologically, from the
+     * first Step to the currently executing one. The first step is the first
+     * item in the array. If the Workflow has not started, this method returns a
+     * zero-length array.
+     *
+     * @return an array of Steps representing those that have executed, or are
+     *         currently executing
+     */
+    public final List&lt; Step &gt; getHistory()
+    {
+<span class="fc" id="L515">        return Collections.unmodifiableList( m_history );</span>
+    }
+
+    /**
+     * Returns &lt;code&gt;true&lt;/code&gt; if the workflow had been previously aborted.
+     *
+     * @return the result
+     */
+    public final boolean isAborted()
+    {
+<span class="fc bfc" id="L525" title="All 2 branches covered.">        return m_state == ABORTED;</span>
+    }
+
+    /**
+     * Determines whether this Workflow is completed; that is, if it has no
+     * additional Steps to perform. If the last Step in the workflow is
+     * finished, this method will return &lt;code&gt;true&lt;/code&gt;.
+     *
+     * @return &lt;code&gt;true&lt;/code&gt; if the workflow has been started but has no
+     *         more steps to perform; &lt;code&gt;false&lt;/code&gt; if not.
+     */
+    public final synchronized boolean isCompleted()
+    {
+        // If current step is null, then we're done
+<span class="fc bfc" id="L539" title="All 4 branches covered.">        return m_started &amp;&amp; m_state == COMPLETED;</span>
+    }
+
+    /**
+     * Determines whether this Workflow has started; that is, its
+     * {@link #start()} method has been executed.
+     *
+     * @return &lt;code&gt;true&lt;/code&gt; if the workflow has been started;
+     *         &lt;code&gt;false&lt;/code&gt; if not.
+     */
+    public final boolean isStarted()
+    {
+<span class="fc" id="L551">        return m_started;</span>
+    }
+
+    /**
+     * Convenience method that returns the predecessor of the current Step. This
+     * method simply examines the Workflow history and returns the
+     * second-to-last Step.
+     *
+     * @return the predecessor, or &lt;code&gt;null&lt;/code&gt; if the first Step is
+     *         currently executing
+     */
+    public final Step getPreviousStep()
+    {
+<span class="fc" id="L564">        return previousStep( m_currentStep );</span>
+    }
+
+    /**
+     * Restarts the Workflow from the {@link #WAITING} state and puts it into
+     * the {@link #RUNNING} state again. If the Workflow had not previously been
+     * paused, this method throws an IllegalStateException. If any of the
+     * Steps in this Workflow throw a WikiException, the Workflow will abort
+     * and propagate the exception to callers.
+     * @throws WikiException if the current task's {@link Task#execute()} method
+     * throws an exception
+     */
+    public final synchronized void restart() throws WikiException
+    {
+<span class="fc bfc" id="L578" title="All 2 branches covered.">        if ( m_state != WAITING )</span>
+        {
+<span class="fc" id="L580">            throw new IllegalStateException( &quot;Workflow is not paused; cannot restart.&quot; );</span>
+        }
+<span class="fc" id="L582">        m_state = RUNNING;</span>
+<span class="fc" id="L583">        fireEvent( WorkflowEvent.RUNNING );</span>
+
+        // Process current step
+        try
+        {
+<span class="fc" id="L588">            processCurrentStep();</span>
+        }
+<span class="nc" id="L590">        catch ( WikiException e )</span>
+        {
+<span class="nc" id="L592">            abort();</span>
+<span class="nc" id="L593">            throw e;</span>
+<span class="fc" id="L594">        }</span>
+<span class="fc" id="L595">    }</span>
+
+    /**
+     * Temporarily associates an object with this Workflow, as a named attribute, for the
+     * duration of workflow execution. The passed object can be anything required by
+     * an executing Step, although it &lt;em&gt;should&lt;/em&gt; be serializable. Note that when the workflow
+     * completes or aborts, all attributes will be cleared.
+     *
+     * @param attr
+     *            the attribute name
+     * @param obj
+     *            the value
+     */
+    public final synchronized void setAttribute(String attr, Object obj )
+    {
+<span class="fc bfc" id="L610" title="All 2 branches covered.">        if ( m_attributes == null )</span>
+        {
+<span class="fc" id="L612">            m_attributes = new HashMap&lt;String, Object&gt;();</span>
+        }
+<span class="fc" id="L614">        m_attributes.put( attr, obj );</span>
+<span class="fc" id="L615">    }</span>
+
+    /**
+     * Sets the first Step for this Workflow, which will be executed immediately
+     * after the {@link #start()} method executes. Note than the Step is not
+     * marked as the &quot;current&quot; step or added to the Workflow history until the
+     * {@link #start()} method is called.
+     *
+     * @param step
+     *            the first step for the workflow
+     */
+    public final synchronized void setFirstStep(Step step)
+    {
+<span class="fc" id="L628">        m_firstStep = step;</span>
+<span class="fc" id="L629">    }</span>
+
+    /**
+     * Sets the unique identifier for this Workflow.
+     *
+     * @param id
+     *            the unique identifier
+     */
+    public final synchronized void setId( int id )
+    {
+<span class="fc" id="L639">        this.m_id = id;</span>
+<span class="fc" id="L640">    }</span>
+
+    /**
+     * Sets the WorkflowManager that contains this Workflow.
+     *
+     * @param manager
+     *            the workflow manager
+     */
+    public final synchronized void setWorkflowManager( WorkflowManager manager )
+    {
+<span class="fc" id="L650">        m_manager = manager;</span>
+<span class="fc" id="L651">        addWikiEventListener( manager );</span>
+<span class="fc" id="L652">    }</span>
+
+    /**
+     * Starts the Workflow and sets the state to {@link #RUNNING}. If the
+     * Workflow has already been started (or previously aborted), this method
+     * returns an {@linkplain IllegalStateException}. If any of the
+     * Steps in this Workflow throw a WikiException, the Workflow will abort
+     * and propagate the exception to callers.
+     * @throws WikiException if the current Step's {@link Step#start()}
+     * method throws an exception of any kind
+     */
+    public final synchronized void start() throws WikiException
+    {
+<span class="fc bfc" id="L665" title="All 2 branches covered.">        if ( m_state == ABORTED )</span>
+        {
+<span class="fc" id="L667">            throw new IllegalStateException( &quot;Workflow cannot be started; it has already been aborted.&quot; );</span>
+        }
+<span class="fc bfc" id="L669" title="All 2 branches covered.">        if ( m_started )</span>
+        {
+<span class="fc" id="L671">            throw new IllegalStateException( &quot;Workflow has already started.&quot; );</span>
+        }
+<span class="fc" id="L673">        m_started = true;</span>
+<span class="fc" id="L674">        m_state = RUNNING;</span>
+<span class="fc" id="L675">        fireEvent( WorkflowEvent.RUNNING );</span>
+
+        // Mark the first step as the current one &amp; add to history
+<span class="fc" id="L678">        m_currentStep = m_firstStep;</span>
+<span class="fc" id="L679">        m_history.add( m_currentStep );</span>
+
+        // Process current step
+        try
+        {
+<span class="fc" id="L684">            processCurrentStep();</span>
+        }
+<span class="fc" id="L686">        catch ( WikiException e )</span>
+        {
+<span class="fc" id="L688">            abort();</span>
+<span class="fc" id="L689">            throw e;</span>
+<span class="fc" id="L690">        }</span>
+<span class="fc" id="L691">    }</span>
+
+    /**
+     * Sets the Workflow in the {@link #WAITING} state. If the Workflow is not
+     * running or has already been paused, this method throws an
+     * IllegalStateException. Once paused, the Workflow can be un-paused by
+     * executing the {@link #restart()} method.
+     */
+    public final synchronized void waitstate()
+    {
+<span class="pc bpc" id="L701" title="1 of 2 branches missed.">        if ( m_state != RUNNING )</span>
+        {
+<span class="nc" id="L703">            throw new IllegalStateException( &quot;Workflow is not running; cannot pause.&quot; );</span>
+        }
+<span class="fc" id="L705">        m_state = WAITING;</span>
+<span class="fc" id="L706">        fireEvent( WorkflowEvent.WAITING );</span>
+<span class="fc" id="L707">    }</span>
+
+    /**
+     * Clears the attribute map and sets the current step field to
+     * &lt;code&gt;null&lt;/code&gt;.
+     */
+    protected void cleanup()
+    {
+<span class="fc" id="L715">        m_currentStep = null;</span>
+<span class="fc" id="L716">        m_attributes = null;</span>
+<span class="fc" id="L717">    }</span>
+
+    /**
+     * Protected helper method that changes the Workflow's state to
+     * {@link #COMPLETED} and sets the current Step to &lt;code&gt;null&lt;/code&gt;. It
+     * calls the {@link #cleanup()} method to flush retained objects.
+     * This method will no-op if it has previously been called.
+     */
+    protected final synchronized void complete()
+    {
+<span class="pc bpc" id="L727" title="1 of 2 branches missed.">        if ( !isCompleted() )</span>
+        {
+<span class="fc" id="L729">            m_state = COMPLETED;</span>
+<span class="fc" id="L730">            fireEvent( WorkflowEvent.COMPLETED );</span>
+<span class="fc" id="L731">            cleanup();</span>
+        }
+<span class="fc" id="L733">    }</span>
+
+    /**
+     * Protected method that returns the predecessor for a supplied Step.
+     *
+     * @param step
+     *            the Step for which the predecessor is requested
+     * @return its predecessor, or &lt;code&gt;null&lt;/code&gt; if the first Step was
+     *         supplied.
+     */
+    protected final Step previousStep(Step step)
+    {
+<span class="fc" id="L745">        int index = m_history.indexOf( step );</span>
+<span class="fc bfc" id="L746" title="All 2 branches covered.">        return index &lt; 1 ? null : m_history.get( index - 1 );</span>
+    }
+
+    /**
+     * Protected method that processes the current Step by calling
+     * {@link Step#execute()}. If the &lt;code&gt;execute&lt;/code&gt; throws an
+     * exception, this method will propagate the exception immediately
+     * to callers without aborting.
+     * @throws WikiException if the current Step's {@link Step#start()}
+     * method throws an exception of any kind
+     */
+    protected final void processCurrentStep() throws WikiException
+    {
+<span class="pc bpc" id="L759" title="1 of 2 branches missed.">        while ( m_currentStep != null )</span>
+        {
+
+            // Start and execute the current step
+<span class="fc bfc" id="L763" title="All 2 branches covered.">            if ( !m_currentStep.isStarted() )</span>
+            {
+<span class="fc" id="L765">                m_currentStep.start();</span>
+            }
+            try
+            {
+<span class="fc" id="L769">                Outcome result = m_currentStep.execute();</span>
+<span class="pc bpc" id="L770" title="1 of 2 branches missed.">                if ( Outcome.STEP_ABORT.equals( result ) )</span>
+                {
+<span class="nc" id="L772">                    abort();</span>
+<span class="nc" id="L773">                    break;</span>
+                }
+
+<span class="fc bfc" id="L776" title="All 2 branches covered.">                if ( !m_currentStep.isCompleted() )</span>
+                {
+<span class="fc" id="L778">                    m_currentStep.setOutcome( result );</span>
+                }
+            }
+<span class="fc" id="L781">            catch ( WikiException e )</span>
+            {
+<span class="fc" id="L783">                throw e;</span>
+<span class="fc" id="L784">            }</span>
+
+            // Get the execution Outcome; if not complete, pause workflow and
+            // exit
+<span class="fc" id="L788">            Outcome outcome = m_currentStep.getOutcome();</span>
+<span class="fc bfc" id="L789" title="All 2 branches covered.">            if ( !outcome.isCompletion() )</span>
+            {
+<span class="fc" id="L791">                waitstate();</span>
+<span class="fc" id="L792">                break;</span>
+            }
+
+            // Get the next Step; if null, we're done
+<span class="fc" id="L796">            Step nextStep = m_currentStep.getSuccessor( outcome );</span>
+<span class="fc bfc" id="L797" title="All 2 branches covered.">            if ( nextStep == null )</span>
+            {
+<span class="fc" id="L799">                complete();</span>
+<span class="fc" id="L800">                break;</span>
+            }
+
+            // Add the next step to Workflow history, and mark as current
+<span class="fc" id="L804">            m_history.add( nextStep );</span>
+<span class="fc" id="L805">            m_currentStep = nextStep;</span>
+<span class="fc" id="L806">        }</span>
+
+<span class="fc" id="L808">    }</span>
+
+    // events processing .......................................................
+
+    /**
+     * Registers a WikiEventListener with this instance. This is a convenience
+     * method.
+     *
+     * @param listener
+     *            the event listener
+     */
+    public final synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="fc" id="L821">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="fc" id="L822">    }</span>
+
+    /**
+     * Un-registers a WikiEventListener with this instance. This is a
+     * convenience method.
+     *
+     * @param listener
+     *            the event listener
+     */
+    public final synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L833">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L834">    }</span>
+
+    /**
+     * Fires a WorkflowEvent of the provided type to all registered listeners.
+     *
+     * @see org.apache.wiki.event.WorkflowEvent
+     * @param type
+     *            the event type to be fired
+     */
+    protected final void fireEvent( int type )
+    {
+<span class="fc bfc" id="L845" title="All 2 branches covered.">        if ( WikiEventManager.isListening( this ) )</span>
+        {
+<span class="fc" id="L847">            WikiEventManager.fireEvent( this, new WorkflowEvent( this, type ) );</span>
+        }
+<span class="fc" id="L849">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

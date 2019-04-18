@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Task.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.workflow</a> &gt; <span class="el_source">Task.java</span></div><h1>Task.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.workflow;
+
+import java.security.Principal;
+
+/**
+ * AbstractStep subclass that executes instructions, uninterrupted, and results
+ * in an Outcome. Concrete classes only need to implement {@link Task#execute()}.
+ * When the execution step completes, &lt;code&gt;execute&lt;/code&gt; must return
+ * {@link Outcome#STEP_COMPLETE}, {@link Outcome#STEP_CONTINUE} or
+ * {@link Outcome#STEP_ABORT}. Subclasses can add any errors by calling the
+ * helper method {@link AbstractStep#addError(String)}. The execute method should
+ * &lt;em&gt;generally&lt;/em&gt; capture and add errors to the error list instead of
+ * throwing a WikiException.
+ * &lt;p&gt;
+ *
+ * @since 2.5
+ */
+public abstract class Task extends AbstractStep
+{
+    private static final long serialVersionUID = 4630293957752430807L;
+    
+<span class="fc" id="L40">    private Step m_successor = null;</span>
+
+    /**
+     * Protected constructor that creates a new Task with a specified message key.
+     * After construction, the protected method {@link #setWorkflow(Workflow)} should be
+     * called.
+     *
+     * @param messageKey
+     *            the Step's message key, such as
+     *            &lt;code&gt;decision.editPageApproval&lt;/code&gt;. By convention, the
+     *            message prefix should be a lower-case version of the Step's
+     *            type, plus a period (&lt;em&gt;e.g.&lt;/em&gt;, &lt;code&gt;task.&lt;/code&gt;
+     *            and &lt;code&gt;decision.&lt;/code&gt;).
+     */
+    public Task( String messageKey )
+    {
+<span class="fc" id="L56">        super( messageKey );</span>
+<span class="fc" id="L57">        super.addSuccessor( Outcome.STEP_COMPLETE, null );</span>
+<span class="fc" id="L58">        super.addSuccessor( Outcome.STEP_ABORT, null );</span>
+<span class="fc" id="L59">    }</span>
+
+    /**
+     * Constructs a new instance of a Task, with an associated Workflow and
+     * message key.
+     *
+     * @param workflow
+     *            the associated workflow
+     * @param messageKey
+     *            the i18n message key
+     */
+    public Task( Workflow workflow, String messageKey )
+    {
+<span class="fc" id="L72">        this( messageKey );</span>
+<span class="fc" id="L73">        setWorkflow( workflow );</span>
+<span class="fc" id="L74">    }</span>
+
+    /**
+     * Returns {@link SystemPrincipal#SYSTEM_USER}.
+     * @return the system principal
+     */
+    public final Principal getActor()
+    {
+<span class="fc" id="L82">        return SystemPrincipal.SYSTEM_USER;</span>
+    }
+
+    /**
+     * Sets the successor Step to this one, which will be triggered if the Task
+     * completes successfully (that is, {@link Step#getOutcome()} returns
+     * {@link Outcome#STEP_COMPLETE}. This method is really a convenient
+     * shortcut for {@link Step#addSuccessor(Outcome, Step)}, where the first
+     * parameter is {@link Outcome#STEP_COMPLETE}.
+     *
+     * @param step
+     *            the successor
+     */
+    public final synchronized void setSuccessor( Step step )
+    {
+<span class="nc" id="L97">        m_successor = step;</span>
+<span class="nc" id="L98">    }</span>
+
+    /**
+     * Identifies the next Step after this Task finishes successfully. This
+     * method will always return the value set in method
+     * {@link #setSuccessor(Step)}, regardless of the current completion state.
+     *
+     * @return the next step
+     */
+    public final synchronized Step getSuccessor()
+    {
+<span class="nc" id="L109">        return m_successor;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

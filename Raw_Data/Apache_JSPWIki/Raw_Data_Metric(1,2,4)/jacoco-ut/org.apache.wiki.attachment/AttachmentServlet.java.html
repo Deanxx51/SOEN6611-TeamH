@@ -1,0 +1,754 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AttachmentServlet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.attachment</a> &gt; <span class="el_source">AttachmentServlet.java</span></div><h1>AttachmentServlet.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.attachment;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.SocketException;
+import java.security.Permission;
+import java.security.Principal;
+import java.util.List;
+import java.util.Properties;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload.FileItemFactory;
+import org.apache.commons.fileupload.FileUploadException;
+import org.apache.commons.fileupload.ProgressListener;
+import org.apache.commons.fileupload.disk.DiskFileItemFactory;
+import org.apache.commons.fileupload.servlet.ServletFileUpload;
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.WikiSession;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.RedirectException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.ui.progress.ProgressItem;
+import org.apache.wiki.util.HttpUtil;
+import org.apache.wiki.util.TextUtil;
+
+
+/**
+ *  This is the chief JSPWiki attachment management servlet.  It is used for
+ *  both uploading new content and downloading old content.  It can handle
+ *  most common cases, e.g. check for modifications and return 304's as necessary.
+ *  &lt;p&gt;
+ *  Authentication is done using JSPWiki's normal AAA framework.
+ *  &lt;p&gt;
+ *  This servlet is also capable of managing dynamically created attachments.
+ *
+ *
+ *  @since 1.9.45.
+ */
+<span class="nc" id="L75">public class AttachmentServlet extends HttpServlet {</span>
+
+    private static final int BUFFER_SIZE = 8192;
+
+    private static final long serialVersionUID = 3257282552187531320L;
+
+    private WikiEngine m_engine;
+<span class="nc" id="L82">    private static final Logger log = Logger.getLogger( AttachmentServlet.class );</span>
+
+    private static final String HDR_VERSION     = &quot;version&quot;;
+    // private static final String HDR_NAME        = &quot;page&quot;;
+
+    /** Default expiry period is 1 day */
+    protected static final long DEFAULT_EXPIRY = 1 * 24 * 60 * 60 * 1000;
+
+    /**
+     *  The maximum size that an attachment can be.
+     */
+<span class="nc" id="L93">    private int   m_maxSize = Integer.MAX_VALUE;</span>
+
+    /**
+     *  List of attachment types which are allowed
+     */
+
+    private String[] m_allowedPatterns;
+
+    private String[] m_forbiddenPatterns;
+
+    //
+    // Not static as DateFormat objects are not thread safe.
+    // Used to handle the RFC date format = Sat, 13 Apr 2002 13:23:01 GMT
+    //
+    //private final DateFormat rfcDateFormat = new SimpleDateFormat(&quot;EEE, dd MMM yyyy HH:mm:ss z&quot;);
+
+    /**
+     *  Initializes the servlet from WikiEngine properties.
+     *
+     */
+    public void init( ServletConfig config ) throws ServletException {
+        String tmpDir;
+
+<span class="nc" id="L116">        m_engine         = WikiEngine.getInstance( config );</span>
+<span class="nc" id="L117">        Properties props = m_engine.getWikiProperties();</span>
+
+<span class="nc" id="L119">        tmpDir         = m_engine.getWorkDir()+File.separator+&quot;attach-tmp&quot;;</span>
+
+<span class="nc" id="L121">        m_maxSize        = TextUtil.getIntegerProperty( props,</span>
+                AttachmentManager.PROP_MAXSIZE,
+                Integer.MAX_VALUE );
+
+<span class="nc" id="L125">        String allowed = TextUtil.getStringProperty( props,</span>
+                AttachmentManager.PROP_ALLOWEDEXTENSIONS,
+                null );
+
+<span class="nc bnc" id="L129" title="All 4 branches missed.">        if( allowed != null &amp;&amp; allowed.length() &gt; 0 )</span>
+<span class="nc" id="L130">            m_allowedPatterns = allowed.toLowerCase().split(&quot;\\s&quot;);</span>
+        else
+<span class="nc" id="L132">            m_allowedPatterns = new String[0];</span>
+
+<span class="nc" id="L134">        String forbidden = TextUtil.getStringProperty( props,</span>
+                AttachmentManager.PROP_FORDBIDDENEXTENSIONS,
+                null );
+
+<span class="nc bnc" id="L138" title="All 4 branches missed.">        if( forbidden != null &amp;&amp; forbidden.length() &gt; 0 )</span>
+<span class="nc" id="L139">            m_forbiddenPatterns = forbidden.toLowerCase().split(&quot;\\s&quot;);</span>
+        else
+<span class="nc" id="L141">            m_forbiddenPatterns = new String[0];</span>
+
+<span class="nc" id="L143">        File f = new File( tmpDir );</span>
+<span class="nc bnc" id="L144" title="All 2 branches missed.">        if( !f.exists() )</span>
+        {
+<span class="nc" id="L146">            f.mkdirs();</span>
+        }
+<span class="nc bnc" id="L148" title="All 2 branches missed.">        else if( !f.isDirectory() )</span>
+        {
+<span class="nc" id="L150">            log.fatal(&quot;A file already exists where the temporary dir is supposed to be: &quot;+tmpDir+&quot;.  Please remove it.&quot;);</span>
+        }
+
+<span class="nc" id="L153">        log.debug( &quot;UploadServlet initialized. Using &quot; +</span>
+                tmpDir + &quot; for temporary storage.&quot; );
+<span class="nc" id="L155">    }</span>
+
+    private boolean isTypeAllowed( String name )
+    {
+<span class="nc bnc" id="L159" title="All 4 branches missed.">        if( name == null || name.length() == 0 ) return false;</span>
+
+<span class="nc" id="L161">        name = name.toLowerCase();</span>
+
+<span class="nc bnc" id="L163" title="All 2 branches missed.">        for( int i = 0; i &lt; m_forbiddenPatterns.length; i++ )</span>
+        {
+<span class="nc bnc" id="L165" title="All 4 branches missed.">            if( name.endsWith(m_forbiddenPatterns[i]) &amp;&amp; m_forbiddenPatterns[i].length() &gt; 0 )</span>
+<span class="nc" id="L166">                return false;</span>
+        }
+
+<span class="nc bnc" id="L169" title="All 2 branches missed.">        for( int i = 0; i &lt; m_allowedPatterns.length; i++ )</span>
+        {
+<span class="nc bnc" id="L171" title="All 4 branches missed.">            if( name.endsWith(m_allowedPatterns[i]) &amp;&amp; m_allowedPatterns[i].length() &gt; 0 )</span>
+<span class="nc" id="L172">                return true;</span>
+        }
+
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        return m_allowedPatterns.length == 0;</span>
+    }
+
+    /**
+     *  Implements the OPTIONS method.
+     *
+     *  @param req The servlet request
+     *  @param res The servlet response
+     */
+
+    protected void doOptions( HttpServletRequest req, HttpServletResponse res )
+    {
+<span class="nc" id="L187">        res.setHeader( &quot;Allow&quot;, &quot;GET, PUT, POST, OPTIONS, PROPFIND, PROPPATCH, MOVE, COPY, DELETE&quot;);</span>
+<span class="nc" id="L188">        res.setStatus( HttpServletResponse.SC_OK );</span>
+<span class="nc" id="L189">    }</span>
+
+    /**
+     *  Serves a GET with two parameters: 'wikiname' specifying the wikiname
+     *  of the attachment, 'version' specifying the version indicator.
+     *
+     */
+
+    // FIXME: Messages would need to be localized somehow.
+    public void doGet( HttpServletRequest  req, HttpServletResponse res )
+            throws IOException, ServletException
+    {
+<span class="nc" id="L201">        WikiContext context = m_engine.createContext( req, WikiContext.ATTACH );</span>
+
+<span class="nc" id="L203">        String version  = req.getParameter( HDR_VERSION );</span>
+<span class="nc" id="L204">        String nextPage = req.getParameter( &quot;nextpage&quot; );</span>
+
+<span class="nc" id="L206">        String msg      = &quot;An error occurred. Ouch.&quot;;</span>
+<span class="nc" id="L207">        int    ver      = WikiProvider.LATEST_VERSION;</span>
+
+<span class="nc" id="L209">        AttachmentManager mgr = m_engine.getAttachmentManager();</span>
+<span class="nc" id="L210">        AuthorizationManager authmgr = m_engine.getAuthorizationManager();</span>
+
+
+<span class="nc" id="L213">        String page = context.getPage().getName();</span>
+
+<span class="nc bnc" id="L215" title="All 2 branches missed.">        if( page == null )</span>
+        {
+<span class="nc" id="L217">            log.info(&quot;Invalid attachment name.&quot;);</span>
+<span class="nc" id="L218">            res.sendError( HttpServletResponse.SC_BAD_REQUEST );</span>
+<span class="nc" id="L219">            return;</span>
+        }
+
+<span class="nc" id="L222">        OutputStream out = null;</span>
+<span class="nc" id="L223">        InputStream  in  = null;</span>
+
+        try
+        {
+<span class="nc" id="L227">            log.debug(&quot;Attempting to download att &quot;+page+&quot;, version &quot;+version);</span>
+<span class="nc bnc" id="L228" title="All 2 branches missed.">            if( version != null )</span>
+            {
+<span class="nc" id="L230">                ver = Integer.parseInt( version );</span>
+            }
+
+<span class="nc" id="L233">            Attachment att = mgr.getAttachmentInfo( page, ver );</span>
+
+<span class="nc bnc" id="L235" title="All 2 branches missed.">            if( att != null )</span>
+            {
+                //
+                //  Check if the user has permission for this attachment
+                //
+
+<span class="nc" id="L241">                Permission permission = PermissionFactory.getPagePermission( att, &quot;view&quot; );</span>
+<span class="nc bnc" id="L242" title="All 2 branches missed.">                if( !authmgr.checkPermission( context.getWikiSession(), permission ) )</span>
+                {
+<span class="nc" id="L244">                    log.debug(&quot;User does not have permission for this&quot;);</span>
+<span class="nc" id="L245">                    res.sendError( HttpServletResponse.SC_FORBIDDEN );</span>
+<span class="nc" id="L246">                    return;</span>
+                }
+
+
+                //
+                //  Check if the client already has a version of this attachment.
+                //
+<span class="nc bnc" id="L253" title="All 2 branches missed.">                if( HttpUtil.checkFor304( req, att.getName(), att.getLastModified() ) )</span>
+                {
+<span class="nc" id="L255">                    log.debug(&quot;Client has latest version already, sending 304...&quot;);</span>
+<span class="nc" id="L256">                    res.sendError( HttpServletResponse.SC_NOT_MODIFIED );</span>
+<span class="nc" id="L257">                    return;</span>
+                }
+
+<span class="nc" id="L260">                String mimetype = getMimeType( context, att.getFileName() );</span>
+
+<span class="nc" id="L262">                res.setContentType( mimetype );</span>
+
+                //
+                //  We use 'inline' instead of 'attachment' so that user agents
+                //  can try to automatically open the file.
+                //
+
+<span class="nc" id="L269">                res.addHeader( &quot;Content-Disposition&quot;,</span>
+<span class="nc" id="L270">                        &quot;inline; filename=\&quot;&quot; + att.getFileName() + &quot;\&quot;;&quot; );</span>
+
+<span class="nc" id="L272">                res.addDateHeader(&quot;Last-Modified&quot;,att.getLastModified().getTime());</span>
+
+<span class="nc bnc" id="L274" title="All 2 branches missed.">                if( !att.isCacheable() )</span>
+                {
+<span class="nc" id="L276">                    res.addHeader( &quot;Pragma&quot;, &quot;no-cache&quot; );</span>
+<span class="nc" id="L277">                    res.addHeader( &quot;Cache-control&quot;, &quot;no-cache&quot; );</span>
+                }
+
+                // If a size is provided by the provider, report it.
+<span class="nc bnc" id="L281" title="All 2 branches missed.">                if( att.getSize() &gt;= 0 )</span>
+                {
+                    // log.info(&quot;size:&quot;+att.getSize());
+<span class="nc" id="L284">                    res.setContentLength( (int)att.getSize() );</span>
+                }
+
+<span class="nc" id="L287">                out = res.getOutputStream();</span>
+<span class="nc" id="L288">                in  = mgr.getAttachmentStream( context, att );</span>
+
+<span class="nc" id="L290">                int read = 0;</span>
+<span class="nc" id="L291">                byte[] buffer = new byte[BUFFER_SIZE];</span>
+
+<span class="nc bnc" id="L293" title="All 2 branches missed.">                while( (read = in.read( buffer )) &gt; -1 )</span>
+                {
+<span class="nc" id="L295">                    out.write( buffer, 0, read );</span>
+                }
+
+<span class="nc bnc" id="L298" title="All 2 branches missed.">                if(log.isDebugEnabled())</span>
+                {
+<span class="nc" id="L300">                    msg = &quot;Attachment &quot;+att.getFileName()+&quot; sent to &quot;+req.getRemoteUser()+&quot; on &quot;+HttpUtil.getRemoteAddress(req);</span>
+<span class="nc" id="L301">                    log.debug( msg );</span>
+                }
+<span class="nc bnc" id="L303" title="All 2 branches missed.">                if( nextPage != null ) {</span>
+<span class="nc" id="L304">                    res.sendRedirect( validateNextPage( nextPage, m_engine.getURL( WikiContext.ERROR, &quot;&quot;, null, false ) ) );</span>
+                }
+
+<span class="nc" id="L307">            } else {</span>
+<span class="nc" id="L308">                msg = &quot;Attachment '&quot; + page + &quot;', version &quot; + ver + &quot; does not exist.&quot;;</span>
+
+<span class="nc" id="L310">                log.info( msg );</span>
+<span class="nc" id="L311">                res.sendError( HttpServletResponse.SC_NOT_FOUND, msg );</span>
+            }
+        }
+<span class="nc" id="L314">        catch( ProviderException pe )</span>
+        {
+<span class="nc" id="L316">            msg = &quot;Provider error: &quot;+pe.getMessage();</span>
+
+<span class="nc" id="L318">            log.debug(&quot;Provider failed while reading&quot;, pe);</span>
+            //
+            //  This might fail, if the response is already committed.  So in that
+            //  case we just log it.
+            //
+            try {
+<span class="nc" id="L324">                res.sendError( HttpServletResponse.SC_INTERNAL_SERVER_ERROR, msg );</span>
+            }
+<span class="nc" id="L326">            catch( IllegalStateException e ) {}</span>
+        }
+<span class="nc" id="L328">        catch( NumberFormatException nfe )</span>
+        {
+<span class="nc" id="L330">            log.warn( &quot;Invalid version number: &quot; + version );</span>
+<span class="nc" id="L331">            res.sendError( HttpServletResponse.SC_BAD_REQUEST, &quot;Invalid version number&quot; );</span>
+        }
+<span class="nc" id="L333">        catch( SocketException se )</span>
+        {
+            //
+            //  These are very common in download situations due to aggressive
+            //  clients.  No need to try and send an error.
+            //
+<span class="nc" id="L339">            log.debug(&quot;I/O exception during download&quot;,se);</span>
+        }
+<span class="nc" id="L341">        catch( IOException ioe )</span>
+        {
+            //
+            //  Client dropped the connection or something else happened.
+            //  We don't know where the error came from, so we'll at least
+            //  try to send an error and catch it quietly if it doesn't quite work.
+            //
+<span class="nc" id="L348">            msg = &quot;Error: &quot; + ioe.getMessage();</span>
+<span class="nc" id="L349">            log.debug(&quot;I/O exception during download&quot;,ioe);</span>
+
+            try
+            {
+<span class="nc" id="L353">                res.sendError( HttpServletResponse.SC_INTERNAL_SERVER_ERROR, msg );</span>
+            }
+<span class="nc" id="L355">            catch( IllegalStateException e ) {}</span>
+        }
+        finally
+        {
+<span class="nc" id="L359">            IOUtils.closeQuietly( in );</span>
+
+            //
+            //  Quite often, aggressive clients close the connection when they have
+            //  received the last bits.  Therefore, we close the output, but ignore
+            //  any exception that might come out of it.
+            //
+<span class="nc" id="L366">            IOUtils.closeQuietly( out );</span>
+        }
+<span class="nc" id="L368">    }</span>
+
+    /**
+     *  Returns the mime type for this particular file.  Case does not matter.
+     *
+     * @param ctx WikiContext; required to access the ServletContext of the request.
+     * @param fileName The name to check for.
+     * @return A valid mime type, or application/binary, if not recognized
+     */
+    private static String getMimeType(WikiContext ctx, String fileName )
+    {
+<span class="nc" id="L379">        String mimetype = null;</span>
+
+<span class="nc" id="L381">        HttpServletRequest req = ctx.getHttpRequest();</span>
+<span class="nc bnc" id="L382" title="All 2 branches missed.">        if( req != null )</span>
+        {
+<span class="nc" id="L384">            ServletContext s = req.getSession().getServletContext();</span>
+
+<span class="nc bnc" id="L386" title="All 2 branches missed.">            if( s != null )</span>
+            {
+<span class="nc" id="L388">                mimetype = s.getMimeType( fileName.toLowerCase() );</span>
+            }
+        }
+
+<span class="nc bnc" id="L392" title="All 2 branches missed.">        if( mimetype == null )</span>
+        {
+<span class="nc" id="L394">            mimetype = &quot;application/binary&quot;;</span>
+        }
+
+<span class="nc" id="L397">        return mimetype;</span>
+    }
+
+
+    /**
+     * Grabs mime/multipart data and stores it into the temporary area.
+     * Uses other parameters to determine which name to store as.
+     *
+     * &lt;p&gt;The input to this servlet is generated by an HTML FORM with
+     * two parts. The first, named 'page', is the WikiName identifier
+     * for the parent file. The second, named 'content', is the binary
+     * content of the file.
+     *
+     */
+    public void doPost( HttpServletRequest  req, HttpServletResponse res )
+            throws IOException, ServletException
+    {
+        try
+        {
+<span class="nc" id="L416">            String nextPage = upload( req );</span>
+<span class="nc" id="L417">            req.getSession().removeAttribute(&quot;msg&quot;);</span>
+<span class="nc" id="L418">            res.sendRedirect( nextPage );</span>
+        }
+<span class="nc" id="L420">        catch( RedirectException e )</span>
+        {
+<span class="nc" id="L422">            WikiSession session = WikiSession.getWikiSession( m_engine, req );</span>
+<span class="nc" id="L423">            session.addMessage( e.getMessage() );</span>
+
+<span class="nc" id="L425">            req.getSession().setAttribute(&quot;msg&quot;, e.getMessage());</span>
+<span class="nc" id="L426">            res.sendRedirect( e.getRedirect() );</span>
+<span class="nc" id="L427">        }</span>
+<span class="nc" id="L428">    }</span>
+
+    /**
+     *  Validates the next page to be on the same server as this webapp.
+     *  Fixes [JSPWIKI-46].
+     */
+    private String validateNextPage( String nextPage, String errorPage )
+    {
+<span class="nc bnc" id="L436" title="All 2 branches missed.">        if( nextPage.indexOf(&quot;://&quot;) != -1 )</span>
+        {
+            // It's an absolute link, so unless it starts with our address, we'll
+            // log an error.
+
+<span class="nc bnc" id="L441" title="All 2 branches missed.">            if( !nextPage.startsWith( m_engine.getBaseURL() ) )</span>
+            {
+<span class="nc" id="L443">                log.warn(&quot;Detected phishing attempt by redirecting to an unsecure location: &quot;+nextPage);</span>
+<span class="nc" id="L444">                nextPage = errorPage;</span>
+            }
+        }
+
+<span class="nc" id="L448">        return nextPage;</span>
+    }
+
+    /**
+     *  Uploads a specific mime multipart input set, intercepts exceptions.
+     *
+     *  @param req The servlet request
+     *  @return The page to which we should go next.
+     *  @throws RedirectException If there's an error and a redirection is needed
+     *  @throws IOException If upload fails
+     * @throws FileUploadException
+     */
+    protected String upload( HttpServletRequest req ) throws RedirectException, IOException {
+<span class="nc" id="L461">        String msg     = &quot;&quot;;</span>
+<span class="nc" id="L462">        String attName = &quot;(unknown)&quot;;</span>
+<span class="nc" id="L463">        String errorPage = m_engine.getURL( WikiContext.ERROR, &quot;&quot;, null, false ); // If something bad happened, Upload should be able to take care of most stuff</span>
+<span class="nc" id="L464">        String nextPage = errorPage;</span>
+
+<span class="nc" id="L466">        String progressId = req.getParameter( &quot;progressid&quot; );</span>
+
+        // Check that we have a file upload request
+<span class="nc bnc" id="L469" title="All 2 branches missed.">        if( !ServletFileUpload.isMultipartContent(req) )</span>
+        {
+<span class="nc" id="L471">            throw new RedirectException( &quot;Not a file upload&quot;, errorPage );</span>
+        }
+
+        try
+        {
+<span class="nc" id="L476">            FileItemFactory factory = new DiskFileItemFactory();</span>
+
+            // Create the context _before_ Multipart operations, otherwise
+            // strict servlet containers may fail when setting encoding.
+<span class="nc" id="L480">            WikiContext context = m_engine.createContext( req, WikiContext.ATTACH );</span>
+
+<span class="nc" id="L482">            UploadListener pl = new UploadListener();</span>
+
+<span class="nc" id="L484">            m_engine.getProgressManager().startProgress( pl, progressId );</span>
+
+<span class="nc" id="L486">            ServletFileUpload upload = new ServletFileUpload(factory);</span>
+<span class="nc" id="L487">            upload.setHeaderEncoding(&quot;UTF-8&quot;);</span>
+<span class="nc bnc" id="L488" title="All 2 branches missed.">            if( !context.hasAdminPermissions() )</span>
+            {
+<span class="nc" id="L490">                upload.setFileSizeMax( m_maxSize );</span>
+            }
+<span class="nc" id="L492">            upload.setProgressListener( pl );</span>
+<span class="nc" id="L493">            List&lt;FileItem&gt; items = upload.parseRequest( req );</span>
+
+<span class="nc" id="L495">            String   wikipage   = null;</span>
+<span class="nc" id="L496">            String   changeNote = null;</span>
+            //FileItem actualFile = null;
+<span class="nc" id="L498">            List&lt;FileItem&gt; fileItems = new java.util.ArrayList&lt;FileItem&gt;();</span>
+
+<span class="nc bnc" id="L500" title="All 2 branches missed.">            for( FileItem item : items )</span>
+            {
+<span class="nc bnc" id="L502" title="All 2 branches missed.">                if( item.isFormField() )</span>
+                {
+<span class="nc bnc" id="L504" title="All 2 branches missed.">                    if( item.getFieldName().equals(&quot;page&quot;) )</span>
+                    {
+                        //
+                        // FIXME: Kludge alert.  We must end up with the parent page name,
+                        //        if this is an upload of a new revision
+                        //
+
+<span class="nc" id="L511">                        wikipage = item.getString(&quot;UTF-8&quot;);</span>
+<span class="nc" id="L512">                        int x = wikipage.indexOf(&quot;/&quot;);</span>
+
+<span class="nc bnc" id="L514" title="All 2 branches missed.">                        if( x != -1 ) wikipage = wikipage.substring(0,x);</span>
+<span class="nc" id="L515">                    }</span>
+<span class="nc bnc" id="L516" title="All 2 branches missed.">                    else if( item.getFieldName().equals(&quot;changenote&quot;) )</span>
+                    {
+<span class="nc" id="L518">                        changeNote = item.getString(&quot;UTF-8&quot;);</span>
+<span class="nc bnc" id="L519" title="All 2 branches missed.">                        if (changeNote != null)</span>
+                        {
+<span class="nc" id="L521">                            changeNote = TextUtil.replaceEntities(changeNote);</span>
+                        }
+                    }
+<span class="nc bnc" id="L524" title="All 2 branches missed.">                    else if( item.getFieldName().equals( &quot;nextpage&quot; ) )</span>
+                    {
+<span class="nc" id="L526">                        nextPage = validateNextPage( item.getString(&quot;UTF-8&quot;), errorPage );</span>
+                    }
+                }
+                else
+                {
+<span class="nc" id="L531">                    fileItems.add( item );</span>
+                }
+<span class="nc" id="L533">            }</span>
+
+<span class="nc bnc" id="L535" title="All 2 branches missed.">            if( fileItems.size() == 0 )</span>
+            {
+<span class="nc" id="L537">                throw new RedirectException( &quot;Broken file upload&quot;, errorPage );</span>
+
+            } else {
+
+<span class="nc bnc" id="L541" title="All 2 branches missed.">                for( FileItem actualFile : fileItems ){</span>
+
+<span class="nc" id="L543">                    String filename = actualFile.getName();</span>
+<span class="nc" id="L544">                    long   fileSize = actualFile.getSize();</span>
+<span class="nc" id="L545">                    InputStream in  = actualFile.getInputStream();</span>
+
+                    try
+                    {
+<span class="nc" id="L549">                        executeUpload( context, in, filename, nextPage, wikipage, changeNote, fileSize );</span>
+                    }
+                    finally
+                    {
+<span class="nc" id="L553">                        IOUtils.closeQuietly( in );</span>
+                    }
+
+<span class="nc" id="L556">                }</span>
+            }
+
+        }
+<span class="nc" id="L560">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L562">            msg = &quot;Upload failed because the provider failed: &quot;+e.getMessage();</span>
+<span class="nc" id="L563">            log.warn( msg + &quot; (attachment: &quot; + attName + &quot;)&quot;, e );</span>
+
+<span class="nc" id="L565">            throw new IOException(msg);</span>
+        }
+<span class="nc" id="L567">        catch( IOException e )</span>
+        {
+            // Show the submit page again, but with a bit more
+            // intimidating output.
+<span class="nc" id="L571">            msg = &quot;Upload failure: &quot; + e.getMessage();</span>
+<span class="nc" id="L572">            log.warn( msg + &quot; (attachment: &quot; + attName + &quot;)&quot;, e );</span>
+
+<span class="nc" id="L574">            throw e;</span>
+        }
+<span class="nc" id="L576">        catch (FileUploadException e)</span>
+        {
+            // Show the submit page again, but with a bit more
+            // intimidating output.
+<span class="nc" id="L580">            msg = &quot;Upload failure: &quot; + e.getMessage();</span>
+<span class="nc" id="L581">            log.warn( msg + &quot; (attachment: &quot; + attName + &quot;)&quot;, e );</span>
+
+<span class="nc" id="L583">            throw new IOException( msg, e );</span>
+        }
+        finally
+        {
+<span class="nc" id="L587">            m_engine.getProgressManager().stopProgress( progressId );</span>
+            // FIXME: In case of exceptions should absolutely
+            //        remove the uploaded file.
+        }
+
+<span class="nc" id="L592">        return nextPage;</span>
+    }
+
+    /**
+     *
+     * @param context the wiki context
+     * @param data the input stream data
+     * @param filename the name of the file to upload
+     * @param errorPage the place to which you want to get a redirection
+     * @param parentPage the page to which the file should be attached
+     * @param changenote The change note
+     * @param contentLength The content length
+     * @return &lt;code&gt;true&lt;/code&gt; if upload results in the creation of a new page;
+     * &lt;code&gt;false&lt;/code&gt; otherwise
+     * @throws RedirectException If the content needs to be redirected
+     * @throws IOException       If there is a problem in the upload.
+     * @throws ProviderException If there is a problem in the backend.
+     */
+    protected boolean executeUpload( WikiContext context, InputStream data,
+                                     String filename, String errorPage,
+                                     String parentPage, String changenote,
+                                     long contentLength )
+            throws RedirectException,
+            IOException, ProviderException
+    {
+<span class="nc" id="L617">        boolean created = false;</span>
+
+        try
+        {
+<span class="nc" id="L621">            filename = AttachmentManager.validateFileName( filename );</span>
+        }
+<span class="nc" id="L623">        catch( WikiException e )</span>
+        {
+            // this is a kludge, the exception that is caught here contains the i18n key
+            // here we have the context available, so we can internationalize it properly :
+<span class="nc" id="L627">            throw new RedirectException (Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE )</span>
+<span class="nc" id="L628">                    .getString( e.getMessage() ), errorPage );</span>
+<span class="nc" id="L629">        }</span>
+
+        //
+        //  FIXME: This has the unfortunate side effect that it will receive the
+        //  contents.  But we can't figure out the page to redirect to
+        //  before we receive the file, due to the stupid constructor of MultipartRequest.
+        //
+
+<span class="nc bnc" id="L637" title="All 2 branches missed.">        if( !context.hasAdminPermissions() )</span>
+        {
+<span class="nc bnc" id="L639" title="All 2 branches missed.">            if( contentLength &gt; m_maxSize )</span>
+            {
+                // FIXME: Does not delete the received files.
+<span class="nc" id="L642">                throw new RedirectException( &quot;File exceeds maximum size (&quot;+m_maxSize+&quot; bytes)&quot;,</span>
+                        errorPage );
+            }
+
+<span class="nc bnc" id="L646" title="All 2 branches missed.">            if( !isTypeAllowed(filename) )</span>
+            {
+<span class="nc" id="L648">                throw new RedirectException( &quot;Files of this type may not be uploaded to this wiki&quot;,</span>
+                        errorPage );
+            }
+        }
+
+<span class="nc" id="L653">        Principal user    = context.getCurrentUser();</span>
+
+<span class="nc" id="L655">        AttachmentManager mgr = m_engine.getAttachmentManager();</span>
+
+<span class="nc" id="L657">        log.debug(&quot;file=&quot;+filename);</span>
+
+<span class="nc bnc" id="L659" title="All 2 branches missed.">        if( data == null )</span>
+        {
+<span class="nc" id="L661">            log.error(&quot;File could not be opened.&quot;);</span>
+
+<span class="nc" id="L663">            throw new RedirectException(&quot;File could not be opened.&quot;,</span>
+                    errorPage);
+        }
+
+        //
+        //  Check whether we already have this kind of a page.
+        //  If the &quot;page&quot; parameter already defines an attachment
+        //  name for an update, then we just use that file.
+        //  Otherwise we create a new attachment, and use the
+        //  filename given.  Incidentally, this will also mean
+        //  that if the user uploads a file with the exact
+        //  same name than some other previous attachment,
+        //  then that attachment gains a new version.
+        //
+
+<span class="nc" id="L678">        Attachment att = mgr.getAttachmentInfo( context.getPage().getName() );</span>
+
+<span class="nc bnc" id="L680" title="All 2 branches missed.">        if( att == null )</span>
+        {
+<span class="nc" id="L682">            att = new Attachment( m_engine, parentPage, filename );</span>
+<span class="nc" id="L683">            created = true;</span>
+        }
+<span class="nc" id="L685">        att.setSize( contentLength );</span>
+
+        //
+        //  Check if we're allowed to do this?
+        //
+
+<span class="nc" id="L691">        Permission permission = PermissionFactory.getPagePermission( att, &quot;upload&quot; );</span>
+<span class="nc bnc" id="L692" title="All 2 branches missed.">        if( m_engine.getAuthorizationManager().checkPermission( context.getWikiSession(),</span>
+                permission ) )
+        {
+<span class="nc bnc" id="L695" title="All 2 branches missed.">            if( user != null )</span>
+            {
+<span class="nc" id="L697">                att.setAuthor( user.getName() );</span>
+            }
+
+<span class="nc bnc" id="L700" title="All 4 branches missed.">            if( changenote != null &amp;&amp; changenote.length() &gt; 0 )</span>
+            {
+<span class="nc" id="L702">                att.setAttribute( WikiPage.CHANGENOTE, changenote );</span>
+            }
+
+            try
+            {
+<span class="nc" id="L707">                m_engine.getAttachmentManager().storeAttachment( att, data );</span>
+            }
+<span class="nc" id="L709">            catch( ProviderException pe )</span>
+            {
+                // this is a kludge, the exception that is caught here contains the i18n key
+                // here we have the context available, so we can internationalize it properly :
+<span class="nc" id="L713">                throw new ProviderException( Preferences.getBundle( context, InternationalizationManager.CORE_BUNDLE )</span>
+<span class="nc" id="L714">                        .getString( pe.getMessage() ) );</span>
+<span class="nc" id="L715">            }</span>
+
+<span class="nc" id="L717">            log.info( &quot;User &quot; + user + &quot; uploaded attachment to &quot; + parentPage +</span>
+<span class="nc" id="L718">                    &quot; called &quot;+filename+&quot;, size &quot; + att.getSize() );</span>
+        }
+        else
+        {
+<span class="nc" id="L722">            throw new RedirectException( &quot;No permission to upload a file&quot;, errorPage );</span>
+        }
+
+<span class="nc" id="L725">        return created;</span>
+    }
+
+    /**
+     *  Provides tracking for upload progress.
+     *
+     */
+    private static class UploadListener
+            extends    ProgressItem
+            implements ProgressListener
+    {
+        public long m_currentBytes;
+        public long m_totalBytes;
+
+        public void update(long recvdBytes, long totalBytes, int item)
+        {
+<span class="nc" id="L741">            m_currentBytes = recvdBytes;</span>
+<span class="nc" id="L742">            m_totalBytes   = totalBytes;</span>
+<span class="nc" id="L743">        }</span>
+
+        public int getProgress()
+        {
+<span class="nc" id="L747">            return (int) (((float)m_currentBytes / m_totalBytes) * 100 + 0.5);</span>
+        }
+    }
+
+}
+
+
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

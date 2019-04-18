@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>XHtmlToWikiConfig.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.htmltowiki</a> &gt; <span class="el_source">XHtmlToWikiConfig.java</span></div><h1>XHtmlToWikiConfig.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.htmltowiki;
+
+import org.apache.wiki.WikiContext;
+
+/**
+ *  Defines a Wiki configuration to XHtmlToWikiTranslator, including things like
+ *  URLs.
+ *
+ */
+public class XHtmlToWikiConfig
+{
+<span class="fc" id="L30">    private String m_outlink = &quot;outlink&quot;;</span>
+
+<span class="fc" id="L32">    private String m_pageInfoJsp = &quot;PageInfo.jsp&quot;;</span>
+
+<span class="fc" id="L34">    private String m_wikiJspPage = &quot;Wiki.jsp?page=&quot;;</span>
+
+<span class="fc" id="L36">    private String m_editJspPage = &quot;Edit.jsp?page=&quot;;</span>
+
+<span class="fc" id="L38">    private String m_attachPage = &quot;attach?page=&quot;;</span>
+
+    private String m_pageName;
+
+    /**
+     *  Creates a new, empty config object.
+     */
+    public XHtmlToWikiConfig()
+<span class="fc" id="L46">    {}</span>
+
+    /**
+     *  The constructor initializes the different internal fields
+     *  according to the current URLConstructor.
+     *
+     * @param wikiContext A WikiContext
+     */
+    public XHtmlToWikiConfig( WikiContext wikiContext )
+<span class="fc" id="L55">    {</span>
+<span class="fc" id="L56">        setWikiContext( wikiContext );</span>
+
+        //
+        //  Figure out the actual URLs.
+        //
+        //  NB: The logic here will fail if you add something else after
+        //      the Wiki page name in VIEW or ATTACH
+        //
+
+<span class="fc" id="L65">        m_wikiJspPage = wikiContext.getURL( WikiContext.VIEW, &quot;&quot; );</span>
+
+<span class="fc" id="L67">        m_editJspPage = wikiContext.getURL( WikiContext.EDIT, &quot;&quot; );</span>
+
+<span class="fc" id="L69">        m_attachPage = wikiContext.getURL( WikiContext.ATTACH, &quot;&quot; );</span>
+
+<span class="fc" id="L71">        m_pageInfoJsp = wikiContext.getURL( WikiContext.INFO, &quot;&quot; );</span>
+<span class="fc" id="L72">    }</span>
+
+    private void setWikiContext( WikiContext wikiContext )
+    {
+<span class="pc bpc" id="L76" title="1 of 2 branches missed.">        if( wikiContext.getPage() != null )</span>
+        {
+<span class="fc" id="L78">            setPageName( wikiContext.getPage().getName() + '/' );</span>
+        }
+<span class="fc" id="L80">    }</span>
+
+    /**
+     *  Return the URL for the attachments.
+     *  
+     *  @return URL for attachments.
+     */
+    public String getAttachPage()
+    {
+<span class="fc" id="L89">        return m_attachPage;</span>
+    }
+
+    /**
+     *  Set the URL for attachments.
+     *  
+     *  @param attachPage The attachment URL.
+     */
+    public void setAttachPage( String attachPage )
+    {
+<span class="nc" id="L99">        m_attachPage = attachPage;</span>
+<span class="nc" id="L100">    }</span>
+
+    /**
+     *  Gets the URL of the outlink image.
+     *  
+     *  @return The URL of the outlink image.
+     */
+    public String getOutlink()
+    {
+<span class="fc" id="L109">        return m_outlink;</span>
+    }
+
+    /**
+     *  Set the outlink URL.
+     *  
+     *  @param outlink The outlink URL.
+     */
+    public void setOutlink( String outlink )
+    {
+<span class="nc" id="L119">        m_outlink = outlink;</span>
+<span class="nc" id="L120">    }</span>
+
+    /**
+     *  Get the PageInfo.jsp URI.
+     *  
+     *  @return The URI for the page info display.
+     */
+    public String getPageInfoJsp()
+    {
+<span class="fc" id="L129">        return m_pageInfoJsp;</span>
+    }
+
+    /**
+     *  Set the URI for the page info display.
+     *  
+     *  @param pageInfoJsp URI for the page info.
+     */
+    public void setPageInfoJsp( String pageInfoJsp )
+    {
+<span class="nc" id="L139">        m_pageInfoJsp = pageInfoJsp;</span>
+<span class="nc" id="L140">    }</span>
+
+    /**
+     *  Get the page name.
+     *  
+     *  @return The Page Name.
+     */
+    public String getPageName()
+    {
+<span class="fc" id="L149">        return m_pageName;</span>
+    }
+
+    
+    /**
+     *  Set the page name.
+     *  
+     *  @param pageName The name of the page.
+     */
+    public void setPageName( String pageName )
+    {
+<span class="fc" id="L160">        m_pageName = pageName;</span>
+<span class="fc" id="L161">    }</span>
+
+    /**
+     *  Get the URI to the Wiki.jsp view.
+     *  
+     *  @return The URI to the Wiki.jsp.
+     */
+    public String getWikiJspPage()
+    {
+<span class="fc" id="L170">        return m_wikiJspPage;</span>
+    }
+
+    /**
+     *  Set the URI to the Wiki.jsp.
+     *  
+     *  @param wikiJspPage The URI to the Wiki.jsp.
+     */
+    public void setWikiJspPage( String wikiJspPage )
+    {
+<span class="nc" id="L180">        m_wikiJspPage = wikiJspPage;</span>
+<span class="nc" id="L181">    }</span>
+
+    /**
+     *  Return the URI to the Edit.jsp page.
+     *  
+     *  @return The URI to the Edit.jsp page.
+     */
+    public String getEditJspPage()
+    {
+<span class="fc" id="L190">        return m_editJspPage;</span>
+    }
+
+    /**
+     *  Set the URI to the Edit.jsp page.
+     *  
+     *  @param editJspPage The Edit.jsp URI.
+     */
+    public void setEditJspPage( String editJspPage )
+    {
+<span class="nc" id="L200">        m_editJspPage = editJspPage;</span>
+<span class="nc" id="L201">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

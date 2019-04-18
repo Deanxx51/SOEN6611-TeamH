@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>ContentTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">ContentTag.java</span></div><h1>ContentTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
+import javax.servlet.ServletException;
+import javax.servlet.jsp.JspException;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.ProviderException;
+
+
+/**
+ *  Is used as a &quot;super include&quot; tag, which can include the proper context
+ *  based on the wikicontext.
+ *
+ *  @since 2.2
+ */
+<span class="nc" id="L39">public class ContentTag extends WikiTagBase {</span>
+
+    private static final long serialVersionUID = 0L;
+<span class="nc" id="L42">    private static final Logger log = Logger.getLogger( ContentTag.class );</span>
+    
+<span class="nc" id="L44">    private Map&lt;String, String&gt; m_mappings = new HashMap&lt;String, String&gt;();</span>
+
+    /**
+     *  Set the template for the VIEW context.
+     *  
+     *  @param s The template name.
+     */
+    public void setView( String s )
+    {
+<span class="nc" id="L53">        m_mappings.put( WikiContext.VIEW, s );</span>
+<span class="nc" id="L54">    }</span>
+
+    /**
+     *  Set the template for the DIFF context.
+     *  
+     *  @param s The template name.
+     */
+    public void setDiff( String s )
+    {
+<span class="nc" id="L63">        m_mappings.put( WikiContext.DIFF, s );</span>
+<span class="nc" id="L64">    }</span>
+
+    /**
+     *  Set the template for the INFO context.
+     *  
+     *  @param s The template name.
+     */
+    public void setInfo( String s )
+    {
+<span class="nc" id="L73">        m_mappings.put( WikiContext.INFO, s );</span>
+<span class="nc" id="L74">    }</span>
+
+    /**
+     *  Set the template for the PREVIEW context.
+     *  
+     *  @param s The template name.
+     */
+    public void setPreview( String s )
+    {
+<span class="nc" id="L83">        m_mappings.put( WikiContext.PREVIEW, s );</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     *  Set the template for the CONFLICT context.
+     *  
+     *  @param s The template name.
+     */
+    public void setConflict( String s )
+    {
+<span class="nc" id="L93">        m_mappings.put( WikiContext.CONFLICT, s );</span>
+<span class="nc" id="L94">    }</span>
+
+    /**
+     *  Set the template for the FIND context.
+     *  
+     *  @param s The template name.
+     */
+    public void setFind( String s )
+    {
+<span class="nc" id="L103">        m_mappings.put( WikiContext.FIND, s );</span>
+<span class="nc" id="L104">    }</span>
+
+    /**
+     *  Set the template for the PREFS context.
+     *  
+     *  @param s The template name.
+     */
+    public void setPrefs( String s )
+    {
+<span class="nc" id="L113">        m_mappings.put( WikiContext.PREFS, s );</span>
+<span class="nc" id="L114">    }</span>
+
+    /**
+     *  Set the template for the ERROR context.
+     *  
+     *  @param s The template name.
+     */
+    public void setError( String s )
+    {
+<span class="nc" id="L123">        m_mappings.put( WikiContext.ERROR, s );</span>
+<span class="nc" id="L124">    }</span>
+
+    /**
+     *  Set the template for the EDIT context.
+     *  
+     *  @param s The template name.
+     */
+    public void setEdit( String s )
+    {
+<span class="nc" id="L133">        m_mappings.put( WikiContext.EDIT, s );</span>
+<span class="nc" id="L134">    }</span>
+
+    /**
+     *  Set the template for the COMMENT context.
+     *  
+     *  @param s The template name.
+     */
+    public void setComment( String s )
+    {
+<span class="nc" id="L143">        m_mappings.put( WikiContext.COMMENT, s );</span>
+<span class="nc" id="L144">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public final int doWikiStartTag()
+        throws IOException,
+               ProviderException
+    {
+<span class="nc" id="L153">        return SKIP_BODY;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public final int doEndTag()
+        throws JspException
+    {
+        try
+        {
+            // Check the overridden templates first
+<span class="nc" id="L165">            String requestContext = m_wikiContext.getRequestContext();</span>
+<span class="nc" id="L166">            String contentTemplate = m_mappings.get( requestContext );</span>
+
+            // If not found, use the defaults
+<span class="nc bnc" id="L169" title="All 2 branches missed.">            if ( contentTemplate == null )</span>
+            {
+<span class="nc" id="L171">                contentTemplate = m_wikiContext.getContentTemplate();</span>
+            }
+            
+            // If still no, something fishy is going on
+<span class="nc bnc" id="L175" title="All 2 branches missed.">            if( contentTemplate == null )</span>
+            {
+<span class="nc" id="L177">                throw new JspException(&quot;This template uses &lt;wiki:Content/&gt; in an unsupported context: &quot; + requestContext );</span>
+            }
+
+<span class="nc" id="L180">            String page = m_wikiContext.getEngine().getTemplateManager().findJSP( pageContext,</span>
+<span class="nc" id="L181">                                                                                  m_wikiContext.getTemplate(),</span>
+                                                                                  contentTemplate );
+<span class="nc" id="L183">            pageContext.include( page );</span>
+        }
+<span class="nc" id="L185">        catch( ServletException e )</span>
+        {
+<span class="nc" id="L187">            log.warn( &quot;Including failed, got a servlet exception from sub-page. &quot;+</span>
+                      &quot;Rethrowing the exception to the JSP engine.&quot;, e );
+<span class="nc" id="L189">            throw new JspException( e.getMessage() );</span>
+        }
+<span class="nc" id="L191">        catch( IOException e )</span>
+        {
+<span class="nc" id="L193">            log.warn( &quot;I/O exception - probably the connection was broken. &quot;+</span>
+                      &quot;Rethrowing the exception to the JSP engine.&quot;, e );
+<span class="nc" id="L195">            throw new JspException( e.getMessage() );</span>
+<span class="nc" id="L196">        }</span>
+
+<span class="nc" id="L198">        return EVAL_PAGE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

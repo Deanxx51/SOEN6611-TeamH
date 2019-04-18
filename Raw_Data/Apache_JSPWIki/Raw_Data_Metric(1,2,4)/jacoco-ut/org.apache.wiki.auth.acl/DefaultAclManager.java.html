@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DefaultAclManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.acl</a> &gt; <span class="el_source">DefaultAclManager.java</span></div><h1>DefaultAclManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.auth.acl;
+
+import java.security.Permission;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Properties;
+import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.PrincipalComparator;
+import org.apache.wiki.auth.WikiSecurityException;
+import org.apache.wiki.auth.permissions.PagePermission;
+import org.apache.wiki.auth.permissions.PermissionFactory;
+import org.apache.wiki.pages.PageLock;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.render.RenderingManager;
+
+/**
+ * Default implementation that parses Acls from wiki page markup.
+ *
+ * @since 2.3
+ */
+<span class="fc" id="L55">public class DefaultAclManager implements AclManager {</span>
+
+<span class="fc" id="L57">    private static final Logger log = Logger.getLogger(DefaultAclManager.class);</span>
+
+<span class="fc" id="L59">    private AuthorizationManager m_auth = null;</span>
+<span class="fc" id="L60">    private WikiEngine m_engine = null;</span>
+    private static final String PERM_REGEX = &quot;(&quot; +
+            PagePermission.COMMENT_ACTION + &quot;|&quot; +
+            PagePermission.DELETE_ACTION + &quot;|&quot; +
+            PagePermission.EDIT_ACTION + &quot;|&quot; +
+            PagePermission.MODIFY_ACTION + &quot;|&quot; +
+            PagePermission.RENAME_ACTION + &quot;|&quot; +
+            PagePermission.UPLOAD_ACTION + &quot;|&quot; +
+            PagePermission.VIEW_ACTION + &quot;)&quot;;
+    private static final String ACL_REGEX = &quot;\\[\\{\\s*ALLOW\\s+&quot; + PERM_REGEX + &quot;\\s*(.*?)\\s*\\}\\]&quot;;
+
+    /**
+     * Identifies ACL strings in wiki text; the first group is the action (view, edit) and
+     * the second is the list of Principals separated by commas. The overall match is
+     * the ACL string from [{ to }].
+     */
+<span class="fc" id="L76">    public static final Pattern ACL_PATTERN = Pattern.compile(ACL_REGEX);</span>
+
+    /**
+     * Initializes the AclManager with a supplied wiki engine and properties.
+     *
+     * @param engine the wiki engine
+     * @param props  the initialization properties
+     * @see org.apache.wiki.auth.acl.AclManager#initialize(org.apache.wiki.WikiEngine,
+     *      java.util.Properties)
+     */
+    public void initialize(WikiEngine engine, Properties props) {
+<span class="fc" id="L87">        m_auth = engine.getAuthorizationManager();</span>
+<span class="fc" id="L88">        m_engine = engine;</span>
+<span class="fc" id="L89">    }</span>
+
+    /**
+     * A helper method for parsing textual AccessControlLists. The line is in
+     * form &quot;ALLOW &lt;permission&gt; &lt;principal&gt;, &lt;principal&gt;, &lt;principal&gt;&quot;. This
+     * method was moved from Authorizer.
+     *
+     * @param page     The current wiki page. If the page already has an ACL, it
+     *                 will be used as a basis for this ACL in order to avoid the
+     *                 creation of a new one.
+     * @param ruleLine The rule line, as described above.
+     * @return A valid Access Control List. May be empty.
+     * @throws WikiSecurityException if the ruleLine was faulty somehow.
+     * @since 2.1.121
+     */
+    public Acl parseAcl(WikiPage page, String ruleLine) throws WikiSecurityException {
+<span class="fc" id="L105">        Acl acl = page.getAcl();</span>
+<span class="fc bfc" id="L106" title="All 2 branches covered.">        if (acl == null) {</span>
+<span class="fc" id="L107">            acl = new AclImpl();</span>
+        }
+
+        try {
+<span class="fc" id="L111">            StringTokenizer fieldToks = new StringTokenizer(ruleLine);</span>
+<span class="fc" id="L112">            fieldToks.nextToken();</span>
+<span class="fc" id="L113">            String actions = fieldToks.nextToken();</span>
+<span class="fc" id="L114">            page.getName();</span>
+
+<span class="fc bfc" id="L116" title="All 2 branches covered.">            while (fieldToks.hasMoreTokens()) {</span>
+<span class="fc" id="L117">                String principalName = fieldToks.nextToken(&quot;,&quot;).trim();</span>
+<span class="fc" id="L118">                Principal principal = m_auth.resolvePrincipal(principalName);</span>
+<span class="fc" id="L119">                AclEntry oldEntry = acl.getEntry(principal);</span>
+
+<span class="fc bfc" id="L121" title="All 2 branches covered.">                if (oldEntry != null) {</span>
+<span class="fc" id="L122">                    log.debug(&quot;Adding to old acl list: &quot; + principal + &quot;, &quot; + actions);</span>
+<span class="fc" id="L123">                    oldEntry.addPermission(PermissionFactory.getPagePermission(page, actions));</span>
+                } else {
+<span class="fc" id="L125">                    log.debug(&quot;Adding new acl entry for &quot; + actions);</span>
+<span class="fc" id="L126">                    AclEntry entry = new AclEntryImpl();</span>
+
+<span class="fc" id="L128">                    entry.setPrincipal(principal);</span>
+<span class="fc" id="L129">                    entry.addPermission(PermissionFactory.getPagePermission(page, actions));</span>
+
+<span class="fc" id="L131">                    acl.addEntry(entry);</span>
+                }
+<span class="fc" id="L133">            }</span>
+
+<span class="fc" id="L135">            page.setAcl(acl);</span>
+
+<span class="fc" id="L137">            log.debug(acl.toString());</span>
+<span class="nc" id="L138">        } catch (NoSuchElementException nsee) {</span>
+<span class="nc" id="L139">            log.warn(&quot;Invalid access rule: &quot; + ruleLine + &quot; - defaults will be used.&quot;);</span>
+<span class="nc" id="L140">            throw new WikiSecurityException(&quot;Invalid access rule: &quot; + ruleLine, nsee);</span>
+<span class="nc" id="L141">        } catch (IllegalArgumentException iae) {</span>
+<span class="nc" id="L142">            throw new WikiSecurityException(&quot;Invalid permission type: &quot; + ruleLine, iae);</span>
+<span class="fc" id="L143">        }</span>
+
+<span class="fc" id="L145">        return acl;</span>
+    }
+
+
+    /**
+     * Returns the access control list for the page.
+     * If the ACL has not been parsed yet, it is done
+     * on-the-fly. If the page has a parent page, then that is tried also.
+     * This method was moved from Authorizer;
+     * it was consolidated with some code from AuthorizationManager.
+     * This method is guaranteed to return a non-&lt;code&gt;null&lt;/code&gt; Acl.
+     *
+     * @param page the page
+     * @return the Acl representing permissions for the page
+     * @since 2.2.121
+     */
+    public Acl getPermissions(WikiPage page) {
+        //
+        //  Does the page already have cached ACLs?
+        //
+<span class="fc" id="L165">        Acl acl = page.getAcl();</span>
+<span class="fc" id="L166">        log.debug(&quot;page=&quot; + page.getName() + &quot;\n&quot; + acl);</span>
+
+<span class="fc bfc" id="L168" title="All 2 branches covered.">        if (acl == null) {</span>
+            //
+            //  If null, try the parent.
+            //
+<span class="pc bpc" id="L172" title="1 of 2 branches missed.">            if (page instanceof Attachment) {</span>
+<span class="nc" id="L173">                WikiPage parent = m_engine.getPage(((Attachment) page).getParentName());</span>
+
+<span class="nc" id="L175">                acl = getPermissions(parent);</span>
+<span class="nc" id="L176">            } else {</span>
+                //
+                //  Or, try parsing the page
+                //
+<span class="fc" id="L180">                WikiContext ctx = new WikiContext(m_engine, page);</span>
+
+<span class="fc" id="L182">                ctx.setVariable(RenderingManager.VAR_EXECUTE_PLUGINS, Boolean.FALSE);</span>
+
+<span class="fc" id="L184">                m_engine.getHTML(ctx, page);</span>
+
+<span class="pc bpc" id="L186" title="1 of 2 branches missed.">                if (page.getAcl() == null) {</span>
+<span class="fc" id="L187">                    page.setAcl( new AclImpl() );</span>
+                }
+<span class="fc" id="L189">                acl = page.getAcl();</span>
+            }
+        }
+
+<span class="fc" id="L193">        return acl;</span>
+    }
+
+    /**
+     * Sets the access control list for the page and persists it by prepending
+     * it to the wiki page markup and saving the page. When this method is
+     * called, all other ACL markup in the page is removed. This method will forcibly
+     * expire locks on the wiki page if they exist. Any ProviderExceptions will be
+     * re-thrown as WikiSecurityExceptions.
+     *
+     * @param page the wiki page
+     * @param acl  the access control list
+     * @throws WikiSecurityException of the Acl cannot be set
+     * @since 2.5
+     */
+    public void setPermissions(WikiPage page, Acl acl) throws WikiSecurityException {
+<span class="fc" id="L209">        PageManager pageManager = m_engine.getPageManager();</span>
+
+        // Forcibly expire any page locks
+<span class="fc" id="L212">        PageLock lock = pageManager.getCurrentLock(page);</span>
+<span class="pc bpc" id="L213" title="1 of 2 branches missed.">        if (lock != null) {</span>
+<span class="nc" id="L214">            pageManager.unlockPage(lock);</span>
+        }
+
+        // Remove all of the existing ACLs.
+<span class="fc" id="L218">        String pageText = m_engine.getPureText(page);</span>
+<span class="fc" id="L219">        Matcher matcher = DefaultAclManager.ACL_PATTERN.matcher(pageText);</span>
+<span class="fc" id="L220">        String cleansedText = matcher.replaceAll(&quot;&quot;);</span>
+<span class="fc" id="L221">        String newText = DefaultAclManager.printAcl(page.getAcl()) + cleansedText;</span>
+        try {
+<span class="fc" id="L223">            pageManager.putPageText(page, newText);</span>
+<span class="nc" id="L224">        } catch (ProviderException e) {</span>
+<span class="nc" id="L225">            throw new WikiSecurityException(&quot;Could not set Acl. Reason: ProviderExcpetion &quot; + e.getMessage(), e);</span>
+<span class="fc" id="L226">        }</span>
+<span class="fc" id="L227">    }</span>
+
+    /**
+     * Generates an ACL string for inclusion in a wiki page, based on a supplied Acl object.
+     * All of the permissions in this Acl are assumed to apply to the same page scope.
+     * The names of the pages are ignored; only the actions and principals matter.
+     *
+     * @param acl the ACL
+     * @return the ACL string
+     */
+    protected static String printAcl(Acl acl) {
+        // Extract the ACL entries into a Map with keys == permissions, values == principals
+<span class="fc" id="L239">        Map&lt;String, List&lt;Principal&gt;&gt; permissionPrincipals = new TreeMap&lt;String, List&lt;Principal&gt;&gt;();</span>
+<span class="fc" id="L240">        Enumeration&lt;AclEntry&gt; entries = acl.entries();</span>
+<span class="fc bfc" id="L241" title="All 2 branches covered.">        while (entries.hasMoreElements()) {</span>
+<span class="fc" id="L242">            AclEntry entry = entries.nextElement();</span>
+<span class="fc" id="L243">            Principal principal = entry.getPrincipal();</span>
+<span class="fc" id="L244">            Enumeration&lt;Permission&gt; permissions = entry.permissions();</span>
+<span class="fc bfc" id="L245" title="All 2 branches covered.">            while (permissions.hasMoreElements()) {</span>
+<span class="fc" id="L246">                Permission permission = permissions.nextElement();</span>
+<span class="fc" id="L247">                List&lt;Principal&gt; principals = permissionPrincipals.get(permission.getActions());</span>
+<span class="fc bfc" id="L248" title="All 2 branches covered.">                if (principals == null) {</span>
+<span class="fc" id="L249">                    principals = new ArrayList&lt;Principal&gt;();</span>
+<span class="fc" id="L250">                    String action = permission.getActions();</span>
+<span class="pc bpc" id="L251" title="1 of 2 branches missed.">                    if (action.indexOf(',') != -1) {</span>
+<span class="nc" id="L252">                        throw new IllegalStateException(&quot;AclEntry permission cannot have multiple targets.&quot;);</span>
+                    }
+<span class="fc" id="L254">                    permissionPrincipals.put(action, principals);</span>
+                }
+<span class="fc" id="L256">                principals.add(principal);</span>
+<span class="fc" id="L257">            }</span>
+<span class="fc" id="L258">        }</span>
+
+        // Now, iterate through each permission in the map and generate an ACL string
+
+<span class="fc" id="L262">        StringBuilder s = new StringBuilder();</span>
+<span class="fc bfc" id="L263" title="All 2 branches covered.">        for (Map.Entry&lt;String, List&lt;Principal&gt;&gt; entry : permissionPrincipals.entrySet()) {</span>
+<span class="fc" id="L264">            String action = entry.getKey();</span>
+<span class="fc" id="L265">            List&lt;Principal&gt; principals = entry.getValue();</span>
+<span class="fc" id="L266">            Collections.sort(principals, new PrincipalComparator());</span>
+<span class="fc" id="L267">            s.append(&quot;[{ALLOW &quot;);</span>
+<span class="fc" id="L268">            s.append(action);</span>
+<span class="fc" id="L269">            s.append(&quot; &quot;);</span>
+<span class="fc bfc" id="L270" title="All 2 branches covered.">            for (int i = 0; i &lt; principals.size(); i++) {</span>
+<span class="fc" id="L271">                Principal principal = principals.get(i);</span>
+<span class="fc" id="L272">                s.append(principal.getName());</span>
+<span class="fc bfc" id="L273" title="All 2 branches covered.">                if (i &lt; (principals.size() - 1)) {</span>
+<span class="fc" id="L274">                    s.append(&quot;,&quot;);</span>
+                }
+            }
+<span class="fc" id="L277">            s.append(&quot;}]\n&quot;);</span>
+<span class="fc" id="L278">        }</span>
+<span class="fc" id="L279">        return s.toString();</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormTextarea.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormTextarea.java</span></div><h1>FormTextarea.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+
+package org.apache.wiki.forms;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.ResourceBundle;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.preferences.Preferences;
+import org.apache.wiki.util.XHTML;
+import org.apache.wiki.util.XhtmlUtil;
+import org.jdom2.Element;
+
+/**
+ *  Creates a Form text area element.   You may specify the size of the textarea
+ *  by using the {@link #PARAM_COLS} and {@link #PARAM_ROWS} to signify the width
+ *  and height of the area.
+ */
+<span class="nc" id="L39">public class FormTextarea extends FormElement</span>
+{
+    /** Parameter name for setting the rows value.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_ROWS = &quot;rows&quot;;
+
+    /** Parameter name for setting the columns value.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_COLS = &quot;cols&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params ) throws PluginException {
+        // Don't render if no error and error-only-rendering is on.
+<span class="nc" id="L52">        FormInfo info = getFormInfo( ctx );</span>
+<span class="nc" id="L53">        Map&lt; String, String &gt; previousValues = null;</span>
+<span class="nc" id="L54">        ResourceBundle rb = Preferences.getBundle( ctx, WikiPlugin.CORE_PLUGINS_RESOURCEBUNDLE );</span>
+
+<span class="nc bnc" id="L56" title="All 2 branches missed.">        if ( info != null ) {</span>
+<span class="nc bnc" id="L57" title="All 2 branches missed.">            if ( info.hide() ) {</span>
+<span class="nc" id="L58">                return &quot;&lt;p&gt;&quot; + rb.getString( &quot;formclose.noneedtoshow&quot; ) + &quot;&lt;/p&gt;&quot;;</span>
+            }
+<span class="nc" id="L60">            previousValues = info.getSubmission();</span>
+        }
+
+<span class="nc bnc" id="L63" title="All 2 branches missed.">        if ( previousValues == null ) {</span>
+<span class="nc" id="L64">            previousValues = new HashMap&lt; String, String &gt;();</span>
+        }
+
+<span class="nc" id="L67">        Element field = buildTextArea( params, previousValues, rb );</span>
+
+        // We should look for extra params, e.g. width, ..., here.
+<span class="nc" id="L70">        return XhtmlUtil.serialize(field, XhtmlUtil.EXPAND_EMPTY_NODES ); // ctx.getEngine().getContentEncoding()</span>
+    }
+
+    private Element buildTextArea(
+            Map&lt;String,String&gt; params,
+            Map&lt;String,String&gt; previousValues,
+            ResourceBundle rb )
+            throws PluginException
+    {
+<span class="nc" id="L79">        String inputName = params.get(PARAM_INPUTNAME);</span>
+<span class="nc" id="L80">        String rows = params.get(PARAM_ROWS);</span>
+<span class="nc" id="L81">        String cols = params.get(PARAM_COLS);</span>
+
+<span class="nc bnc" id="L83" title="All 2 branches missed.">        if ( inputName == null ) {</span>
+<span class="nc" id="L84">        	throw new PluginException( rb.getString( &quot;formtextarea.namemissing&quot; ) );</span>
+        }
+
+        // In order to isolate posted form elements into their own
+        // map, prefix the variable name here. It will be stripped
+        // when the handler plugin is executed.
+<span class="nc" id="L90">        Element field = XhtmlUtil.element(XHTML.textarea);</span>
+<span class="nc" id="L91">        field.setAttribute(XHTML.ATTR_name,HANDLERPARAM_PREFIX + inputName);</span>
+<span class="nc bnc" id="L92" title="All 2 branches missed.">        if ( rows != null ) {</span>
+<span class="nc" id="L93">            field.setAttribute(XHTML.ATTR_rows,rows);</span>
+        }
+<span class="nc bnc" id="L95" title="All 2 branches missed.">        if ( cols != null ) {</span>
+<span class="nc" id="L96">            field.setAttribute(XHTML.ATTR_cols,cols);</span>
+        }
+
+<span class="nc bnc" id="L99" title="All 2 branches missed.">        if ( previousValues != null )</span>
+        {
+<span class="nc" id="L101">            String oldValue = previousValues.get( inputName );</span>
+<span class="nc bnc" id="L102" title="All 2 branches missed.">            if ( oldValue != null )</span>
+            {
+<span class="nc" id="L104">                field.addContent(oldValue);</span>
+            }
+            else
+            {
+<span class="nc" id="L108">                oldValue = params.get(PARAM_VALUE);</span>
+<span class="nc bnc" id="L109" title="All 2 branches missed.">                if ( oldValue != null ) {</span>
+<span class="nc" id="L110">                	field.addContent(oldValue);</span>
+                }
+            }
+        }
+<span class="nc" id="L114">        return field;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

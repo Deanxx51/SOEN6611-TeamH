@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Release.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">Release.java</span></div><h1>Release.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+
+package org.apache.wiki;
+
+import org.apache.commons.lang.StringUtils;
+
+
+/**
+ *  Contains release and version information.  You may also invoke this class directly, in which case it prints
+ *  out the version string.  This is a handy way of checking which JSPWiki version you have - just type
+ *  from a command line:
+ *  &lt;pre&gt;
+ *  % java -cp JSPWiki.jar org.apache.wiki.Release
+ *  2.5.38
+ *  &lt;/pre&gt;
+ *  &lt;p&gt;
+ *  As a historical curiosity, this is the oldest JSPWiki file.  According to the CVS history, it dates from 6.7.2001,
+ *  and it really hasn't changed much since.
+ *  &lt;/p&gt;
+ *  @since  1.0
+ */
+public final class Release {
+
+    private static final String VERSION_SEPARATORS = &quot;.-&quot;;
+
+    /**
+     *  This is the default application name.
+     */
+    public static final String     APPNAME       = &quot;JSPWiki&quot;;
+
+    /**
+     *  This should be empty when doing a release - otherwise keep it as &quot;cvs&quot; so that whenever someone checks
+     *  out the code, they know it is a bleeding-edge version.  Other possible values are &quot;alpha&quot; and &quot;beta&quot; for
+     *  alpha and beta versions, respectively.
+     *  &lt;p&gt;
+     *  If the POSTFIX is empty, it is not added to the version string.
+     */
+    private static final String    POSTFIX       = &quot;M3-git&quot;;
+
+    /** The JSPWiki major version. */
+    public static final int        VERSION       = 2;
+
+    /** The JSPWiki revision. */
+    public static final int        REVISION      = 11;
+
+    /** The minor revision.  */
+    public static final int        MINORREVISION = 0;
+
+    /** The build number/identifier.  This is a String as opposed to an integer, just so that people can add
+     *  other identifiers to it.  The build number is incremented every time a committer checks in code, and reset
+     *  when the a release is made.
+     *  &lt;p&gt;
+     *  If you are a person who likes to build his own releases, we recommend that you add your initials to this
+     *  identifier (e.g. &quot;13-jj&quot;, or 49-aj&quot;).
+     *  &lt;p&gt;
+     *  If the build identifier is empty, it is not added.
+     */
+    public static final String     BUILD         = &quot;02&quot;;
+
+    /**
+     *  This is the generic version string you should use when printing out the version.  It is of
+     *  the form &quot;VERSION.REVISION.MINORREVISION[-POSTFIX][-BUILD]&quot;.
+     */
+<span class="fc" id="L81">    public static final String     VERSTR        =</span>
+<span class="pc bpc" id="L82" title="2 of 4 branches missed.">        VERSION+&quot;.&quot;+REVISION+&quot;.&quot;+MINORREVISION+ ((POSTFIX.length() != 0 ) ? &quot;-&quot;+POSTFIX : &quot;&quot;) + ((BUILD.length() != 0 ? &quot;-&quot;+BUILD : &quot;&quot;));</span>
+
+    /**
+     *  Private constructor prevents instantiation.
+     */
+    private Release() {
+    }
+
+    /**
+     *  This method is useful for templates, because hopefully it will
+     *  not be inlined, and thus any change to version number does not
+     *  need recompiling the pages.
+     *
+     *  @since 2.1.26.
+     *  @return The version string (e.g. 2.5.23).
+     */
+    public static String getVersionString() {
+<span class="fc" id="L99">        return VERSTR;</span>
+    }
+
+    /**
+     *  Returns true, if this version of JSPWiki is newer or equal than what is requested.
+     *  @param version A version parameter string (a.b.c-something). B and C are optional.
+     *  @return A boolean value describing whether the given version is newer than the current JSPWiki.
+     *  @since 2.4.57
+     *  @throws IllegalArgumentException If the version string could not be parsed.
+     */
+    public static boolean isNewerOrEqual( String version ) throws IllegalArgumentException {
+<span class="fc bfc" id="L110" title="All 2 branches covered.">        if( version == null ) {</span>
+<span class="fc" id="L111">        	return true;</span>
+        }
+<span class="fc" id="L113">        String[] versionComponents = StringUtils.split( version, VERSION_SEPARATORS );</span>
+<span class="pc bpc" id="L114" title="1 of 2 branches missed.">        int reqVersion       = versionComponents.length &gt; 0 ? Integer.parseInt( versionComponents[0] ) : Release.VERSION;</span>
+<span class="fc bfc" id="L115" title="All 2 branches covered.">        int reqRevision      = versionComponents.length &gt; 1 ? Integer.parseInt( versionComponents[1] ) : Release.REVISION;</span>
+<span class="fc bfc" id="L116" title="All 2 branches covered.">        int reqMinorRevision = versionComponents.length &gt; 2 ? Integer.parseInt( versionComponents[2] ) : Release.MINORREVISION;</span>
+
+<span class="fc bfc" id="L118" title="All 2 branches covered.">        if( VERSION == reqVersion ) {</span>
+<span class="fc bfc" id="L119" title="All 2 branches covered.">            if( REVISION == reqRevision ) {</span>
+<span class="fc bfc" id="L120" title="All 2 branches covered.">                if( MINORREVISION == reqMinorRevision ) {</span>
+<span class="fc" id="L121">                    return true;</span>
+                }
+
+<span class="pc bpc" id="L124" title="1 of 2 branches missed.">                return MINORREVISION &gt; reqMinorRevision;</span>
+            }
+
+<span class="pc bpc" id="L127" title="1 of 2 branches missed.">            return REVISION &gt; reqRevision;</span>
+        }
+
+<span class="fc bfc" id="L130" title="All 2 branches covered.">        return VERSION &gt; reqVersion;</span>
+    }
+
+    /**
+     *  Returns true, if this version of JSPWiki is older or equal than what is requested.
+     *
+     *  @param version A version parameter string (a.b.c-something)
+     *  @return A boolean value describing whether the given version is older than the current JSPWiki version
+     *  @since 2.4.57
+     *  @throws IllegalArgumentException If the version string could not be parsed.
+     */
+    public static boolean isOlderOrEqual( String version ) throws IllegalArgumentException {
+<span class="fc bfc" id="L142" title="All 2 branches covered.">        if( version == null ) {</span>
+<span class="fc" id="L143">        	return true;</span>
+        }
+
+<span class="fc" id="L146">        String[] versionComponents = StringUtils.split( version, VERSION_SEPARATORS );</span>
+<span class="fc bfc" id="L147" title="All 2 branches covered.">        int reqVersion       = versionComponents.length &gt; 0 ? Integer.parseInt( versionComponents[0] ) : Release.VERSION;</span>
+<span class="fc bfc" id="L148" title="All 2 branches covered.">        int reqRevision      = versionComponents.length &gt; 1 ? Integer.parseInt( versionComponents[1] ) : Release.REVISION;</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">        int reqMinorRevision = versionComponents.length &gt; 2 ? Integer.parseInt( versionComponents[2] ) : Release.MINORREVISION;</span>
+
+<span class="fc bfc" id="L151" title="All 2 branches covered.">        if( VERSION == reqVersion ) {</span>
+<span class="fc bfc" id="L152" title="All 2 branches covered.">            if( REVISION == reqRevision ) {</span>
+<span class="fc bfc" id="L153" title="All 2 branches covered.">                if( MINORREVISION == reqMinorRevision ) {</span>
+<span class="fc" id="L154">                    return true;</span>
+                }
+
+<span class="pc bpc" id="L157" title="1 of 2 branches missed.">                return MINORREVISION &lt; reqMinorRevision;</span>
+            }
+
+<span class="pc bpc" id="L160" title="1 of 2 branches missed.">            return REVISION &lt; reqRevision;</span>
+        }
+
+<span class="fc bfc" id="L163" title="All 2 branches covered.">        return VERSION &lt; reqVersion;</span>
+    }
+
+    /**
+     *  Executing this class directly from command line prints out the current version.  It is very useful for
+     *  things like different command line tools.
+     *  &lt;P&gt;Example:
+     *  &lt;PRE&gt;
+     *  % java org.apache.wiki.Release
+     *  1.9.26-cvs
+     *  &lt;/PRE&gt;
+     *
+     *  @param argv The argument string.  This class takes in no arguments.
+     */
+    public static void main( String[] argv ) {
+<span class="nc" id="L178">        System.out.println(VERSTR);</span>
+<span class="nc" id="L179">    }</span>
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

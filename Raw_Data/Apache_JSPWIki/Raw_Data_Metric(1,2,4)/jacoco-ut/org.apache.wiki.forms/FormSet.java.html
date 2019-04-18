@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FormSet.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.forms</a> &gt; <span class="el_source">FormSet.java</span></div><h1>FormSet.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.forms;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+
+/**
+ * FormSet is a companion WikiPlugin for Form. 
+ * 
+ * &lt;p&gt;The mandatory 'form' parameter specifies which form the variable
+ * applies to.  Any other parameters are put directly into a FormInfo
+ * object that will be available to a Form plugin called 'form'
+ * (presumably invoked later on the same WikiPage).
+ * 
+ * &lt;p&gt;If the name of a FormSet parameter is the same as the name of
+ * a Form plugin input element later on the same page, the Form will
+ * consider the given value the default for the form field. (However,
+ * the handler for the Form is free to use the value as it wishes, and
+ * even override it.)
+ *
+ * &lt;p&gt;If the name of a parameter is not present in Form input fields,
+ * the parameter is presumably meant for sending initial information
+ * to the Form handler. If this is the case, you may want to specify the
+ * &lt;i&gt;populate=''&lt;/i&gt; in the Form &lt;i&gt;open&lt;/i&gt; element, otherwise the
+ * form won't be displayed on the first invocation.
+ *  
+ * &lt;p&gt;This object looks for a FormInfo object named
+ * FORM_VALUES_CARRIER in the WikiContext. If found, it checks that
+ * its name matches the 'form' parameter, and if it does, adds the
+ * plugin parameters to the FormInfo. If the names don't match, the
+ * old FormInfo is discarded and a new one is created. Only one
+ * FormInfo is supported at a time. A practical consequence of this is
+ * that a FormSet invocation only applies to the Form plugins that
+ * follow it; any further Forms need new FormSet calls.
+ *
+ * @see FormInfo
+ */
+<span class="nc" id="L59">public class FormSet</span>
+    implements WikiPlugin
+{    
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext ctx, Map&lt; String, String &gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L68">        String formName = params.get( FormElement.PARAM_FORM );</span>
+<span class="nc bnc" id="L69" title="All 4 branches missed.">        if( formName == null || formName.trim().length() == 0 )</span>
+        {
+<span class="nc" id="L71">            return &quot;&quot;;</span>
+        }
+
+<span class="nc" id="L74">        FormInfo info = (FormInfo)ctx.getVariable( FormElement.FORM_VALUES_CARRIER );</span>
+
+<span class="nc bnc" id="L76" title="All 4 branches missed.">        if( info == null || formName.equals( info.getName() ) == false )</span>
+        {
+<span class="nc" id="L78">            info = new FormInfo();</span>
+<span class="nc" id="L79">            ctx.setVariable( FormElement.FORM_VALUES_CARRIER, info );</span>
+        }
+
+        //
+        //  Create a copy for the context.  Unfortunately we need to 
+        //  create slightly modified copy, because otherwise on next
+        //  invocation this might be coming from a cache; so we can't
+        //  modify the original param string.
+        //
+<span class="nc" id="L88">        info.setName( formName );</span>
+<span class="nc" id="L89">        Map&lt; String, String &gt; hm = new HashMap&lt; String, String &gt;();</span>
+<span class="nc" id="L90">        hm.putAll( params );</span>
+        
+<span class="nc" id="L92">        hm.remove( FormElement.PARAM_FORM );</span>
+<span class="nc" id="L93">        info.addSubmission( hm );</span>
+        
+<span class="nc" id="L95">        return &quot;&quot;;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,437 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>CookieTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">CookieTag.java</span></div><h1>CookieTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.tagext.TagSupport;
+
+import org.apache.log4j.Logger;
+
+
+/**
+ * Sets or gets Cookie values. This implementation makes the following
+ * assumptions:
+ * &lt;ul&gt;
+ * &lt;li&gt;The cookie contains any number of name-value pairs
+ * &lt;li&gt;Name-value pairs are separated by &quot;&amp;&quot; in the encoded cookie value string
+ * &lt;li&gt;An encoded name-value pair is compatible with JavaScript's
+ * encodeURIComponent(). Notably, spaces are encoded as &quot;%20&quot;.
+ * &lt;li&gt;A decoded name-value pair separates the name and value with a &quot;=&quot;
+ * &lt;/ul&gt;
+ *
+ * &lt;p&gt;The value of a cookie carrying values n1=&quot;v1&quot; and n2=&quot;v2 with space&quot;
+ * would thus be
+ * &lt;pre&gt;
+ *   n1%3Dv1&amp;n2%3Dv2%20with%20space
+ * &lt;/pre&gt;
+ *
+ * &lt;p&gt;Usage:
+ *
+ * &lt;pre&gt;
+ * &amp;lt;wiki:cookie name=&quot;cookiename&quot; var=&quot;contextvariable&quot; scope=&quot;page&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Returns the value of the named cookie, or an empty string if not set.
+ * If 'var' is specified, the value is set into a context variable of this name.
+ * The 'scope' parameter may be added to specify the context: &quot;session&quot;,
+ * &quot;page&quot;, &quot;request&quot;. If var is omitted, the output is placed directly into
+ * the JSP page.
+ *
+ * &lt;pre&gt;
+ * &amp;lt;wiki:cookie name=&quot;cookiename&quot; value=&quot;encoded_value&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Sets the named cookie to the given value. If the value string is empty,
+ * the cookie value is set to empty; otherwise the cookie encoding rules of
+ * this class must be followed for the value.
+ *
+ * &lt;pre&gt;
+ * &amp;lt;wiki:cookie name=&quot;cookiename&quot; item=&quot;parameter_name&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Assumes that the cookie contains URLEncoded name-value pairs,
+ * with name and value separated by an equals sign, and returns the value
+ * of the specified item.
+ *
+ * &amp;lt;wiki:cookie name=&quot;cookiename&quot; item=&quot;parameter_name&quot; value=&quot;value&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Sets the value of 'parameter_name' in the named cookie to 'value'.
+ *
+ * &lt;pre&gt;
+ * &amp;lt;wiki:cookie name=&quot;cookiename&quot; clear=&quot;parameter_name&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Removes the named parameter from the cookie.
+ *
+ * &lt;pre&gt;
+ * &amp;lt;wiki:cookie clear=&quot;cookiename&quot; /&amp;gt;
+ * &lt;/pre&gt;
+ * - Removes the named cookie. Clear may be used at the same time as a value
+ * is retrieved (or set, despite the dubious usefulness of that operation).
+ */
+<span class="nc" id="L95">public class CookieTag</span>
+    extends TagSupport
+{
+    private static final long serialVersionUID = 0L;
+
+<span class="nc" id="L100">    private static Logger log = Logger.getLogger( CookieTag.class );</span>
+
+    /** Name of the cookie value. Required. */
+    private String m_name;
+    /** Name of the cookie nvp item. Optional. */
+    private String m_item;
+    /** A value to echo or set. Optional. */
+    private String m_value;
+    /** Name of a context variable to set result in. Optional, defaults to out.*/
+    private String m_var;
+    /** Scope of m_var: request, session, page. */
+    private String m_scope;
+    /** Name of a cookie or a cookie nvp to clear. */
+    private String m_clear;
+
+    /**
+     *  Set the &quot;name&quot; parameter.
+     *  
+     *  @param s The name.
+     */
+    public void setName( String s )
+    {
+<span class="nc" id="L122">        m_name = s;</span>
+<span class="nc" id="L123">    }</span>
+
+    /**
+     *  Set the &quot;item&quot; parameter.
+     *  
+     *  @param s The item.
+     */
+    public void setItem( String s )
+    {
+<span class="nc" id="L132">        m_item = s;</span>
+<span class="nc" id="L133">    }</span>
+
+    /**
+     *  Set the &quot;value&quot; parameter.
+     *  
+     *  @param s The value.
+     */
+    public void setValue( String s )
+    {
+<span class="nc" id="L142">        m_value = s;</span>
+<span class="nc" id="L143">    }</span>
+
+    /**
+     *  Set the &quot;var&quot; parameter.
+     *  
+     *  @param s The parameter.
+     */
+    public void setVar( String s )
+    {
+<span class="nc" id="L152">        m_scope = s;</span>
+<span class="nc" id="L153">    }</span>
+
+    /**
+     *  Set the &quot;clear&quot; parameter.
+     *  
+     *  @param s The parameter.
+     */
+    public void setClear( String s )
+    {
+<span class="nc" id="L162">        m_clear = s;</span>
+<span class="nc" id="L163">    }</span>
+
+    /**
+     *  Set the &quot;scope&quot; parameter.
+     *  
+     *  @param s The scope.
+     */
+    public void setScope( String s )
+    {
+<span class="nc" id="L172">        m_scope = s;</span>
+<span class="nc" id="L173">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void release()
+    {
+<span class="nc" id="L180">        m_name = m_item = m_var = m_value = m_clear = m_scope = null;</span>
+<span class="nc" id="L181">        super.release();</span>
+<span class="nc" id="L182">    }</span>
+
+    /**
+     * Examines the parameter and returns the corresponding scope identifier:
+     * &quot;request&quot; maps to PageContext.REQUEST_SCOPE, and so on.
+     * Possible values are &quot;page&quot;, &quot;session&quot;, &quot;application&quot;, and &quot;request&quot;,
+     * which is the default return value.
+     */
+    private int getScope( String s )
+    {
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if( s == null )</span>
+        {
+<span class="nc" id="L194">            return PageContext.REQUEST_SCOPE;</span>
+        }
+<span class="nc bnc" id="L196" title="All 2 branches missed.">        if( &quot;page&quot;.equals( m_scope ) )</span>
+        {
+<span class="nc" id="L198">            return PageContext.PAGE_SCOPE;</span>
+        }
+<span class="nc bnc" id="L200" title="All 2 branches missed.">        if( &quot;session&quot;.equals( m_scope ) )</span>
+        {
+<span class="nc" id="L202">            return PageContext.SESSION_SCOPE;</span>
+        }
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if( &quot;application&quot;.equals( m_scope ) )</span>
+        {
+<span class="nc" id="L206">            return PageContext.APPLICATION_SCOPE;</span>
+        }
+
+<span class="nc" id="L209">        return PageContext.REQUEST_SCOPE;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public int doEndTag()
+    {
+<span class="nc" id="L217">        String out = null;</span>
+<span class="nc" id="L218">        Cookie cookie = findCookie( m_name );</span>
+<span class="nc" id="L219">        boolean changed = false;</span>
+
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if( m_value != null )</span>
+        {
+<span class="nc bnc" id="L223" title="All 2 branches missed.">            if( m_item != null )</span>
+            {
+<span class="nc" id="L225">                setItemValue( cookie, m_item, m_value );</span>
+            }
+            else
+            {
+<span class="nc" id="L229">                cookie.setValue( m_value );</span>
+            }
+<span class="nc" id="L231">            changed = true;</span>
+        }
+        else
+        {
+<span class="nc bnc" id="L235" title="All 2 branches missed.">            if( m_item != null )</span>
+            {
+<span class="nc" id="L237">                out = getItemValue( cookie, m_item );</span>
+            }
+            else
+            {
+<span class="nc" id="L241">                out = cookie.getValue();</span>
+            }
+        }
+
+<span class="nc bnc" id="L245" title="All 2 branches missed.">        if( out != null )</span>
+        {
+<span class="nc bnc" id="L247" title="All 2 branches missed.">            if( m_var != null )</span>
+            {
+<span class="nc" id="L249">                int scope = getScope( m_scope );</span>
+<span class="nc" id="L250">                pageContext.setAttribute( m_var, out,  scope );</span>
+<span class="nc" id="L251">            }</span>
+            else
+            {
+                try
+                {
+<span class="nc" id="L256">                    pageContext.getOut().print( out );</span>
+                }
+<span class="nc" id="L258">                catch( IOException ioe )</span>
+                {
+<span class="nc" id="L260">                    log.warn( &quot;Failed to write to JSP page: &quot; + ioe.getMessage(), ioe );</span>
+<span class="nc" id="L261">                }</span>
+            }
+        }
+
+<span class="nc" id="L265">        Cookie cleared = null;</span>
+<span class="nc bnc" id="L266" title="All 2 branches missed.">        if( m_clear != null )</span>
+        {
+<span class="nc" id="L268">            cleared = findCookie( m_clear );</span>
+<span class="nc bnc" id="L269" title="All 2 branches missed.">            if( m_item != null )</span>
+            {
+<span class="nc" id="L271">                setItemValue( cookie, m_item, null );</span>
+            }
+            else
+            {
+<span class="nc" id="L275">                cleared.setValue( null );</span>
+            }
+        }
+
+<span class="nc" id="L279">        HttpServletResponse res = (HttpServletResponse)pageContext.getResponse();</span>
+<span class="nc bnc" id="L280" title="All 2 branches missed.">        if( changed )</span>
+        {
+<span class="nc" id="L282">            res.addCookie( cookie );</span>
+        }
+<span class="nc bnc" id="L284" title="All 2 branches missed.">        if( cleared != null )</span>
+        {
+<span class="nc" id="L286">            res.addCookie( cleared );</span>
+        }
+
+<span class="nc" id="L289">        return EVAL_PAGE;</span>
+    }
+
+    /**
+     * Sets a single name-value pair in the given cookie.
+     */
+    private void setItemValue( Cookie c, String item, String value )
+    {
+<span class="nc bnc" id="L297" title="All 2 branches missed.">        if( c == null )</span>
+        {
+<span class="nc" id="L299">            return;</span>
+        }
+<span class="nc" id="L301">        String in = c.getValue();</span>
+<span class="nc" id="L302">        Map&lt;String, String&gt; values = parseCookieValues( in );</span>
+<span class="nc" id="L303">        values.put( item, value );</span>
+<span class="nc" id="L304">        String cv = encodeValues( values );</span>
+<span class="nc" id="L305">        c.setValue( cv );</span>
+<span class="nc" id="L306">    }</span>
+
+    /**
+     * Returns the value of the given item in the cookie.
+     */
+    private String getItemValue( Cookie c, String item )
+    {
+<span class="nc bnc" id="L313" title="All 4 branches missed.">        if( c == null || item == null ) {</span>
+<span class="nc" id="L314">            return null;</span>
+        }
+<span class="nc" id="L316">        String in = c.getValue();</span>
+<span class="nc" id="L317">        Map&lt; String, String &gt; values = parseCookieValues( in );</span>
+<span class="nc" id="L318">        return values.get( item );</span>
+    }
+
+
+    /**
+     * Parses a cookie value, of format name1%3Fvalue1&amp;name2%3Fvalue2...,
+     * into a Map&lt;String,String&gt;.
+     */
+    private Map&lt;String, String&gt; parseCookieValues( String s )
+    {
+<span class="nc" id="L328">        Map&lt; String, String &gt; rval = new HashMap&lt; String, String &gt;();</span>
+<span class="nc bnc" id="L329" title="All 2 branches missed.">        if( s == null ) {</span>
+<span class="nc" id="L330">            return rval;</span>
+        }
+<span class="nc" id="L332">        String[] nvps = s.split( &quot;&amp;&quot; );</span>
+<span class="nc bnc" id="L333" title="All 2 branches missed.">        if( nvps.length == 0 ) {</span>
+<span class="nc" id="L334">            return rval;</span>
+        }
+<span class="nc bnc" id="L336" title="All 2 branches missed.">        for( int i = 0; i &lt; nvps.length; i++ ) {</span>
+<span class="nc" id="L337">            String nvp = decode( nvps[i] );</span>
+<span class="nc" id="L338">            String[] nv = nvp.split( &quot;=&quot; );</span>
+<span class="nc bnc" id="L339" title="All 4 branches missed.">            if( nv[0] != null &amp;&amp; nv[0].trim().length() &gt; 0 )</span>
+            {
+<span class="nc" id="L341">                rval.put( nv[0], nv[1] );</span>
+            }
+        }
+
+<span class="nc" id="L345">        return rval;</span>
+    }
+
+    /**
+     * Encodes name-value pairs in the map into a single string, in a format
+     * understood by this class and JavaScript decodeURIComponent().
+     */
+    private String encodeValues( Map&lt;String, String&gt; values )
+    {
+<span class="nc" id="L354">        StringBuilder rval = new StringBuilder();</span>
+<span class="nc bnc" id="L355" title="All 4 branches missed.">        if( values == null || values.size() == 0 ) {</span>
+<span class="nc" id="L356">            return rval.toString();</span>
+        }
+
+<span class="nc" id="L359">        Iterator&lt; Map.Entry&lt; String, String &gt; &gt; it = values.entrySet().iterator();</span>
+<span class="nc bnc" id="L360" title="All 2 branches missed.">        while( it.hasNext() ) {</span>
+<span class="nc" id="L361">            Map.Entry&lt; String, String &gt; e = it.next();</span>
+<span class="nc" id="L362">            String n = e.getKey();</span>
+<span class="nc" id="L363">            String v = e.getValue();</span>
+<span class="nc bnc" id="L364" title="All 2 branches missed.">            if( v != null ) {</span>
+<span class="nc" id="L365">                String nv = n + &quot;=&quot; + v;</span>
+<span class="nc" id="L366">                rval.append( encode( nv ) );</span>
+            }
+<span class="nc" id="L368">        }</span>
+
+<span class="nc" id="L370">        return rval.toString();</span>
+    }
+
+    /**
+     * Converts a String to an encoding understood by JavaScript
+     * decodeURIComponent.
+     */
+    private String encode( String nvp )
+    {
+<span class="nc" id="L379">        String coded = &quot;&quot;;</span>
+        try
+        {
+<span class="nc" id="L382">            coded = URLEncoder.encode( nvp, &quot;UTF-8&quot; );</span>
+        }
+<span class="nc" id="L384">        catch( UnsupportedEncodingException e )</span>
+        {
+            /* never happens */
+<span class="nc" id="L387">            log.info( &quot;Failed to encode UTF-8&quot;, e );</span>
+<span class="nc" id="L388">        }</span>
+<span class="nc" id="L389">        return coded.replaceAll( &quot;\\+&quot;, &quot;%20&quot; );</span>
+    }
+
+    /**
+     * Converts a cookie value (set by this class, or by a JavaScript
+     * encodeURIComponent call) into a plain string.
+     */
+    private String decode( String envp )
+    {
+        String rval;
+        try
+        {
+<span class="nc" id="L401">            rval = URLDecoder.decode( envp , &quot;UTF-8&quot; );</span>
+<span class="nc" id="L402">            return rval;</span>
+        }
+<span class="nc" id="L404">        catch( UnsupportedEncodingException e )</span>
+        {
+<span class="nc" id="L406">            log.error( &quot;Failed to decode cookie&quot;, e );</span>
+<span class="nc" id="L407">            return envp;</span>
+        }
+    }
+
+    /**
+     * Locates the named cookie in the request, or creates a new one if it
+     * doesn't exist.
+     */
+    private Cookie findCookie( String cname )
+    {
+<span class="nc" id="L417">        HttpServletRequest req = (HttpServletRequest)pageContext.getRequest();</span>
+<span class="nc bnc" id="L418" title="All 2 branches missed.">        if( req != null )</span>
+        {
+<span class="nc" id="L420">            Cookie[] cookies = req.getCookies();</span>
+<span class="nc bnc" id="L421" title="All 2 branches missed.">            if( cookies != null )</span>
+            {
+<span class="nc bnc" id="L423" title="All 2 branches missed.">                for( int i = 0; i &lt; cookies.length; i++ )</span>
+                {
+<span class="nc bnc" id="L425" title="All 2 branches missed.">                    if( cookies[i].getName().equals( cname ) )</span>
+                    {
+<span class="nc" id="L427">                        return cookies[i];</span>
+                    }
+                }
+            }
+        }
+
+<span class="nc" id="L433">        return new Cookie( cname, null );</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Counter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">Counter.java</span></div><h1>Counter.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.plugin;
+
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Provides a page-specific counter, it is reset every time a page is rendered, so it is not usable as a hitcounter.
+ *  &lt;br&gt;Stores a variable in the WikiContext called &quot;counter&quot;, with the name of the optionally specified variable &quot;name&quot;.  
+ *  &lt;br&gt;For example:  If name is &quot;thispage&quot;, then the variable name is called &quot;counter-thispage&quot;.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;name&lt;/b&gt; - Name of the counter.  Optional.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;increment&lt;/b&gt; - The amount to increment, may be a negative value, default is 1.  Optional.&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;showResult&lt;/b&gt; - Should the counter value be visible on the page, default is true.  Optional.&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 1.9.30
+ */
+<span class="fc" id="L42">public class Counter</span>
+    implements WikiPlugin
+{
+    // private static Logger log = Logger.getLogger( Counter.class );
+
+    /** Parameter name for setting the name.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PARAM_NAME          = &quot;name&quot;;
+    /** Parameter name for setting the increment.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PARAM_INCREMENT     = &quot;increment&quot;;
+    /** Parameter name for setting the showResult.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PARAM_SHOW_RESULT   = &quot;showResult&quot;;
+    /** Parameter name for setting the start.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String  PARAM_START         = &quot;start&quot;;
+    public static final String  DEFAULT_NAME        = &quot;counter&quot;;
+    private static final int     DEFAULT_INCREMENT   = 1;
+    private static final boolean DEFAULT_SHOW_RESULT = true;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+        //
+        //  First, determine which kind of name we use to store in
+        //  the WikiContext.
+        //
+<span class="fc" id="L69">        String  countername = params.get(  PARAM_NAME);</span>
+
+<span class="fc bfc" id="L71" title="All 2 branches covered.">        if( countername == null ) </span>
+        {
+<span class="fc" id="L73">            countername = DEFAULT_NAME;</span>
+        }
+        else
+        {
+<span class="fc" id="L77">            countername = DEFAULT_NAME+&quot;-&quot;+countername;</span>
+        }
+
+        //
+        //  Fetch the old value
+        //
+<span class="fc" id="L83">        Integer val = (Integer)context.getVariable( countername );</span>
+
+<span class="fc bfc" id="L85" title="All 2 branches covered.">        if( val == null )</span>
+        {
+<span class="fc" id="L87">            val = 0;</span>
+        }
+        
+        //
+        //  Check if we need to reset this
+        //
+        
+<span class="fc" id="L94">        String start = params.get( PARAM_START );</span>
+        
+<span class="fc bfc" id="L96" title="All 2 branches covered.">        if( start != null )</span>
+        {
+<span class="fc" id="L98">            val = Integer.parseInt( start );</span>
+        }
+        else
+        {
+            //
+            //  Determine how much to increment
+            //
+<span class="fc" id="L105">            String incrementObj = params.get( PARAM_INCREMENT );</span>
+        
+<span class="fc" id="L107">            int increment = DEFAULT_INCREMENT;</span>
+        
+<span class="fc bfc" id="L109" title="All 2 branches covered.">            if (incrementObj != null) </span>
+            {
+<span class="fc" id="L111">                increment = ( Integer.valueOf( incrementObj ) ).intValue();</span>
+            }
+
+<span class="fc" id="L114">            val = val + increment;</span>
+        }
+        
+<span class="fc" id="L117">        context.setVariable( countername, val );</span>
+
+        //
+        // check if we want to hide the result (just count, don't show result on the page
+        //
+<span class="fc" id="L122">        String showObj = params.get(PARAM_SHOW_RESULT);</span>
+        
+<span class="fc" id="L124">        boolean show = DEFAULT_SHOW_RESULT;</span>
+        
+<span class="fc bfc" id="L126" title="All 2 branches covered.">        if( showObj != null ) </span>
+        {
+<span class="fc" id="L128">            show = TextUtil.isPositive( showObj );</span>
+        }
+        
+<span class="fc bfc" id="L131" title="All 2 branches covered.">        if( show )</span>
+        {
+<span class="fc" id="L133">            return val.toString();</span>
+        } 
+       
+<span class="fc" id="L136">        return &quot;&quot;;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

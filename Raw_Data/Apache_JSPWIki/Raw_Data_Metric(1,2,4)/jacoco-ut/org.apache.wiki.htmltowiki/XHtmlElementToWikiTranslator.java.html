@@ -1,0 +1,1081 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>XHtmlElementToWikiTranslator.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.htmltowiki</a> &gt; <span class="el_source">XHtmlElementToWikiTranslator.java</span></div><h1>XHtmlElementToWikiTranslator.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.htmltowiki;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.apache.commons.lang.StringEscapeUtils;
+import org.jdom2.Attribute;
+import org.jdom2.Content;
+import org.jdom2.Element;
+import org.jdom2.JDOMException;
+import org.jdom2.Text;
+import org.jdom2.xpath.XPath;
+
+/**
+ * Converting XHtml to Wiki Markup.  This is the class which does all of the heavy loading.
+ *
+ */
+public class XHtmlElementToWikiTranslator
+{
+    private static final String UTF8 = &quot;UTF-8&quot;;
+
+    private XHtmlToWikiConfig m_config;
+
+    private WhitespaceTrimWriter m_outTimmer;
+
+    private PrintWriter m_out;
+
+<span class="fc" id="L53">    private LiStack m_liStack = new LiStack();</span>
+
+<span class="fc" id="L55">    private PreStack m_preStack = new PreStack();</span>
+
+    /**
+     *  Create a new translator using the default config.
+     *
+     *  @param base The base element from which to start translating.
+     *  @throws IOException If reading of the DOM tree fails.
+     *  @throws JDOMException If the DOM tree is faulty.
+     */
+    public XHtmlElementToWikiTranslator( Element base ) throws IOException, JDOMException
+    {
+<span class="nc" id="L66">        this( base, new XHtmlToWikiConfig() );</span>
+<span class="nc" id="L67">    }</span>
+
+    /**
+     *  Create a new translator using the specified config.
+     *
+     *  @param base The base element from which to start translating.
+     *  @param config The config to use.
+     *  @throws IOException If reading of the DOM tree fails.
+     *  @throws JDOMException If the DOM tree is faulty.
+     */
+    public XHtmlElementToWikiTranslator( Element base, XHtmlToWikiConfig config ) throws IOException, JDOMException
+<span class="fc" id="L78">    {</span>
+<span class="fc" id="L79">        this.m_config = config;</span>
+<span class="fc" id="L80">        m_outTimmer = new WhitespaceTrimWriter();</span>
+<span class="fc" id="L81">        m_out = new PrintWriter( m_outTimmer );</span>
+<span class="fc" id="L82">        print( base );</span>
+<span class="fc" id="L83">    }</span>
+
+    /**
+     *  FIXME: I have no idea what this does...
+     *
+     *  @return Something.
+     */
+    public String getWikiString()
+    {
+<span class="fc" id="L92">        return m_outTimmer.toString();</span>
+    }
+
+    private void print( String s )
+    {
+<span class="fc" id="L97">        s = StringEscapeUtils.unescapeHtml( s );</span>
+<span class="fc" id="L98">        m_out.print( s );</span>
+<span class="fc" id="L99">    }</span>
+
+    private void print( Object element ) throws IOException, JDOMException
+    {
+<span class="fc bfc" id="L103" title="All 2 branches covered.">        if( element instanceof Text )</span>
+        {
+<span class="fc" id="L105">            Text t = (Text)element;</span>
+<span class="fc" id="L106">            String s = t.getText();</span>
+<span class="fc bfc" id="L107" title="All 2 branches covered.">            if( m_preStack.isPreMode() )</span>
+            {
+<span class="fc" id="L109">                m_out.print( s );</span>
+            }
+            else
+            {
+                // remove all &quot;line terminator&quot; characters
+<span class="fc" id="L114">                s = s.replaceAll( &quot;[\\r\\n\\f\\u0085\\u2028\\u2029]&quot;, &quot;&quot; );</span>
+<span class="fc" id="L115">                m_out.print( s );</span>
+            }
+<span class="fc" id="L117">        }</span>
+<span class="pc bpc" id="L118" title="1 of 2 branches missed.">        else if( element instanceof Element )</span>
+        {
+<span class="fc" id="L120">            Element base = (Element)element;</span>
+<span class="fc" id="L121">            String n = base.getName().toLowerCase();</span>
+<span class="fc bfc" id="L122" title="All 2 branches covered.">            if( &quot;imageplugin&quot;.equals( base.getAttributeValue( &quot;class&quot; ) ) )</span>
+            {
+<span class="fc" id="L124">                printImage( base );</span>
+            }
+<span class="fc bfc" id="L126" title="All 2 branches covered.">            else if( &quot;wikiform&quot;.equals( base.getAttributeValue( &quot;class&quot; ) ) )</span>
+            {
+                // only print the children if the div's class=&quot;wikiform&quot;, but not the div itself.
+<span class="fc" id="L129">                printChildren( base );</span>
+            }
+            else
+            {
+<span class="fc" id="L133">                boolean bold = false;</span>
+<span class="fc" id="L134">                boolean italic = false;</span>
+<span class="fc" id="L135">                boolean monospace = false;</span>
+<span class="fc" id="L136">                String cssSpecial = null;</span>
+<span class="fc" id="L137">                String cssClass = base.getAttributeValue( &quot;class&quot; );</span>
+
+                // accomodate a FCKeditor bug with Firefox: when a link is removed, it becomes &lt;span class=&quot;wikipage&quot;&gt;text&lt;/span&gt;.
+<span class="fc bfc" id="L140" title="All 4 branches covered.">                boolean ignoredCssClass = cssClass != null &amp;&amp; cssClass.matches( &quot;wikipage|createpage|external|interwiki|attachment&quot; );</span>
+
+<span class="fc" id="L142">                Map styleProps = null;</span>
+
+                // Only get the styles if it's not a link element. Styles for link elements are
+                // handled as an AugmentedWikiLink instead.
+<span class="fc bfc" id="L146" title="All 2 branches covered.">                if( !n.equals( &quot;a&quot; ) )</span>
+                {
+<span class="fc" id="L148">                    styleProps = getStylePropertiesLowerCase( base );</span>
+                }
+
+<span class="fc bfc" id="L151" title="All 2 branches covered.">                if( styleProps != null )</span>
+                {
+<span class="fc" id="L153">                    String fontFamily = (String)styleProps.get( &quot;font-family&quot; );</span>
+<span class="fc" id="L154">                    String whiteSpace = (String)styleProps.get( &quot;white-space&quot; );</span>
+<span class="pc bpc" id="L155" title="1 of 6 branches missed.">                    if( fontFamily != null &amp;&amp; ( fontFamily.indexOf( &quot;monospace&quot; ) &gt;= 0</span>
+<span class="pc bpc" id="L156" title="1 of 2 branches missed.">                            &amp;&amp; whiteSpace != null &amp;&amp; whiteSpace.indexOf( &quot;pre&quot; ) &gt;= 0  ) )</span>
+                    {
+<span class="fc" id="L158">                        styleProps.remove( &quot;font-family&quot; );</span>
+<span class="fc" id="L159">                        styleProps.remove( &quot;white-space&quot; );</span>
+<span class="fc" id="L160">                        monospace = true;</span>
+                    }
+
+<span class="fc" id="L163">                    String weight = (String)styleProps.remove( &quot;font-weight&quot; );</span>
+<span class="fc" id="L164">                    String style = (String)styleProps.remove( &quot;font-style&quot; );</span>
+
+<span class="fc bfc" id="L166" title="All 2 branches covered.">                    if( n.equals( &quot;p&quot; ) )</span>
+                    {
+                        // change it so we can print out the css styles for &lt;p&gt;
+<span class="fc" id="L169">                        n = &quot;div&quot;;</span>
+                    }
+
+<span class="pc bpc" id="L172" title="1 of 4 branches missed.">                    italic = &quot;oblique&quot;.equals( style ) || &quot;italic&quot;.equals( style );</span>
+<span class="pc bpc" id="L173" title="1 of 4 branches missed.">                    bold = &quot;bold&quot;.equals( weight ) || &quot;bolder&quot;.equals( weight );</span>
+<span class="fc bfc" id="L174" title="All 2 branches covered.">                    if( !styleProps.isEmpty() )</span>
+                    {
+<span class="fc" id="L176">                        cssSpecial = propsToStyleString( styleProps );</span>
+                    }
+                }
+<span class="fc bfc" id="L179" title="All 4 branches covered.">                if( cssClass != null &amp;&amp; !ignoredCssClass )</span>
+                {
+<span class="fc bfc" id="L181" title="All 2 branches covered.">                    if( n.equals( &quot;div&quot; ) )</span>
+                    {
+<span class="fc" id="L183">                        m_out.print( &quot;\n%%&quot; + cssClass + &quot; \n&quot; );</span>
+                    }
+<span class="pc bpc" id="L185" title="1 of 2 branches missed.">                    else if( n.equals( &quot;span&quot; ) )</span>
+                    {
+<span class="nc" id="L187">                        m_out.print( &quot;%%&quot; + cssClass + &quot; &quot; );</span>
+                    }
+                }
+<span class="fc bfc" id="L190" title="All 2 branches covered.">                if( bold )</span>
+                {
+<span class="fc" id="L192">                    m_out.print( &quot;__&quot; );</span>
+                }
+<span class="fc bfc" id="L194" title="All 2 branches covered.">                if( italic )</span>
+                {
+<span class="fc" id="L196">                    m_out.print( &quot;''&quot; );</span>
+                }
+<span class="fc bfc" id="L198" title="All 2 branches covered.">                if( monospace )</span>
+                {
+<span class="fc" id="L200">                    m_out.print( &quot;{{{&quot; );</span>
+<span class="fc" id="L201">                    m_preStack.push();</span>
+                }
+<span class="fc bfc" id="L203" title="All 2 branches covered.">                if( cssSpecial != null )</span>
+                {
+<span class="fc bfc" id="L205" title="All 2 branches covered.">                    if( n.equals( &quot;div&quot; ) )</span>
+                    {
+<span class="fc" id="L207">                        m_out.print( &quot;\n%%(&quot; + cssSpecial + &quot; )\n&quot; );</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L211">                        m_out.print( &quot;%%(&quot; + cssSpecial + &quot; )&quot; );</span>
+                    }
+                }
+<span class="fc" id="L214">                printChildren( base );</span>
+<span class="fc bfc" id="L215" title="All 2 branches covered.">                if( cssSpecial != null )</span>
+                {
+<span class="fc bfc" id="L217" title="All 2 branches covered.">                    if( n.equals( &quot;div&quot; ) )</span>
+                    {
+<span class="fc" id="L219">                        m_out.print( &quot;\n/%\n&quot; );</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L223">                        m_out.print( &quot;/%&quot; );</span>
+                    }
+                }
+<span class="fc bfc" id="L226" title="All 2 branches covered.">                if( monospace )</span>
+                {
+<span class="fc" id="L228">                    m_preStack.pop();</span>
+<span class="fc" id="L229">                    m_out.print( &quot;}}}&quot; );</span>
+                }
+<span class="fc bfc" id="L231" title="All 2 branches covered.">                if( italic )</span>
+                {
+<span class="fc" id="L233">                    m_out.print( &quot;''&quot; );</span>
+                }
+<span class="fc bfc" id="L235" title="All 2 branches covered.">                if( bold )</span>
+                {
+<span class="fc" id="L237">                    m_out.print( &quot;__&quot; );</span>
+                }
+<span class="fc bfc" id="L239" title="All 4 branches covered.">                if( cssClass != null &amp;&amp; !ignoredCssClass )</span>
+                {
+<span class="fc bfc" id="L241" title="All 2 branches covered.">                    if( n.equals( &quot;div&quot; ) )</span>
+                    {
+<span class="fc" id="L243">                        m_out.print( &quot;\n/%\n&quot; );</span>
+                    }
+<span class="pc bpc" id="L245" title="1 of 2 branches missed.">                    else if( n.equals( &quot;span&quot; ) )</span>
+                    {
+<span class="nc" id="L247">                        m_out.print( &quot;/%&quot; );</span>
+                    }
+                }
+            }
+        }
+<span class="fc" id="L252">    }</span>
+
+    private void printChildren( Element base ) throws IOException, JDOMException
+    {
+<span class="fc bfc" id="L256" title="All 2 branches covered.">        for( Iterator&lt; Content &gt; i = base.getContent().iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L258">            Content c = i.next();</span>
+<span class="fc bfc" id="L259" title="All 2 branches covered.">            if( c instanceof Element )</span>
+            {
+<span class="fc" id="L261">                Element e = (Element)c;</span>
+<span class="fc" id="L262">                String n = e.getName().toLowerCase();</span>
+<span class="fc bfc" id="L263" title="All 2 branches covered.">                if( n.equals( &quot;h1&quot; ) )</span>
+                {
+<span class="fc" id="L265">                    m_out.print( &quot;\n!!! &quot; );</span>
+<span class="fc" id="L266">                    print( e );</span>
+<span class="fc" id="L267">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L269" title="All 2 branches covered.">                else if( n.equals( &quot;h2&quot; ) )</span>
+                {
+<span class="fc" id="L271">                    m_out.print( &quot;\n!!! &quot; );</span>
+<span class="fc" id="L272">                    print( e );</span>
+<span class="fc" id="L273">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L275" title="All 2 branches covered.">                else if( n.equals( &quot;h3&quot; ) )</span>
+                {
+<span class="fc" id="L277">                    m_out.print( &quot;\n!! &quot; );</span>
+<span class="fc" id="L278">                    print( e );</span>
+<span class="fc" id="L279">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L281" title="All 2 branches covered.">                else if( n.equals( &quot;h4&quot; ) )</span>
+                {
+<span class="fc" id="L283">                    m_out.print( &quot;\n! &quot; );</span>
+<span class="fc" id="L284">                    print( e );</span>
+<span class="fc" id="L285">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L287" title="All 2 branches covered.">                else if( n.equals( &quot;p&quot; ) )</span>
+                {
+<span class="fc bfc" id="L289" title="All 2 branches covered.">                    if( e.getContentSize() != 0 ) // we don't want to print empty elements: &lt;p&gt;&lt;/p&gt;</span>
+                    {
+<span class="fc" id="L291">                        m_out.println();</span>
+<span class="fc" id="L292">                        print( e );</span>
+<span class="fc" id="L293">                        m_out.println();</span>
+                    }
+                }
+<span class="fc bfc" id="L296" title="All 2 branches covered.">                else if( n.equals( &quot;br&quot; ) )</span>
+                {
+<span class="fc bfc" id="L298" title="All 2 branches covered.">                    if( m_preStack.isPreMode() )</span>
+                    {
+<span class="fc" id="L300">                        m_out.println();</span>
+                    }
+                    else
+                    {
+<span class="fc" id="L304">                        String parentElementName = base.getName().toLowerCase();</span>
+
+                        //
+                        // To beautify the generated wiki markup, we print a newline character after a linebreak.
+                        // It's only safe to do this when the parent element is a &lt;p&gt; or &lt;div&gt;; when the parent
+                        // element is a table cell or list item, a newline character would break the markup.
+                        // We also check that this isn't being done inside a plugin body.
+                        //
+<span class="fc bfc" id="L312" title="All 2 branches covered.">                        if( parentElementName.matches( &quot;p|div&quot; )</span>
+<span class="fc bfc" id="L313" title="All 2 branches covered.">                            &amp;&amp; !base.getText().matches( &quot;(?s).*\\[\\{.*\\}\\].*&quot; ) )</span>
+                        {
+<span class="fc" id="L315">                            m_out.print( &quot; \\\\\n&quot; );</span>
+                        }
+                        else
+                        {
+<span class="fc" id="L319">                            m_out.print( &quot; \\\\&quot; );</span>
+                        }
+                    }
+<span class="fc" id="L322">                    print( e );</span>
+                }
+<span class="fc bfc" id="L324" title="All 2 branches covered.">                else if( n.equals( &quot;hr&quot; ) )</span>
+                {
+<span class="fc" id="L326">                    m_out.println();</span>
+<span class="fc" id="L327">                    print( &quot;----&quot; );</span>
+<span class="fc" id="L328">                    print( e );</span>
+<span class="fc" id="L329">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L331" title="All 2 branches covered.">                else if( n.equals( &quot;table&quot; ) )</span>
+                {
+<span class="fc bfc" id="L333" title="All 2 branches covered.">                    if( !m_outTimmer.isCurrentlyOnLineBegin() )</span>
+                    {
+<span class="fc" id="L335">                        m_out.println();</span>
+                    }
+<span class="fc" id="L337">                    print( e );</span>
+                }
+<span class="fc bfc" id="L339" title="All 2 branches covered.">                else if( n.equals( &quot;tr&quot; ) )</span>
+                {
+<span class="fc" id="L341">                    print( e );</span>
+<span class="fc" id="L342">                    m_out.println();</span>
+                }
+<span class="fc bfc" id="L344" title="All 2 branches covered.">                else if( n.equals( &quot;td&quot; ) )</span>
+                {
+<span class="fc" id="L346">                    m_out.print( &quot;| &quot; );</span>
+<span class="fc" id="L347">                    print( e );</span>
+<span class="pc bpc" id="L348" title="1 of 2 branches missed.">                    if( !m_preStack.isPreMode() )</span>
+                    {
+<span class="fc" id="L350">                        print( &quot; &quot; );</span>
+                    }
+                }
+<span class="fc bfc" id="L353" title="All 2 branches covered.">                else if( n.equals( &quot;th&quot; ) )</span>
+                {
+<span class="fc" id="L355">                    m_out.print( &quot;|| &quot; );</span>
+<span class="fc" id="L356">                    print( e );</span>
+<span class="pc bpc" id="L357" title="1 of 2 branches missed.">                    if( !m_preStack.isPreMode() )</span>
+                    {
+<span class="fc" id="L359">                        print( &quot; &quot; );</span>
+                    }
+                }
+<span class="fc bfc" id="L362" title="All 2 branches covered.">                else if( n.equals( &quot;a&quot; ) )</span>
+                {
+<span class="fc bfc" id="L364" title="All 2 branches covered.">                    if( !isIgnorableWikiMarkupLink( e ) )</span>
+                    {
+<span class="fc bfc" id="L366" title="All 2 branches covered.">                        if( e.getChild( &quot;IMG&quot; ) != null )</span>
+                        {
+<span class="fc" id="L368">                            printImage( e );</span>
+                        }
+                        else
+                        {
+<span class="fc" id="L372">                            String ref = e.getAttributeValue( &quot;href&quot; );</span>
+<span class="pc bpc" id="L373" title="1 of 2 branches missed.">                            if( ref == null )</span>
+                            {
+<span class="nc bnc" id="L375" title="All 2 branches missed.">                                if( isUndefinedPageLink( e ) )</span>
+                                {
+<span class="nc" id="L377">                                    m_out.print( &quot;[&quot; );</span>
+<span class="nc" id="L378">                                    print( e );</span>
+<span class="nc" id="L379">                                    m_out.print( &quot;]&quot; );</span>
+                                }
+                                else
+                                {
+<span class="nc" id="L383">                                    print( e );</span>
+                                }
+                            }
+                            else
+                            {
+<span class="fc" id="L388">                                ref = trimLink( ref );</span>
+<span class="pc bpc" id="L389" title="1 of 2 branches missed.">                                if( ref != null )</span>
+                                {
+<span class="fc bfc" id="L391" title="All 2 branches covered.">                                    if( ref.startsWith( &quot;#&quot; ) ) // This is a link to a footnote.</span>
+                                    {
+                                        // convert &quot;#ref-PageName-1&quot; to just &quot;1&quot;
+<span class="fc" id="L394">                                        String href = ref.replaceFirst( &quot;#ref-.+-(\\d+)&quot;, &quot;$1&quot; );</span>
+
+                                        // remove the brackets around &quot;[1]&quot;
+<span class="fc" id="L397">                                        String textValue = e.getValue().substring( 1, (e.getValue().length() - 1) );</span>
+
+<span class="fc bfc" id="L399" title="All 2 branches covered.">                                        if( href.equals( textValue ) ){ // handles the simplest case. Example: [1]</span>
+<span class="fc" id="L400">                                            print( e );</span>
+                                        }
+                                        else{ // handles the case where the link text is different from the href. Example: [something|1]
+<span class="fc" id="L403">                                            m_out.print( &quot;[&quot; + textValue + &quot;|&quot; + href + &quot;]&quot; );</span>
+                                        }
+<span class="fc" id="L405">                                    }</span>
+                                    else
+                                    {
+<span class="fc" id="L408">                                        Map&lt;String, String&gt; augmentedWikiLinkAttributes = getAugmentedWikiLinkAttributes( e );</span>
+
+<span class="fc" id="L410">                                        m_out.print( &quot;[&quot; );</span>
+<span class="fc" id="L411">                                        print( e );</span>
+<span class="fc bfc" id="L412" title="All 2 branches covered.">                                        if( !e.getTextTrim().equalsIgnoreCase( ref ) )</span>
+                                        {
+<span class="fc" id="L414">                                            m_out.print( &quot;|&quot; );</span>
+<span class="fc" id="L415">                                            print( ref );</span>
+
+<span class="pc bpc" id="L417" title="1 of 2 branches missed.">                                            if( !augmentedWikiLinkAttributes.isEmpty() )</span>
+                                            {
+<span class="nc" id="L419">                                                m_out.print( &quot;|&quot; );</span>
+
+<span class="nc" id="L421">                                                String augmentedWikiLink = augmentedWikiLinkMapToString( augmentedWikiLinkAttributes );</span>
+<span class="nc" id="L422">                                                m_out.print( augmentedWikiLink );</span>
+<span class="nc" id="L423">                                            }</span>
+                                        }
+<span class="fc bfc" id="L425" title="All 2 branches covered.">                                        else if( !augmentedWikiLinkAttributes.isEmpty() )</span>
+                                        {
+                                            // If the ref has the same value as the text and also if there
+                                            // are attributes, then just print: [ref|ref|attributes] .
+<span class="fc" id="L429">                                            m_out.print( &quot;|&quot; + ref + &quot;|&quot; );</span>
+<span class="fc" id="L430">                                            String augmentedWikiLink = augmentedWikiLinkMapToString( augmentedWikiLinkAttributes );</span>
+<span class="fc" id="L431">                                            m_out.print( augmentedWikiLink );</span>
+                                        }
+
+<span class="fc" id="L434">                                        m_out.print( &quot;]&quot; );</span>
+                                    }
+                                }
+                            }
+<span class="fc" id="L438">                        }</span>
+                    }
+                }
+<span class="fc bfc" id="L441" title="All 4 branches covered.">                else if( n.equals( &quot;b&quot; ) || n.equals(&quot;strong&quot;) )</span>
+                {
+<span class="fc" id="L443">                    m_out.print( &quot;__&quot; );</span>
+<span class="fc" id="L444">                    print( e );</span>
+<span class="fc" id="L445">                    m_out.print( &quot;__&quot; );</span>
+                }
+<span class="pc bpc" id="L447" title="1 of 6 branches missed.">                else if( n.equals( &quot;i&quot; ) || n.equals(&quot;em&quot;) || n.equals( &quot;address&quot; ) )</span>
+                {
+<span class="fc" id="L449">                    m_out.print( &quot;''&quot; );</span>
+<span class="fc" id="L450">                    print( e );</span>
+<span class="fc" id="L451">                    m_out.print( &quot;''&quot; );</span>
+                }
+<span class="pc bpc" id="L453" title="1 of 2 branches missed.">                else if( n.equals( &quot;u&quot; ) )</span>
+                {
+<span class="nc" id="L455">                    m_out.print( &quot;%%( text-decoration:underline; )&quot; );</span>
+<span class="nc" id="L456">                    print( e );</span>
+<span class="nc" id="L457">                    m_out.print( &quot;/%&quot; );</span>
+                }
+<span class="fc bfc" id="L459" title="All 2 branches covered.">                else if( n.equals( &quot;strike&quot; ) )</span>
+                {
+<span class="fc" id="L461">                    m_out.print( &quot;%%strike &quot; );</span>
+<span class="fc" id="L462">                    print( e );</span>
+<span class="fc" id="L463">                    m_out.print( &quot;/%&quot; );</span>
+                    // NOTE: don't print a space before or after the double percents because that can break words into two.
+                    // For example: %%(color:red)ABC%%%%(color:green)DEF%% is different from %%(color:red)ABC%% %%(color:green)DEF%%
+                }
+<span class="pc bpc" id="L467" title="1 of 2 branches missed.">                else if( n.equals( &quot;sup&quot; ) )</span>
+                {
+<span class="nc" id="L469">                    m_out.print( &quot;%%sup &quot; );</span>
+<span class="nc" id="L470">                    print( e );</span>
+<span class="nc" id="L471">                    m_out.print( &quot;/%&quot; );</span>
+                }
+<span class="pc bpc" id="L473" title="1 of 2 branches missed.">                else if( n.equals( &quot;sub&quot; ) )</span>
+                {
+<span class="nc" id="L475">                    m_out.print( &quot;%%sub &quot; );</span>
+<span class="nc" id="L476">                    print( e );</span>
+<span class="nc" id="L477">                    m_out.print( &quot;/%&quot; );</span>
+                }
+<span class="fc bfc" id="L479" title="All 2 branches covered.">                else if( n.equals(&quot;dl&quot;) )</span>
+                {
+<span class="fc" id="L481">                    m_out.print( &quot;\n&quot; );</span>
+<span class="fc" id="L482">                    print( e );</span>
+
+                    // print a newline after the definition list. If we don't,
+                    // it may cause problems for the subsequent element.
+<span class="fc" id="L486">                    m_out.print( &quot;\n&quot; );</span>
+                }
+<span class="fc bfc" id="L488" title="All 2 branches covered.">                else if( n.equals(&quot;dt&quot;) )</span>
+                {
+<span class="fc" id="L490">                    m_out.print( &quot;;&quot; );</span>
+<span class="fc" id="L491">                    print( e );</span>
+                }
+<span class="fc bfc" id="L493" title="All 2 branches covered.">                else if( n.equals(&quot;dd&quot;) )</span>
+                {
+<span class="fc" id="L495">                    m_out.print( &quot;:&quot; );</span>
+<span class="fc" id="L496">                    print( e );</span>
+                }
+<span class="fc bfc" id="L498" title="All 2 branches covered.">                else if( n.equals( &quot;ul&quot; ) )</span>
+                {
+<span class="fc" id="L500">                    m_out.println();</span>
+<span class="fc" id="L501">                    m_liStack.push( &quot;*&quot; );</span>
+<span class="fc" id="L502">                    print( e );</span>
+<span class="fc" id="L503">                    m_liStack.pop();</span>
+                }
+<span class="fc bfc" id="L505" title="All 2 branches covered.">                else if( n.equals( &quot;ol&quot; ) )</span>
+                {
+<span class="fc" id="L507">                    m_out.println();</span>
+<span class="fc" id="L508">                    m_liStack.push( &quot;#&quot; );</span>
+<span class="fc" id="L509">                    print( e );</span>
+<span class="fc" id="L510">                    m_liStack.pop();</span>
+                }
+<span class="fc bfc" id="L512" title="All 2 branches covered.">                else if( n.equals( &quot;li&quot; ) )</span>
+                {
+<span class="fc" id="L514">                    m_out.print( m_liStack + &quot; &quot; );</span>
+<span class="fc" id="L515">                    print( e );</span>
+
+                    // The following line assumes that the XHTML has been &quot;pretty-printed&quot;
+                    // (newlines separate child elements from their parents).
+<span class="fc bfc" id="L519" title="All 2 branches covered.">                    boolean lastListItem = base.indexOf( e ) == ( base.getContentSize() - 2 );</span>
+<span class="fc bfc" id="L520" title="All 2 branches covered.">                    boolean sublistItem = m_liStack.toString().length() &gt; 1;</span>
+
+                    // only print a newline if this &lt;li&gt; element is not the last item within a sublist.
+<span class="fc bfc" id="L523" title="All 4 branches covered.">                    if( !sublistItem || !lastListItem )</span>
+                    {
+<span class="fc" id="L525">                        m_out.println();</span>
+                    }
+<span class="fc" id="L527">                }</span>
+<span class="fc bfc" id="L528" title="All 2 branches covered.">                else if( n.equals( &quot;pre&quot; ) )</span>
+                {
+<span class="fc" id="L530">                    m_out.print( &quot;\n{{{&quot; ); // start JSPWiki &quot;code blocks&quot; on its own line</span>
+<span class="fc" id="L531">                    m_preStack.push();</span>
+<span class="fc" id="L532">                    print( e );</span>
+<span class="fc" id="L533">                    m_preStack.pop();</span>
+
+                    // print a newline after the closing braces
+                    // to avoid breaking any subsequent wiki markup that follows.
+<span class="fc" id="L537">                    m_out.print( &quot;}}}\n&quot; );</span>
+                }
+<span class="fc bfc" id="L539" title="All 4 branches covered.">                else if( n.equals( &quot;code&quot; ) || n.equals( &quot;tt&quot; ) )</span>
+                {
+<span class="fc" id="L541">                    m_out.print( &quot;{{&quot; );</span>
+<span class="fc" id="L542">                    m_preStack.push();</span>
+<span class="fc" id="L543">                    print( e );</span>
+<span class="fc" id="L544">                    m_preStack.pop();</span>
+<span class="fc" id="L545">                    m_out.print( &quot;}}&quot; );</span>
+                    // NOTE: don't print a newline after the closing brackets because if the Text is inside
+                    // a table or list, it would break it if there was a subsequent row or list item.
+                }
+<span class="fc bfc" id="L549" title="All 2 branches covered.">                else if( n.equals( &quot;img&quot; ) )</span>
+                {
+<span class="fc bfc" id="L551" title="All 2 branches covered.">                    if( !isIgnorableWikiMarkupLink( e ) )</span>
+                    {
+<span class="fc" id="L553">                        m_out.print( &quot;[&quot; );</span>
+<span class="fc" id="L554">                        print( trimLink( e.getAttributeValue( &quot;src&quot; ) ) );</span>
+<span class="fc" id="L555">                        m_out.print( &quot;]&quot; );</span>
+                    }
+                }
+<span class="fc bfc" id="L558" title="All 2 branches covered.">                else if( n.equals( &quot;form&quot; ) )</span>
+                {
+                    // remove the hidden input where name=&quot;formname&quot; since a new one will be generated again when the xhtml is rendered.
+<span class="fc" id="L561">                    Element formName = (Element)XPath.selectSingleNode( e, &quot;INPUT[@name='formname']&quot; );</span>
+<span class="pc bpc" id="L562" title="1 of 2 branches missed.">                    if( formName != null )</span>
+                    {
+<span class="fc" id="L564">                        formName.detach();</span>
+                    }
+
+<span class="fc" id="L567">                    String name = e.getAttributeValue( &quot;name&quot; );</span>
+
+<span class="fc" id="L569">                    m_out.print( &quot;\n[{FormOpen&quot; );</span>
+
+<span class="pc bpc" id="L571" title="1 of 2 branches missed.">                    if( name != null )</span>
+                    {
+<span class="fc" id="L573">                        m_out.print( &quot; form='&quot; + name + &quot;'&quot; );</span>
+                    }
+
+<span class="fc" id="L576">                    m_out.print( &quot;}]\n&quot; );</span>
+
+<span class="fc" id="L578">                    print( e );</span>
+<span class="fc" id="L579">                    m_out.print( &quot;\n[{FormClose}]\n&quot; );</span>
+<span class="fc" id="L580">                }</span>
+<span class="fc bfc" id="L581" title="All 2 branches covered.">                else if( n.equals( &quot;input&quot; ) )</span>
+                {
+<span class="fc" id="L583">                    String type = e.getAttributeValue( &quot;type&quot; );</span>
+<span class="fc" id="L584">                    String name = e.getAttributeValue( &quot;name&quot; );</span>
+<span class="fc" id="L585">                    String value = e.getAttributeValue( &quot;value&quot; );</span>
+<span class="fc" id="L586">                    String checked = e.getAttributeValue( &quot;checked&quot; );</span>
+
+<span class="fc" id="L588">                    m_out.print( &quot;[{FormInput&quot; );</span>
+
+<span class="pc bpc" id="L590" title="1 of 2 branches missed.">                    if( type != null )</span>
+                    {
+<span class="fc" id="L592">                        m_out.print( &quot; type='&quot; + type + &quot;'&quot; );</span>
+                    }
+<span class="pc bpc" id="L594" title="1 of 2 branches missed.">                    if( name != null )</span>
+                    {
+                        // remove the &quot;nbf_&quot; that was prepended since new one will be generated again when the xhtml is rendered.
+<span class="pc bpc" id="L597" title="1 of 2 branches missed.">                        if( name.startsWith( &quot;nbf_&quot; ) )</span>
+                        {
+<span class="fc" id="L599">                            name = name.substring( 4, name.length( ));</span>
+                        }
+<span class="fc" id="L601">                        m_out.print( &quot; name='&quot; + name + &quot;'&quot; );</span>
+                    }
+<span class="pc bpc" id="L603" title="1 of 4 branches missed.">                    if( value != null &amp;&amp; !value.equals( &quot;&quot; ) )</span>
+                    {
+<span class="fc" id="L605">                        m_out.print( &quot; value='&quot; + value + &quot;'&quot; );</span>
+                    }
+<span class="fc bfc" id="L607" title="All 2 branches covered.">                    if( checked != null )</span>
+                    {
+<span class="fc" id="L609">                        m_out.print( &quot; checked='&quot; + checked + &quot;'&quot; );</span>
+                    }
+
+<span class="fc" id="L612">                    m_out.print( &quot;}]&quot; );</span>
+
+<span class="fc" id="L614">                    print( e );</span>
+<span class="fc" id="L615">                }</span>
+<span class="fc bfc" id="L616" title="All 2 branches covered.">                else if( n.equals( &quot;textarea&quot; ) )</span>
+                {
+<span class="fc" id="L618">                    String name = e.getAttributeValue( &quot;name&quot; );</span>
+<span class="fc" id="L619">                    String rows = e.getAttributeValue( &quot;rows&quot; );</span>
+<span class="fc" id="L620">                    String cols = e.getAttributeValue( &quot;cols&quot; );</span>
+
+<span class="fc" id="L622">                    m_out.print( &quot;[{FormTextarea&quot; );</span>
+
+<span class="pc bpc" id="L624" title="1 of 2 branches missed.">                    if( name != null )</span>
+                    {
+<span class="pc bpc" id="L626" title="1 of 2 branches missed.">                        if( name.startsWith( &quot;nbf_&quot; ) )</span>
+                        {
+<span class="fc" id="L628">                            name = name.substring( 4, name.length( ));</span>
+                        }
+<span class="fc" id="L630">                        m_out.print( &quot; name='&quot; + name + &quot;'&quot; );</span>
+                    }
+<span class="pc bpc" id="L632" title="1 of 2 branches missed.">                    if( rows != null )</span>
+                    {
+<span class="fc" id="L634">                        m_out.print( &quot; rows='&quot; + rows + &quot;'&quot; );</span>
+                    }
+<span class="pc bpc" id="L636" title="1 of 2 branches missed.">                    if( cols != null )</span>
+                    {
+<span class="fc" id="L638">                        m_out.print( &quot; cols='&quot; + cols + &quot;'&quot; );</span>
+                    }
+
+<span class="fc" id="L641">                    m_out.print( &quot;}]&quot; );</span>
+<span class="fc" id="L642">                    print( e );</span>
+<span class="fc" id="L643">                }</span>
+<span class="fc bfc" id="L644" title="All 2 branches covered.">                else if( n.equals( &quot;select&quot; ) )</span>
+                {
+<span class="fc" id="L646">                    String name = e.getAttributeValue( &quot;name&quot; );</span>
+
+<span class="fc" id="L648">                    m_out.print( &quot;[{FormSelect&quot; );</span>
+
+<span class="pc bpc" id="L650" title="1 of 2 branches missed.">                    if( name != null )</span>
+                    {
+<span class="pc bpc" id="L652" title="1 of 2 branches missed.">                        if( name.startsWith( &quot;nbf_&quot; ) )</span>
+                        {
+<span class="fc" id="L654">                            name = name.substring( 4, name.length( ));</span>
+                        }
+<span class="fc" id="L656">                        m_out.print( &quot; name='&quot; + name + &quot;'&quot; );</span>
+                    }
+
+<span class="fc" id="L659">                    m_out.print( &quot; value='&quot; );</span>
+<span class="fc" id="L660">                    print( e );</span>
+<span class="fc" id="L661">                    m_out.print( &quot;'}]&quot; );</span>
+<span class="fc" id="L662">                }</span>
+<span class="fc bfc" id="L663" title="All 2 branches covered.">                else if( n.equals( &quot;option&quot; ) )</span>
+                {
+                    // If this &lt;option&gt; element isn't the second child element within the parent &lt;select&gt;
+                    // element, then we need to print a semicolon as a separator. (The first child element
+                    // is expected to be a newline character which is at index of 0).
+<span class="fc bfc" id="L668" title="All 2 branches covered.">                    if( base.indexOf( e ) != 1 )</span>
+                    {
+<span class="fc" id="L670">                        m_out.print( &quot;;&quot; );</span>
+                    }
+
+<span class="fc" id="L673">                    Attribute selected = e.getAttribute( &quot;selected&quot; );</span>
+<span class="fc bfc" id="L674" title="All 2 branches covered.">                    if( selected !=  null )</span>
+                    {
+<span class="fc" id="L676">                        m_out.print( &quot;*&quot; );</span>
+                    }
+
+<span class="fc" id="L679">                    String value = e.getAttributeValue( &quot;value&quot; );</span>
+<span class="pc bpc" id="L680" title="1 of 2 branches missed.">                    if( value != null )</span>
+                    {
+<span class="fc" id="L682">                        m_out.print( value );</span>
+                    }
+                    else
+                    {
+<span class="nc" id="L686">                        print( e );</span>
+                    }
+<span class="fc" id="L688">                }</span>
+                else
+                {
+<span class="fc" id="L691">                    print( e );</span>
+                }
+<span class="fc" id="L693">            }</span>
+            else
+            {
+<span class="fc" id="L696">                print( c );</span>
+            }
+<span class="fc" id="L698">        }</span>
+<span class="fc" id="L699">    }</span>
+
+    private void printImage( Element base ) throws JDOMException
+    {
+<span class="fc" id="L703">        Element child = (Element)XPath.selectSingleNode( base, &quot;TBODY/TR/TD/*&quot; );</span>
+<span class="fc bfc" id="L704" title="All 2 branches covered.">        if( child == null )</span>
+        {
+<span class="fc" id="L706">            child = base;</span>
+        }
+        Element img;
+        String href;
+<span class="fc" id="L710">        Map&lt;Object,Object&gt; map = new ForgetNullValuesLinkedHashMap&lt;&gt;();</span>
+<span class="fc bfc" id="L711" title="All 2 branches covered.">        if( child.getName().equals( &quot;A&quot; ) )</span>
+        {
+<span class="fc" id="L713">            img = child.getChild( &quot;IMG&quot; );</span>
+<span class="fc" id="L714">            href = child.getAttributeValue( &quot;href&quot; );</span>
+        }
+        else
+        {
+<span class="fc" id="L718">            img = child;</span>
+<span class="fc" id="L719">            href = null;</span>
+        }
+<span class="pc bpc" id="L721" title="1 of 2 branches missed.">        if( img == null )</span>
+        {
+<span class="nc" id="L723">            return;</span>
+        }
+<span class="fc" id="L725">        String src = trimLink( img.getAttributeValue( &quot;src&quot; ) );</span>
+<span class="fc bfc" id="L726" title="All 2 branches covered.">        if( src == null )</span>
+        {
+<span class="fc" id="L728">            return;</span>
+        }
+<span class="fc" id="L730">        map.put( &quot;align&quot;, base.getAttributeValue( &quot;align&quot; ) );</span>
+<span class="fc" id="L731">        map.put( &quot;height&quot;, img.getAttributeValue( &quot;height&quot; ) );</span>
+<span class="fc" id="L732">        map.put( &quot;width&quot;, img.getAttributeValue( &quot;width&quot; ) );</span>
+<span class="fc" id="L733">        map.put( &quot;alt&quot;, img.getAttributeValue( &quot;alt&quot; ) );</span>
+<span class="fc" id="L734">        map.put( &quot;caption&quot;, emptyToNull( XPath.newInstance( &quot;CAPTION&quot; ).valueOf( base ) ) );</span>
+<span class="fc" id="L735">        map.put( &quot;link&quot;, href );</span>
+<span class="fc" id="L736">        map.put( &quot;border&quot;, img.getAttributeValue( &quot;border&quot; ) );</span>
+<span class="fc" id="L737">        map.put( &quot;style&quot;, base.getAttributeValue( &quot;style&quot; ) );</span>
+<span class="pc bpc" id="L738" title="1 of 2 branches missed.">        if( map.size() &gt; 0 )</span>
+        {
+<span class="fc" id="L740">            m_out.print( &quot;[{Image src='&quot; + src + &quot;'&quot; );</span>
+<span class="fc bfc" id="L741" title="All 2 branches covered.">            for( Iterator i = map.entrySet().iterator(); i.hasNext(); )</span>
+            {
+<span class="fc" id="L743">                Map.Entry entry = (Map.Entry)i.next();</span>
+<span class="pc bpc" id="L744" title="1 of 2 branches missed.">                if( !entry.getValue().equals( &quot;&quot; ) )</span>
+                {
+<span class="fc" id="L746">                    m_out.print( &quot; &quot; + entry.getKey() + &quot;='&quot; + entry.getValue() + &quot;'&quot; );</span>
+                }
+<span class="fc" id="L748">            }</span>
+<span class="fc" id="L749">            m_out.print( &quot;}]&quot; );</span>
+        }
+        else
+        {
+<span class="nc" id="L753">            m_out.print( &quot;[&quot; + src + &quot;]&quot; );</span>
+        }
+<span class="fc" id="L755">    }</span>
+
+    private String emptyToNull( String s )
+    {
+<span class="pc bpc" id="L759" title="1 of 4 branches missed.">        return s == null ? null : (s.replaceAll( &quot;\\s&quot;, &quot;&quot; ).length() == 0 ? null : s);</span>
+    }
+
+    private String propsToStyleString( Map styleProps )
+    {
+<span class="fc" id="L764">    	StringBuilder style = new StringBuilder();</span>
+<span class="fc bfc" id="L765" title="All 2 branches covered.">        for( Iterator i = styleProps.entrySet().iterator(); i.hasNext(); )</span>
+        {
+<span class="fc" id="L767">            Map.Entry entry = (Map.Entry)i.next();</span>
+<span class="fc" id="L768">            style.append( &quot; &quot; ).append( entry.getKey() ).append( &quot;: &quot; ).append( entry.getValue() ).append( &quot;;&quot; );</span>
+<span class="fc" id="L769">        }</span>
+<span class="fc" id="L770">        return style.toString();</span>
+    }
+
+    private boolean isIgnorableWikiMarkupLink( Element a )
+    {
+<span class="fc" id="L775">        String ref = a.getAttributeValue( &quot;href&quot; );</span>
+<span class="fc" id="L776">        String clazz = a.getAttributeValue( &quot;class&quot; );</span>
+<span class="fc bfc" id="L777" title="All 6 branches covered.">        return (ref != null &amp;&amp; ref.startsWith( m_config.getPageInfoJsp() ))</span>
+<span class="fc bfc" id="L778" title="All 2 branches covered.">               || (clazz != null &amp;&amp; clazz.trim().equalsIgnoreCase( m_config.getOutlink() ));</span>
+    }
+
+    /**
+     * Checks if the link points to an undefined page.
+     */
+    private boolean isUndefinedPageLink( Element a)
+    {
+<span class="nc" id="L786">        String classVal = a.getAttributeValue( &quot;class&quot; );</span>
+
+<span class="nc" id="L788">        return &quot;createpage&quot;.equals( classVal );</span>
+    }
+
+    /**
+     *  Returns a Map containing the valid augmented wiki link attributes.
+     */
+    private Map&lt;String,String&gt; getAugmentedWikiLinkAttributes( Element a )
+    {
+<span class="fc" id="L796">        Map&lt;String,String&gt; attributesMap = new HashMap&lt;&gt;();</span>
+
+<span class="fc" id="L798">        String id = a.getAttributeValue( &quot;id&quot; );</span>
+<span class="pc bpc" id="L799" title="3 of 4 branches missed.">        if( id != null &amp;&amp; !id.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L801">            attributesMap.put( &quot;id&quot;, id.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L804">        String cssClass = a.getAttributeValue( &quot;class&quot; );</span>
+<span class="pc bpc" id="L805" title="1 of 4 branches missed.">        if( cssClass != null &amp;&amp; !cssClass.equals( &quot;&quot; )</span>
+<span class="pc bpc" id="L806" title="1 of 2 branches missed.">            &amp;&amp; !cssClass.matches( &quot;wikipage|createpage|external|interwiki|attachment&quot; ) )</span>
+        {
+<span class="nc" id="L808">            attributesMap.put( &quot;class&quot;, cssClass.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L811">        String style = a.getAttributeValue( &quot;style&quot; );</span>
+<span class="pc bpc" id="L812" title="3 of 4 branches missed.">        if( style != null &amp;&amp; !style.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L814">            attributesMap.put( &quot;style&quot;, style.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L817">        String title = a.getAttributeValue( &quot;title&quot; );</span>
+<span class="pc bpc" id="L818" title="1 of 4 branches missed.">        if( title != null &amp;&amp; !title.equals( &quot;&quot; ) )</span>
+        {
+<span class="fc" id="L820">            attributesMap.put( &quot;title&quot;, title.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L823">        String lang = a.getAttributeValue( &quot;lang&quot; );</span>
+<span class="pc bpc" id="L824" title="3 of 4 branches missed.">        if( lang != null &amp;&amp; !lang.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L826">            attributesMap.put( &quot;lang&quot;, lang.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L829">        String dir = a.getAttributeValue( &quot;dir&quot; );</span>
+<span class="pc bpc" id="L830" title="3 of 4 branches missed.">        if( dir != null &amp;&amp; !dir.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L832">            attributesMap.put( &quot;dir&quot;, dir.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L835">        String charset = a.getAttributeValue( &quot;charset&quot; );</span>
+<span class="pc bpc" id="L836" title="3 of 4 branches missed.">        if( charset != null &amp;&amp; !charset.equals(&quot;&quot;) )</span>
+        {
+<span class="nc" id="L838">            attributesMap.put( &quot;charset&quot;, charset.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L841">        String type = a.getAttributeValue( &quot;type&quot; );</span>
+<span class="pc bpc" id="L842" title="3 of 4 branches missed.">        if( type != null &amp;&amp; !type.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L844">            attributesMap.put( &quot;type&quot;, type.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L847">        String hreflang = a.getAttributeValue( &quot;hreflang&quot; );</span>
+<span class="pc bpc" id="L848" title="3 of 4 branches missed.">        if( hreflang != null &amp;&amp; !hreflang.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L850">            attributesMap.put( &quot;hreflang&quot;, hreflang.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L853">        String rel = a.getAttributeValue( &quot;rel&quot; );</span>
+<span class="pc bpc" id="L854" title="3 of 4 branches missed.">        if( rel != null &amp;&amp; !rel.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L856">            attributesMap.put( &quot;rel&quot;, rel.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L859">        String rev = a.getAttributeValue( &quot;rev&quot; );</span>
+<span class="pc bpc" id="L860" title="3 of 4 branches missed.">        if( rev != null &amp;&amp; !rev.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L862">            attributesMap.put( &quot;rev&quot;, rev.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L865">        String accesskey = a.getAttributeValue( &quot;accesskey&quot; );</span>
+<span class="pc bpc" id="L866" title="3 of 4 branches missed.">        if( accesskey != null &amp;&amp; !accesskey.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L868">            attributesMap.put( &quot;accesskey&quot;, accesskey.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L871">        String tabindex = a.getAttributeValue( &quot;tabindex&quot; );</span>
+<span class="pc bpc" id="L872" title="3 of 4 branches missed.">        if( tabindex != null &amp;&amp; !tabindex.equals( &quot;&quot; ) )</span>
+        {
+<span class="nc" id="L874">            attributesMap.put( &quot;tabindex&quot;, tabindex.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L877">        String target = a.getAttributeValue( &quot;target&quot; );</span>
+<span class="pc bpc" id="L878" title="1 of 4 branches missed.">        if( target != null &amp;&amp; !target.equals( &quot;&quot; ) )</span>
+        {
+<span class="fc" id="L880">            attributesMap.put( &quot;target&quot;, target.replaceAll( &quot;'&quot;, &quot;\&quot;&quot; ) );</span>
+        }
+
+<span class="fc" id="L883">        return attributesMap;</span>
+    }
+
+    /**
+     * Converts the entries in the map to a string for use in a wiki link.
+     */
+    private String augmentedWikiLinkMapToString( Map attributesMap )
+    {
+<span class="fc" id="L891">    	StringBuilder sb = new StringBuilder();</span>
+
+<span class="fc bfc" id="L893" title="All 2 branches covered.">        for ( Iterator itr = attributesMap.entrySet().iterator(); itr.hasNext(); )</span>
+        {
+<span class="fc" id="L895">            Map.Entry entry = (Map.Entry)itr.next();</span>
+<span class="fc" id="L896">            String attributeName = (String)entry.getKey();</span>
+<span class="fc" id="L897">            String attributeValue = (String)entry.getValue();</span>
+
+<span class="fc" id="L899">            sb.append( &quot; &quot; + attributeName + &quot;='&quot; + attributeValue + &quot;'&quot; );</span>
+<span class="fc" id="L900">        }</span>
+
+<span class="fc" id="L902">        return sb.toString().trim();</span>
+    }
+
+    private Map getStylePropertiesLowerCase( Element base ) throws IOException
+    {
+<span class="fc" id="L907">        String n = base.getName().toLowerCase();</span>
+
+        //&quot;font-weight: bold; font-style: italic;&quot;
+<span class="fc" id="L910">        String style = base.getAttributeValue( &quot;style&quot; );</span>
+<span class="fc bfc" id="L911" title="All 2 branches covered.">        if( style == null )</span>
+        {
+<span class="fc" id="L913">            style = &quot;&quot;;</span>
+        }
+
+<span class="fc bfc" id="L916" title="All 4 branches covered.">        if( n.equals( &quot;p&quot; ) || n.equals( &quot;div&quot; ) )</span>
+        {
+<span class="fc" id="L918">            String align = base.getAttributeValue( &quot;align&quot; );</span>
+<span class="fc bfc" id="L919" title="All 2 branches covered.">            if( align != null )</span>
+            {
+                // only add the value of the align attribute if the text-align style didn't already exist.
+<span class="pc bpc" id="L922" title="1 of 2 branches missed.">                if( style.indexOf( &quot;text-align&quot; ) == -1 )</span>
+                {
+<span class="fc" id="L924">                    style = style + &quot;;text-align:&quot; + align + &quot;;&quot;;</span>
+                }
+            }
+        }
+
+
+
+<span class="fc bfc" id="L931" title="All 2 branches covered.">        if( n.equals( &quot;font&quot; ) )</span>
+        {
+<span class="fc" id="L933">            String color = base.getAttributeValue( &quot;color&quot; );</span>
+<span class="fc" id="L934">            String face = base.getAttributeValue( &quot;face&quot; );</span>
+<span class="fc" id="L935">            String size = base.getAttributeValue( &quot;size&quot; );</span>
+<span class="fc bfc" id="L936" title="All 2 branches covered.">            if( color != null )</span>
+            {
+<span class="fc" id="L938">                style = style + &quot;color:&quot; + color + &quot;;&quot;;</span>
+            }
+<span class="fc bfc" id="L940" title="All 2 branches covered.">            if( face != null )</span>
+            {
+<span class="fc" id="L942">                style = style + &quot;font-family:&quot; + face + &quot;;&quot;;</span>
+            }
+<span class="fc bfc" id="L944" title="All 2 branches covered.">            if( size != null )</span>
+            {
+<span class="pc bpc" id="L946" title="1 of 2 branches missed.">                if( size.equals( &quot;1&quot; ) )</span>
+                {
+<span class="nc" id="L948">                    style = style + &quot;font-size:xx-small;&quot;;</span>
+                }
+<span class="pc bpc" id="L950" title="1 of 2 branches missed.">                else if( size.equals( &quot;2&quot; ) )</span>
+                {
+<span class="nc" id="L952">                    style = style + &quot;font-size:x-small;&quot;;</span>
+                }
+<span class="pc bpc" id="L954" title="1 of 2 branches missed.">                else if( size.equals( &quot;3&quot; ) )</span>
+                {
+<span class="nc" id="L956">                    style = style + &quot;font-size:small;&quot;;</span>
+                }
+<span class="pc bpc" id="L958" title="1 of 2 branches missed.">                else if( size.equals( &quot;4&quot; ) )</span>
+                {
+<span class="nc" id="L960">                    style = style + &quot;font-size:medium;&quot;;</span>
+                }
+<span class="pc bpc" id="L962" title="1 of 2 branches missed.">                else if( size.equals( &quot;5&quot; ) )</span>
+                {
+<span class="fc" id="L964">                    style = style + &quot;font-size:large;&quot;;</span>
+                }
+<span class="nc bnc" id="L966" title="All 2 branches missed.">                else if( size.equals( &quot;6&quot; ) )</span>
+                {
+<span class="nc" id="L968">                    style = style + &quot;font-size:x-large;&quot;;</span>
+                }
+<span class="nc bnc" id="L970" title="All 2 branches missed.">                else if( size.equals( &quot;7&quot; ) )</span>
+                {
+<span class="nc" id="L972">                    style = style + &quot;font-size:xx-large;&quot;;</span>
+                }
+            }
+        }
+
+<span class="fc bfc" id="L977" title="All 2 branches covered.">        if( style.equals( &quot;&quot; ) )</span>
+        {
+<span class="fc" id="L979">            return null;</span>
+        }
+
+<span class="fc" id="L982">        style = style.replace( ';', '\n' ).toLowerCase();</span>
+<span class="fc" id="L983">        LinkedHashMap m = new LinkedHashMap();</span>
+<span class="fc" id="L984">        new PersistentMapDecorator( m ).load( new ByteArrayInputStream( style.getBytes() ) );</span>
+<span class="fc" id="L985">        return m;</span>
+    }
+
+    private String trimLink( String ref )
+    {
+<span class="fc bfc" id="L990" title="All 2 branches covered.">        if( ref == null )</span>
+        {
+<span class="fc" id="L992">            return null;</span>
+        }
+        try
+        {
+<span class="fc" id="L996">            ref = URLDecoder.decode( ref, UTF8 );</span>
+<span class="fc" id="L997">            ref = ref.trim();</span>
+<span class="fc bfc" id="L998" title="All 2 branches covered.">            if( ref.startsWith( m_config.getAttachPage() ) )</span>
+            {
+<span class="fc" id="L1000">                ref = ref.substring( m_config.getAttachPage().length() );</span>
+            }
+<span class="fc bfc" id="L1002" title="All 2 branches covered.">            if( ref.startsWith( m_config.getWikiJspPage() ) )</span>
+            {
+<span class="fc" id="L1004">                ref = ref.substring( m_config.getWikiJspPage().length() );</span>
+
+                // Handle links with section anchors.
+                // For example, we need to translate the html string &quot;TargetPage#section-TargetPage-Heading2&quot;
+                // to this wiki string &quot;TargetPage#Heading2&quot;.
+<span class="fc" id="L1009">                ref = ref.replaceFirst( &quot;.+#section-(.+)-(.+)&quot;, &quot;$1#$2&quot; );</span>
+            }
+<span class="fc bfc" id="L1011" title="All 2 branches covered.">            if( ref.startsWith( m_config.getEditJspPage() ) )</span>
+            {
+<span class="fc" id="L1013">                ref = ref.substring( m_config.getEditJspPage().length() );</span>
+            }
+<span class="pc bpc" id="L1015" title="1 of 2 branches missed.">            if( m_config.getPageName() != null )</span>
+            {
+<span class="nc bnc" id="L1017" title="All 2 branches missed.">                if( ref.startsWith( m_config.getPageName() ) )</span>
+                {
+<span class="nc" id="L1019">                    ref = ref.substring( m_config.getPageName().length() );</span>
+                }
+            }
+        }
+<span class="nc" id="L1023">        catch ( UnsupportedEncodingException e )</span>
+        {
+            // Shouldn't happen...
+<span class="fc" id="L1026">        }</span>
+<span class="fc" id="L1027">        return ref;</span>
+    }
+
+    // FIXME: These should probably be better used with java.util.Stack
+
+<span class="fc" id="L1032">    private static class LiStack</span>
+    {
+
+<span class="fc" id="L1035">        private StringBuffer m_li = new StringBuffer();</span>
+
+        public void push( String c )
+        {
+<span class="fc" id="L1039">            m_li.append( c );</span>
+<span class="fc" id="L1040">        }</span>
+
+        public void pop()
+        {
+<span class="fc" id="L1044">            m_li = m_li.deleteCharAt( m_li.length()-1 );</span>
+            // m_li = m_li.substring( 0, m_li.length() - 1 );
+<span class="fc" id="L1046">        }</span>
+
+        @Override
+        public String toString()
+        {
+<span class="fc" id="L1051">            return m_li.toString();</span>
+        }
+
+    }
+
+<span class="fc" id="L1056">    private class PreStack</span>
+    {
+
+<span class="fc" id="L1059">        private int m_pre = 0;</span>
+
+        public boolean isPreMode()
+        {
+<span class="fc bfc" id="L1063" title="All 2 branches covered.">            return m_pre &gt; 0;</span>
+        }
+
+        public void push()
+        {
+<span class="fc" id="L1068">            m_pre++;</span>
+<span class="pc bpc" id="L1069" title="1 of 2 branches missed.">            m_outTimmer.setWhitespaceTrimMode( !isPreMode() );</span>
+<span class="fc" id="L1070">        }</span>
+
+        public void pop()
+        {
+<span class="fc" id="L1074">            m_pre--;</span>
+<span class="pc bpc" id="L1075" title="1 of 2 branches missed.">            m_outTimmer.setWhitespaceTrimMode( !isPreMode() );</span>
+<span class="fc" id="L1076">        }</span>
+
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

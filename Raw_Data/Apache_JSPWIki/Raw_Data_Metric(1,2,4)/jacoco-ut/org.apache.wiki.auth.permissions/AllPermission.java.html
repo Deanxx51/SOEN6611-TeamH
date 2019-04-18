@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AllPermission.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.permissions</a> &gt; <span class="el_source">AllPermission.java</span></div><h1>AllPermission.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth.permissions;
+
+import java.io.Serializable;
+import java.security.Permission;
+import java.security.PermissionCollection;
+
+/**
+ * &lt;p&gt;
+ * Permission to perform all operations on a given wiki.
+ * &lt;/p&gt;
+ * @since 2.3.80
+ */
+public final class AllPermission extends Permission implements Serializable
+{
+    private static final long   serialVersionUID = 1L;
+
+    private static final String WILDCARD         = &quot;*&quot;;
+
+    private final String        m_wiki;
+
+    /** For serialization purposes. */
+    protected AllPermission()
+    {
+<span class="nc" id="L42">        this(null);</span>
+<span class="nc" id="L43">    }</span>
+    
+    /**
+     * Creates a new AllPermission for the given wikis.
+     * 
+     * @param wiki the wiki to which the permission should apply.  If null, will
+     *             apply to all wikis.
+     */
+    public AllPermission( String wiki )
+    {
+<span class="fc" id="L53">        super( wiki );</span>
+<span class="fc bfc" id="L54" title="All 2 branches covered.">        m_wiki = ( wiki == null ) ? WILDCARD : wiki;</span>
+<span class="fc" id="L55">    }</span>
+
+    /**
+     * Two AllPermission objects are considered equal if their wikis are equal.
+     * @see java.lang.Object#equals(java.lang.Object)
+     * 
+     * @return {@inheritDoc}
+     * @param obj {@inheritDoc}
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L66" title="1 of 2 branches missed.">        if ( !( obj instanceof AllPermission ) )</span>
+        {
+<span class="nc" id="L68">            return false;</span>
+        }
+<span class="fc" id="L70">        AllPermission p = (AllPermission) obj;</span>
+<span class="pc bpc" id="L71" title="1 of 4 branches missed.">        return p.m_wiki != null &amp;&amp; p.m_wiki.equals( m_wiki );</span>
+    }
+
+    /**
+     * No-op; always returns &lt;code&gt;null&lt;/code&gt;
+     * @see java.security.Permission#getActions()
+     *
+     * @return Always null.
+     */
+    public String getActions()
+    {
+<span class="nc" id="L82">        return null;</span>
+    }
+
+    /**
+     * Returns the name of the wiki containing the page represented by this
+     * permission; may return the wildcard string.
+     * @return The wiki
+     */
+    public String getWiki()
+    {
+<span class="fc" id="L92">        return m_wiki;</span>
+    }
+
+    /**
+     * Returns the hash code for this WikiPermission.
+     * @see java.lang.Object#hashCode()
+     * 
+     * @return {@inheritDoc}
+     */
+    public int hashCode()
+    {
+<span class="fc" id="L103">        return m_wiki.hashCode();</span>
+    }
+
+    /**
+     * WikiPermission can only imply other WikiPermissions; no other permission
+     * types are implied. One WikiPermission implies another if all of the other
+     * WikiPermission's actions are equal to, or a subset of, those for this
+     * permission.
+     * @param permission the permission which may (or may not) be implied by
+     *            this instance
+     * @return &lt;code&gt;true&lt;/code&gt; if the permission is implied,
+     *         &lt;code&gt;false&lt;/code&gt; otherwise
+     * @see java.security.Permission#implies(java.security.Permission)
+     */
+    public boolean implies( Permission permission )
+    {
+        // Permission must be a JSPWiki permission, PagePermission or AllPermission
+<span class="pc bpc" id="L120" title="1 of 2 branches missed.">        if ( !isJSPWikiPermission( permission ) )</span>
+        {
+<span class="nc" id="L122">            return false;</span>
+        }
+<span class="fc" id="L124">        String wiki = null;</span>
+<span class="fc bfc" id="L125" title="All 2 branches covered.">        if ( permission instanceof AllPermission )</span>
+        {
+<span class="fc" id="L127">            wiki = ( (AllPermission) permission ).getWiki();</span>
+        }
+<span class="fc bfc" id="L129" title="All 2 branches covered.">        else if ( permission instanceof PagePermission )</span>
+        {
+<span class="fc" id="L131">            wiki = ( (PagePermission) permission ).getWiki();</span>
+        }
+<span class="fc bfc" id="L133" title="All 2 branches covered.">        if ( permission instanceof WikiPermission )</span>
+        {
+<span class="fc" id="L135">            wiki = ( (WikiPermission) permission ).getWiki();</span>
+        }
+<span class="pc bpc" id="L137" title="1 of 2 branches missed.">        if ( permission instanceof GroupPermission )</span>
+        {
+<span class="nc" id="L139">            wiki = ( (GroupPermission) permission ).getWiki();</span>
+        }
+
+        // If the wiki is implied, it's allowed
+<span class="fc" id="L143">        return PagePermission.isSubset( m_wiki, wiki );</span>
+    }
+
+    /**
+     * Returns a new {@link AllPermissionCollection}.
+     * @see java.security.Permission#newPermissionCollection()
+     * 
+     * @return {@inheritDoc}
+     */
+    public PermissionCollection newPermissionCollection()
+    {
+<span class="fc" id="L154">        return new AllPermissionCollection();</span>
+    }
+
+    /**
+     * Prints a human-readable representation of this permission.
+     * @see java.lang.Object#toString()
+     * @return {@inheritDoc}
+     */
+    public String toString()
+    {
+<span class="fc" id="L164">        return &quot;(\&quot;&quot; + this.getClass().getName() + &quot;\&quot;,\&quot;&quot; + m_wiki + &quot;\&quot;)&quot;;</span>
+    }
+
+    /**
+     *  Checks if the given permission is one of ours.
+     *  
+     *  @param permission Permission to check
+     *  @return true, if the permission is a JSPWiki permission; false otherwise.
+     */
+    protected static boolean isJSPWikiPermission( Permission permission )
+    {
+<span class="pc bpc" id="L175" title="2 of 8 branches missed.">        return   permission instanceof WikiPermission ||</span>
+                 permission instanceof PagePermission ||
+                 permission instanceof GroupPermission ||
+                 permission instanceof AllPermission;
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,237 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>Image.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.plugin</a> &gt; <span class="el_source">Image.java</span></div><h1>Image.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.plugin;
+
+import java.util.Map;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.api.exceptions.PluginException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.plugin.WikiPlugin;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.attachment.AttachmentManager;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Provides an image plugin for better control than is possible with a simple image inclusion.
+ *  &lt;br&gt; Most parameters are equivalents of the html image attributes.
+ *
+ *  &lt;p&gt;Parameters : &lt;/p&gt;
+ *  &lt;ul&gt;
+ *  &lt;li&gt;&lt;b&gt;src&lt;/b&gt; - the source (a URL) of the image (required parameter)&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;align&lt;/b&gt; - the alignment of the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;height&lt;/b&gt; - the height of the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;width&lt;/b&gt; - the width of the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;alt&lt;/b&gt; - alternate text&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;caption&lt;/b&gt; - the caption for the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;link&lt;/b&gt; - the hyperlink for the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;target&lt;/b&gt; - the target (frame) to be used for opening the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;style&lt;/b&gt; - the style attribute of the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;class&lt;/b&gt; - the associated class for the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;border&lt;/b&gt; - the border for the image&lt;/li&gt;
+ *  &lt;li&gt;&lt;b&gt;title&lt;/b&gt; - the title for the image, can be presented as a tooltip to the user&lt;/li&gt;
+ *  &lt;/ul&gt;
+ *
+ *  @since 2.1.4.
+ */
+// FIXME: It is not yet possible to do wiki internal links.  In order to
+//        do this cleanly, a TranslatorReader revamp is needed.
+
+<span class="fc" id="L57">public class Image</span>
+    implements WikiPlugin
+{
+    /** The parameter name for setting the src.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_SRC      = &quot;src&quot;;
+    /** The parameter name for setting the align.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_ALIGN    = &quot;align&quot;;
+    /** The parameter name for setting the height.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_HEIGHT   = &quot;height&quot;;
+    /** The parameter name for setting the width.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_WIDTH    = &quot;width&quot;;
+    /** The parameter name for setting the alt.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_ALT      = &quot;alt&quot;;
+    /** The parameter name for setting the caption.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_CAPTION  = &quot;caption&quot;;
+    /** The parameter name for setting the link.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_LINK     = &quot;link&quot;;
+    /** The parameter name for setting the target.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_TARGET   = &quot;target&quot;;
+    /** The parameter name for setting the style.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_STYLE    = &quot;style&quot;;
+    /** The parameter name for setting the class.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_CLASS    = &quot;class&quot;;
+    //    public static final String PARAM_MAP      = &quot;map&quot;;
+    /** The parameter name for setting the border.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_BORDER   = &quot;border&quot;;
+    /** The parameter name for setting the title.  Value is &lt;tt&gt;{@value}&lt;/tt&gt;. */
+    public static final String PARAM_TITLE   = &quot;title&quot;;
+
+    /**
+     *  This method is used to clean away things like quotation marks which
+     *  a malicious user could use to stop processing and insert javascript.
+     */
+    private static String getCleanParameter( Map&lt;String, String&gt; params, String paramId )
+    {
+<span class="nc" id="L92">        return TextUtil.replaceEntities( params.get( paramId ) );</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public String execute( WikiContext context, Map&lt;String, String&gt; params )
+        throws PluginException
+    {
+<span class="nc" id="L101">        WikiEngine engine = context.getEngine();</span>
+<span class="nc" id="L102">        String src     = getCleanParameter( params, PARAM_SRC );</span>
+<span class="nc" id="L103">        String align   = getCleanParameter( params, PARAM_ALIGN );</span>
+<span class="nc" id="L104">        String ht      = getCleanParameter( params, PARAM_HEIGHT );</span>
+<span class="nc" id="L105">        String wt      = getCleanParameter( params, PARAM_WIDTH );</span>
+<span class="nc" id="L106">        String alt     = getCleanParameter( params, PARAM_ALT );</span>
+<span class="nc" id="L107">        String caption = getCleanParameter( params, PARAM_CAPTION );</span>
+<span class="nc" id="L108">        String link    = getCleanParameter( params, PARAM_LINK );</span>
+<span class="nc" id="L109">        String target  = getCleanParameter( params, PARAM_TARGET );</span>
+<span class="nc" id="L110">        String style   = getCleanParameter( params, PARAM_STYLE );</span>
+<span class="nc" id="L111">        String cssclass= getCleanParameter( params, PARAM_CLASS );</span>
+        // String map     = getCleanParameter( params, PARAM_MAP );
+<span class="nc" id="L113">        String border  = getCleanParameter( params, PARAM_BORDER );</span>
+<span class="nc" id="L114">        String title   = getCleanParameter( params, PARAM_TITLE );</span>
+
+<span class="nc bnc" id="L116" title="All 2 branches missed.">        if( src == null )</span>
+        {
+<span class="nc" id="L118">            throw new PluginException(&quot;Parameter 'src' is required for Image plugin&quot;);</span>
+        }
+
+        //if( cssclass == null ) cssclass = &quot;imageplugin&quot;;
+
+<span class="nc bnc" id="L123" title="All 4 branches missed.">        if( target != null &amp;&amp; !validTargetValue(target) )</span>
+        {
+<span class="nc" id="L125">            target = null; // not a valid value so ignore</span>
+        }
+
+        try
+        {
+<span class="nc" id="L130">            AttachmentManager mgr = engine.getAttachmentManager();</span>
+<span class="nc" id="L131">            Attachment        att = mgr.getAttachmentInfo( context, src );</span>
+
+<span class="nc bnc" id="L133" title="All 2 branches missed.">            if( att != null )</span>
+            {
+<span class="nc" id="L135">                src = context.getURL( WikiContext.ATTACH, att.getName() );</span>
+            }
+        }
+<span class="nc" id="L138">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L140">            throw new PluginException( &quot;Attachment info failed: &quot;+e.getMessage() );</span>
+<span class="nc" id="L141">        }</span>
+
+<span class="nc" id="L143">        StringBuilder result = new StringBuilder();</span>
+
+<span class="nc" id="L145">        result.append( &quot;&lt;table border=\&quot;0\&quot; class=\&quot;imageplugin\&quot;&quot; );</span>
+
+<span class="nc bnc" id="L147" title="All 2 branches missed.">        if( title != null )</span>
+        {
+<span class="nc" id="L149">            result.append(&quot; title=\&quot;&quot;+title+&quot;\&quot;&quot;);</span>
+        }
+
+<span class="nc bnc" id="L152" title="All 2 branches missed.">        if( align != null )</span>
+        {
+<span class="nc bnc" id="L154" title="All 2 branches missed.">            if( align.equals(&quot;center&quot;) )</span>
+            {
+<span class="nc" id="L156">                result.append(&quot; style=\&quot;margin-left: auto; margin-right: auto; text-align:center; vertical-align:middle;\&quot;&quot;);</span>
+            }
+            else
+            {
+<span class="nc" id="L160">                result.append(&quot; style=\&quot;float:&quot; + align + &quot;;\&quot;&quot;);</span>
+            }
+        }
+
+<span class="nc" id="L164">        result.append( &quot;&gt;\n&quot; );</span>
+
+<span class="nc bnc" id="L166" title="All 2 branches missed.">        if( caption != null )</span>
+        {
+<span class="nc" id="L168">            result.append(&quot;&lt;caption&gt;&quot;+caption+&quot;&lt;/caption&gt;\n&quot;);</span>
+        }
+
+        //move css class and style to the container of the image,
+        //so it doesn't affect the caption
+<span class="nc" id="L173">        result.append( &quot;&lt;tr&gt;&lt;td&quot; );</span>
+
+<span class="nc bnc" id="L175" title="All 2 branches missed.">        if( cssclass != null )</span>
+        {
+<span class="nc" id="L177">            result.append(&quot; class=\&quot;&quot;+cssclass+&quot;\&quot;&quot;);</span>
+        }
+
+<span class="nc bnc" id="L180" title="All 2 branches missed.">        if( style != null )</span>
+        {
+<span class="nc" id="L182">            result.append(&quot; style=\&quot;&quot;+style);</span>
+
+            // Make sure that we add a &quot;;&quot; to the end of the style string
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if( result.charAt( result.length()-1 ) != ';' ) result.append(&quot;;&quot;);</span>
+
+<span class="nc" id="L187">            result.append(&quot;\&quot;&quot;);</span>
+        }
+
+<span class="nc" id="L190">        result.append( &quot;&gt;&quot; );</span>
+
+<span class="nc bnc" id="L192" title="All 2 branches missed.">        if( link != null )</span>
+        {
+<span class="nc" id="L194">            result.append(&quot;&lt;a href=\&quot;&quot;+link+&quot;\&quot;&quot;);</span>
+<span class="nc bnc" id="L195" title="All 2 branches missed.">            if( target != null )</span>
+            {
+<span class="nc" id="L197">                result.append(&quot; target=\&quot;&quot;+target+&quot;\&quot;&quot;);</span>
+            }
+<span class="nc" id="L199">            result.append(&quot;&gt;&quot;);</span>
+        }
+
+<span class="nc" id="L202">        result.append( &quot;&lt;img src=\&quot;&quot;+src+&quot;\&quot;&quot; );</span>
+
+<span class="nc bnc" id="L204" title="All 2 branches missed.">        if( ht != null )     result.append(&quot; height=\&quot;&quot;+ht+&quot;\&quot;&quot;);</span>
+<span class="nc bnc" id="L205" title="All 2 branches missed.">        if( wt != null )     result.append(&quot; width=\&quot;&quot;+wt+&quot;\&quot;&quot;);</span>
+<span class="nc bnc" id="L206" title="All 2 branches missed.">        if( alt != null )    result.append(&quot; alt=\&quot;&quot;+alt+&quot;\&quot;&quot;);</span>
+<span class="nc bnc" id="L207" title="All 2 branches missed.">        if( border != null ) result.append(&quot; border=\&quot;&quot;+border+&quot;\&quot;&quot;);</span>
+        // if( map != null )    result.append(&quot; map=\&quot;&quot;+map+&quot;\&quot;&quot;);
+
+<span class="nc" id="L210">        result.append(&quot; /&gt;&quot;);</span>
+<span class="nc bnc" id="L211" title="All 2 branches missed.">        if( link != null )  result.append(&quot;&lt;/a&gt;&quot;);</span>
+<span class="nc" id="L212">        result.append(&quot;&lt;/td&gt;&lt;/tr&gt;\n&quot;);</span>
+
+<span class="nc" id="L214">        result.append(&quot;&lt;/table&gt;\n&quot;);</span>
+
+<span class="nc" id="L216">        return result.toString();</span>
+    }
+
+    private boolean validTargetValue( String s )
+    {
+<span class="nc bnc" id="L221" title="All 2 branches missed.">        if( s.equals(&quot;_blank&quot;)</span>
+<span class="nc bnc" id="L222" title="All 2 branches missed.">                || s.equals(&quot;_self&quot;)</span>
+<span class="nc bnc" id="L223" title="All 2 branches missed.">                || s.equals(&quot;_parent&quot;)</span>
+<span class="nc bnc" id="L224" title="All 2 branches missed.">                || s.equals(&quot;_top&quot;) )</span>
+        {
+<span class="nc" id="L226">            return true;</span>
+        }
+<span class="nc bnc" id="L228" title="All 2 branches missed.">        else if( s.length() &gt; 0 ) // check [a-zA-z]</span>
+        {
+<span class="nc" id="L230">            char c = s.charAt(0);</span>
+<span class="nc bnc" id="L231" title="All 4 branches missed.">            return Character.isLowerCase(c) || Character.isUpperCase(c);</span>
+        }
+<span class="nc" id="L233">        return false;</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

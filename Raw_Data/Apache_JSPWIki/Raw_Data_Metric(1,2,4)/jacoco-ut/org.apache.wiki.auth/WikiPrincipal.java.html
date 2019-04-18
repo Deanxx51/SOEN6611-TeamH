@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiPrincipal.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth</a> &gt; <span class="el_source">WikiPrincipal.java</span></div><h1>WikiPrincipal.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.auth;
+
+import java.io.Serializable;
+import java.security.Principal;
+import java.util.Arrays;
+import java.util.Comparator;
+
+/**
+ *  A lightweight, immutable Principal class. WikiPrincipals can be created with
+ *  and optional &quot;type&quot; to denote what type of user profile Principal it represents
+ *  (FULL_NAME, WIKI_NAME, LOGIN_NAME). Types are used to determine suitable
+ *  user and login Principals in classes like WikiSession. However, the type
+ *  property of a WikiPrincipal does not affect a WikiPrincipal's logical equality
+ *  or hash code; two WikiPrincipals with the same name but different types are still
+ *  considered equal.
+ *
+ *  @since  2.2
+ */
+public final class WikiPrincipal implements Principal, Comparable&lt;Principal&gt;, Serializable
+{
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Represents an anonymous user. WikiPrincipals may be
+     * created with an optional type designator: 
+     * LOGIN_NAME, WIKI_NAME, FULL_NAME or UNSPECIFIED.
+     */
+<span class="fc" id="L46">    public static final Principal GUEST = new WikiPrincipal( &quot;Guest&quot; );</span>
+
+    /** WikiPrincipal type denoting a user's full name. */
+    public static final String FULL_NAME  = &quot;fullName&quot;;
+    
+    /** WikiPrincipal type denoting a user's login name. */
+    public static final String LOGIN_NAME = &quot;loginName&quot;;
+    
+    /** WikiPrincipal type denoting a user's wiki name. */
+    public static final String WIKI_NAME  = &quot;wikiName&quot;;
+    
+    /** Generic WikiPrincipal of unspecified type. */
+    public static final String UNSPECIFIED  = &quot;unspecified&quot;;
+    
+    /** Static instance of Comparator that allows Principals to be sorted. */
+<span class="fc" id="L61">    public static final Comparator&lt;Principal&gt; COMPARATOR = new PrincipalComparator();</span>
+    
+    private static final String[] VALID_TYPES;
+    
+    static
+    {
+<span class="fc" id="L67">        VALID_TYPES = new String[] { FULL_NAME, LOGIN_NAME, WIKI_NAME, UNSPECIFIED };</span>
+<span class="fc" id="L68">        Arrays.sort( VALID_TYPES );</span>
+<span class="fc" id="L69">    }</span>
+
+    private final String          m_name;
+    private final String          m_type;
+
+    /** For serialization purposes */
+    protected WikiPrincipal()
+    {
+<span class="nc" id="L77">        this(null);</span>
+<span class="nc" id="L78">    }</span>
+    
+    /**
+     * Constructs a new WikiPrincipal with a given name and a type of
+     * {@link #UNSPECIFIED}.
+     * @param name the name of the Principal
+     */
+    public WikiPrincipal( String name )
+<span class="fc" id="L86">    {</span>
+<span class="fc" id="L87">        m_name = name;</span>
+<span class="fc" id="L88">        m_type = UNSPECIFIED;</span>
+<span class="fc" id="L89">    }</span>
+    
+    /**
+     * Constructs a new WikiPrincipal with a given name and optional type
+     * designator. If the supplied &lt;code&gt;type&lt;/code&gt; parameter is not
+     * {@link #LOGIN_NAME}, {@link #FULL_NAME}, {@link #WIKI_NAME}
+     * or {@link #WIKI_NAME}, this method throws
+     * an {@link IllegalArgumentException}.
+     * @param name the name of the Principal
+     * @param type the type for this principal, which may be {@link #LOGIN_NAME},
+     *            {@link #FULL_NAME}, {@link #WIKI_NAME} or {@link #WIKI_NAME}.
+     */
+    public WikiPrincipal( String name, String type )
+<span class="fc" id="L102">    {</span>
+<span class="fc" id="L103">        m_name = name;</span>
+<span class="pc bpc" id="L104" title="1 of 2 branches missed.">        if ( Arrays.binarySearch( VALID_TYPES, type ) &lt; 0 )</span>
+        {
+<span class="nc" id="L106">            throw new IllegalArgumentException( &quot;Principal type '&quot; + type + &quot;' is invalid.&quot;);</span>
+        }
+<span class="fc" id="L108">        m_type = type;</span>
+<span class="fc" id="L109">    }</span>
+
+    /**
+     *  Returns the wiki name of the Principal.
+     *  @return the name
+     */
+    public String getName()
+    {
+<span class="fc" id="L117">        return m_name;</span>
+    }
+
+    /**
+     * Two &lt;code&gt;WikiPrincipal&lt;/code&gt;s are considered equal if their
+     * names are equal (case-sensitive).
+     * @param obj the object to compare
+     * @return the result of the equality test
+     */
+    public boolean equals( Object obj )
+    {
+<span class="pc bpc" id="L128" title="1 of 4 branches missed.">        if ( obj == null || !( obj instanceof WikiPrincipal ) )</span>
+        {
+<span class="fc" id="L130">            return false;</span>
+        }
+<span class="fc" id="L132">        return m_name.equals( ( (WikiPrincipal) obj ).getName() );</span>
+    }
+
+    /**
+     *  The hashCode() returned for the WikiPrincipal is the same as
+     *  for its name.
+     *  @return the hash code
+     */
+    public int hashCode()
+    {
+<span class="fc" id="L142">        return m_name.hashCode();</span>
+    }
+    
+    /**
+     * Returns the Principal &quot;type&quot;: {@link #LOGIN_NAME}, {@link #FULL_NAME},
+     * {@link #WIKI_NAME} or {@link #WIKI_NAME}
+     * @return the type
+     */
+    public String getType()
+    {
+<span class="fc" id="L152">        return m_type;</span>
+    }
+    
+    /**
+     * Returns a human-readable representation of the object.
+     * @return the string representation
+     */
+    public String toString()
+    {
+<span class="fc" id="L161">        return &quot;[WikiPrincipal (&quot; + m_type + &quot;): &quot; + getName() + &quot;]&quot;;</span>
+    }
+
+    /**
+     *  Allows comparisons to any other Principal objects.  Primary sorting
+     *  order is by the principal name, as returned by getName().
+     *  
+     *  @param o {@inheritDoc}
+     *  @return {@inheritDoc}
+     *  @since 2.7.0
+     */
+    public int compareTo(Principal o)
+    {
+<span class="fc" id="L174">        return getName().compareTo( o.getName() );</span>
+    }
+    
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

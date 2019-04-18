@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FileSystemProvider.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.providers</a> &gt; <span class="el_source">FileSystemProvider.java</span></div><h1>FileSystemProvider.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.providers;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Properties;
+
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.api.exceptions.ProviderException;
+
+/**
+ *  Provides a simple directory based repository for Wiki pages.
+ *  &lt;P&gt;
+ *  All files have &quot;.txt&quot; appended to make life easier for those
+ *  who insist on using Windows or other software which makes assumptions
+ *  on the files contents based on its name.
+ *
+ */
+<span class="fc" id="L41">public class FileSystemProvider</span>
+    extends AbstractFileProvider
+{
+<span class="fc" id="L44">    private static final Logger   log = Logger.getLogger(FileSystemProvider.class);</span>
+    /**
+     *  All metadata is stored in a file with this extension.
+     */
+    public static final String PROP_EXT = &quot;.properties&quot;;
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void putPageText( WikiPage page, String text )        
+        throws ProviderException
+    {
+        try
+        {
+<span class="fc" id="L58">            super.putPageText( page, text );</span>
+<span class="fc" id="L59">            putPageProperties( page );</span>
+        }
+<span class="nc" id="L61">        catch( IOException e )</span>
+        {
+<span class="nc" id="L63">            log.error( &quot;Saving failed&quot; );</span>
+<span class="fc" id="L64">        }</span>
+<span class="fc" id="L65">    }</span>
+
+    /**
+     *  Stores basic metadata to a file.
+     */
+    private void putPageProperties( WikiPage page )        
+        throws IOException
+    {
+<span class="fc" id="L73">        Properties props = new Properties();        </span>
+<span class="fc" id="L74">        OutputStream out = null;</span>
+
+        try
+        {
+<span class="fc" id="L78">            String author = page.getAuthor();</span>
+<span class="fc" id="L79">            String changenote = (String)page.getAttribute( WikiPage.CHANGENOTE );</span>
+<span class="fc" id="L80">            String viewcount = (String)page.getAttribute( WikiPage.VIEWCOUNT );</span>
+            
+<span class="fc bfc" id="L82" title="All 2 branches covered.">            if( author != null )</span>
+            {
+<span class="fc" id="L84">                props.setProperty( WikiPage.AUTHOR, author );</span>
+            }
+            
+<span class="fc bfc" id="L87" title="All 2 branches covered.">            if( changenote != null )</span>
+            {
+<span class="fc" id="L89">                props.setProperty( WikiPage.CHANGENOTE, changenote );</span>
+            }
+
+<span class="pc bpc" id="L92" title="1 of 2 branches missed.">            if( viewcount != null )</span>
+            {
+<span class="nc" id="L94">                props.setProperty( WikiPage.VIEWCOUNT, viewcount );</span>
+            }
+            
+            // Get additional custom properties from page and add to props
+<span class="fc" id="L98">            getCustomProperties(page, props);</span>
+            	
+            
+<span class="fc" id="L101">            File file = new File( getPageDirectory(), </span>
+<span class="fc" id="L102">                                  mangleName(page.getName())+PROP_EXT );</span>
+     
+<span class="fc" id="L104">            out = new FileOutputStream( file );</span>
+
+<span class="fc" id="L106">            props.store( out, &quot;JSPWiki page properties for page &quot;+page.getName() );</span>
+        }
+        finally
+        {
+<span class="pc bpc" id="L110" title="1 of 2 branches missed.">            if( out != null ) out.close();</span>
+        }
+<span class="fc" id="L112">    }</span>
+    
+    /**
+     *  Gets basic metadata from file.
+     */
+    private void getPageProperties( WikiPage page )
+        throws IOException
+    {
+<span class="fc" id="L120">        Properties  props = new Properties();</span>
+<span class="fc" id="L121">        InputStream in    = null;</span>
+
+        try
+        {
+<span class="fc" id="L125">            File file = new File( getPageDirectory(), </span>
+<span class="fc" id="L126">                                  mangleName(page.getName())+PROP_EXT );</span>
+
+<span class="fc bfc" id="L128" title="All 2 branches covered.">            if( file.exists() )</span>
+            {
+<span class="fc" id="L130">                in = new FileInputStream( file );</span>
+
+<span class="fc" id="L132">                props.load(in);</span>
+
+<span class="fc" id="L134">                page.setAuthor( props.getProperty( WikiPage.AUTHOR ) );</span>
+                
+<span class="fc" id="L136">                String changenote = props.getProperty( WikiPage.CHANGENOTE );</span>
+<span class="fc bfc" id="L137" title="All 2 branches covered.">                if( changenote != null )</span>
+                {
+<span class="fc" id="L139">                    page.setAttribute( WikiPage.CHANGENOTE, changenote );</span>
+                }
+                
+<span class="fc" id="L142">                String viewcount = props.getProperty( WikiPage.VIEWCOUNT );</span>
+<span class="pc bpc" id="L143" title="1 of 2 branches missed.">                if( viewcount != null )</span>
+                {
+<span class="nc" id="L145">                    page.setAttribute( WikiPage.VIEWCOUNT, viewcount );</span>
+                }
+                
+                // Set the props values to the page attributes
+<span class="fc" id="L149">                setCustomProperties(page, props);</span>
+            }            
+        }
+        finally
+        {
+<span class="fc bfc" id="L154" title="All 2 branches covered.">            if( in != null ) in.close();</span>
+        }
+<span class="fc" id="L156">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public WikiPage getPageInfo( String page, int version )
+        throws ProviderException
+    {
+<span class="fc" id="L164">        WikiPage p = super.getPageInfo( page, version );</span>
+
+<span class="fc bfc" id="L166" title="All 2 branches covered.">        if( p != null )</span>
+        {
+            try
+            {
+<span class="fc" id="L170">                getPageProperties( p );</span>
+            }
+<span class="nc" id="L172">            catch( IOException e )</span>
+            {
+<span class="nc" id="L174">                log.error(&quot;Unable to read page properties&quot;, e );</span>
+<span class="nc" id="L175">                throw new ProviderException(&quot;Unable to read page properties, check logs.&quot;);</span>
+<span class="fc" id="L176">            }</span>
+        }
+
+<span class="fc" id="L179">        return p;</span>
+    }
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void deletePage(String pageName) throws ProviderException
+    {
+<span class="fc" id="L187">        super.deletePage(pageName);</span>
+
+<span class="fc" id="L189">        File file = new File( getPageDirectory(), </span>
+<span class="fc" id="L190">                              mangleName(pageName)+PROP_EXT );</span>
+        
+<span class="fc bfc" id="L192" title="All 2 branches covered.">        if( file.exists() ) file.delete();</span>
+<span class="fc" id="L193">    }</span>
+
+    /**
+     *  {@inheritDoc}
+     */
+    public void movePage( String from,
+                          String to )
+        throws ProviderException
+    {
+<span class="fc" id="L202">        File fromPage = findPage( from );</span>
+<span class="fc" id="L203">        File toPage = findPage( to );</span>
+        
+<span class="fc" id="L205">        fromPage.renameTo( toPage );</span>
+<span class="fc" id="L206">    }</span>
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

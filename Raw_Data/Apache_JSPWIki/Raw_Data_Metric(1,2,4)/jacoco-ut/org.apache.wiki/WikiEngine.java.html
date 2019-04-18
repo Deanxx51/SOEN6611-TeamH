@@ -1,0 +1,2476 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiEngine.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki</a> &gt; <span class="el_source">WikiEngine.java</span></div><h1>WikiEngine.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.Enumeration;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+
+import javax.servlet.ServletConfig;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletRequest;
+import javax.servlet.http.HttpServletRequest;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang.time.StopWatch;
+import org.apache.log4j.Logger;
+import org.apache.log4j.PropertyConfigurator;
+import org.apache.wiki.api.engine.AdminBeanManager;
+import org.apache.wiki.api.engine.FilterManager;
+import org.apache.wiki.api.engine.PluginManager;
+import org.apache.wiki.api.exceptions.FilterException;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.NoSuchVariableException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.attachment.Attachment;
+import org.apache.wiki.attachment.AttachmentManager;
+import org.apache.wiki.auth.AuthenticationManager;
+import org.apache.wiki.auth.AuthorizationManager;
+import org.apache.wiki.auth.UserManager;
+import org.apache.wiki.auth.acl.AclManager;
+import org.apache.wiki.auth.authorize.GroupManager;
+import org.apache.wiki.content.PageRenamer;
+import org.apache.wiki.diff.DifferenceManager;
+import org.apache.wiki.event.WikiEngineEvent;
+import org.apache.wiki.event.WikiEventListener;
+import org.apache.wiki.event.WikiEventManager;
+import org.apache.wiki.event.WikiPageEvent;
+import org.apache.wiki.event.WikiPageRenameEvent;
+import org.apache.wiki.i18n.InternationalizationManager;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.pages.PageTimeComparator;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.parser.WikiDocument;
+import org.apache.wiki.providers.WikiPageProvider;
+import org.apache.wiki.render.RenderingManager;
+import org.apache.wiki.rss.RSSGenerator;
+import org.apache.wiki.rss.RSSThread;
+import org.apache.wiki.search.SearchManager;
+import org.apache.wiki.tasks.TasksManager;
+import org.apache.wiki.ui.Command;
+import org.apache.wiki.ui.CommandResolver;
+import org.apache.wiki.ui.EditorManager;
+import org.apache.wiki.ui.TemplateManager;
+import org.apache.wiki.ui.progress.ProgressManager;
+import org.apache.wiki.url.URLConstructor;
+import org.apache.wiki.util.ClassUtil;
+import org.apache.wiki.util.PropertyReader;
+import org.apache.wiki.util.TextUtil;
+import org.apache.wiki.workflow.Decision;
+import org.apache.wiki.workflow.DecisionRequiredException;
+import org.apache.wiki.workflow.Fact;
+import org.apache.wiki.workflow.Step;
+import org.apache.wiki.workflow.Workflow;
+import org.apache.wiki.workflow.WorkflowBuilder;
+import org.apache.wiki.workflow.WorkflowManager;
+
+
+/**
+ *  Provides Wiki services to the JSP page.
+ *
+ *  &lt;P&gt;
+ *  This is the main interface through which everything should go.
+ *
+ *  &lt;P&gt;
+ *  Using this class:  Always get yourself an instance from JSP page
+ *  by using the WikiEngine.getInstance() method.  Never create a new
+ *  WikiEngine() from scratch, unless you're writing tests.
+ *  &lt;p&gt;
+ *  There's basically only a single WikiEngine for each web application, and
+ *  you should always get it using the WikiEngine.getInstance() method.
+ */
+public class WikiEngine
+{
+    private static final String ATTR_WIKIENGINE = &quot;org.apache.wiki.WikiEngine&quot;;
+
+<span class="fc" id="L122">    private static final Logger log = Logger.getLogger(WikiEngine.class);</span>
+
+    /** True, if log4j has been configured. */
+    // FIXME: If you run multiple applications, the first application
+    // to run defines where the log goes.  Not what we want.
+<span class="fc" id="L127">    private static boolean   c_configured = false;</span>
+
+    /** Stores properties. */
+    private Properties       m_properties;
+
+    /** The default inlining pattern.  Currently &quot;*.png&quot; */
+    public static final String DEFAULT_INLINEPATTERN = &quot;*.png&quot;;
+    
+    /** The name used for the default template. The value is {@value}. */
+    public static final String DEFAULT_TEMPLATE_NAME = &quot;default&quot;;
+
+    /** Property for application name */
+    public static final String PROP_APPNAME = &quot;jspwiki.applicationName&quot;;
+
+    /** This property defines the inline image pattern.  It's current value is {@value} */
+    public static final String PROP_INLINEIMAGEPTRN  = &quot;jspwiki.translatorReader.inlinePattern&quot;;
+
+    /** Property start for any interwiki reference. */
+    public static final String PROP_INTERWIKIREF = &quot;jspwiki.interWikiRef.&quot;;
+
+    /** If true, then the user name will be stored with the page data.*/
+    public static final String PROP_STOREUSERNAME= &quot;jspwiki.storeUserName&quot;;
+
+    /** Define the used encoding.  Currently supported are ISO-8859-1 and UTF-8 */
+    public static final String PROP_ENCODING     = &quot;jspwiki.encoding&quot;;
+
+    /** Do not use encoding in WikiJSPFilter, default is false for most servers.
+    Double negative, cause for most servers you don't need the property */
+    public static final String PROP_NO_FILTER_ENCODING     = &quot;jspwiki.nofilterencoding&quot;;
+
+    /** The name for the property which allows you to set the current reference
+     *  style.  The value is {@value}.
+     */
+    public static final String PROP_REFSTYLE     = &quot;jspwiki.referenceStyle&quot;;
+
+    /** Property name for the &quot;spaces in titles&quot; -hack. */
+    public static final String PROP_BEAUTIFYTITLE = &quot;jspwiki.breakTitleWithSpaces&quot;;
+
+    /** Property name for where the jspwiki work directory should be.
+        If not specified, reverts to ${java.tmpdir}. */
+    public static final String PROP_WORKDIR      = &quot;jspwiki.workDir&quot;;
+
+    /** The name of the cookie that gets stored to the user browser. */
+    public static final String PREFS_COOKIE_NAME = &quot;JSPWikiUserProfile&quot;;
+
+    /** Property name for the &quot;match english plurals&quot; -hack. */
+    public static final String PROP_MATCHPLURALS     = &quot;jspwiki.translatorReader.matchEnglishPlurals&quot;;
+
+    /** Property name for the template that is used. */
+    public static final String PROP_TEMPLATEDIR  = &quot;jspwiki.templateDir&quot;;
+
+    /** Property name for the default front page. */
+    public static final String PROP_FRONTPAGE    = &quot;jspwiki.frontPage&quot;;
+
+    /** Property name for setting the url generator instance */
+
+    public static final String PROP_URLCONSTRUCTOR = &quot;jspwiki.urlConstructor&quot;;
+
+    /** If this property is set to false, all filters are disabled when translating. */
+    public static final String PROP_RUNFILTERS   = &quot;jspwiki.runFilters&quot;;
+
+    /** Does the work in renaming pages. */
+<span class="pc" id="L189">    private PageRenamer    m_pageRenamer = null;</span>
+
+    /** The name of the property containing the ACLManager implementing class.
+     *  The value is {@value}. */
+    public static final String PROP_ACL_MANAGER_IMPL = &quot;jspwiki.aclManager&quot;;
+
+    /** If this property is set to false, we don't allow the creation of empty pages */
+    public static final String PROP_ALLOW_CREATION_OF_EMPTY_PAGES = &quot;jspwiki.allowCreationOfEmptyPages&quot;;
+
+    /** Should the user info be saved with the page data as well? */
+<span class="pc" id="L199">    private boolean          m_saveUserInfo = true;</span>
+
+    /** If true, uses UTF8 encoding for all data */
+<span class="pc" id="L202">    private boolean          m_useUTF8      = true;</span>
+
+    /** Store the file path to the basic URL.  When we're not running as
+        a servlet, it defaults to the user's current directory. */
+<span class="pc" id="L206">    private String           m_rootPath = System.getProperty(&quot;user.dir&quot;);</span>
+
+    /** Stores references between wikipages. */
+<span class="pc" id="L209">    private ReferenceManager m_referenceManager = null;</span>
+
+    /** Stores the Plugin manager */
+    private PluginManager    m_pluginManager;
+
+    /** Stores the Variable manager */
+    private VariableManager  m_variableManager;
+
+    /** Stores the Attachment manager */
+<span class="pc" id="L218">    private AttachmentManager m_attachmentManager = null;</span>
+
+    /** Stores the Page manager */
+<span class="pc" id="L221">    private PageManager      m_pageManager = null;</span>
+
+    /** Stores the authorization manager */
+<span class="pc" id="L224">    private AuthorizationManager m_authorizationManager = null;</span>
+
+    /** Stores the authentication manager.*/
+<span class="pc" id="L227">    private AuthenticationManager      m_authenticationManager = null;</span>
+
+    /** Stores the ACL manager. */
+<span class="pc" id="L230">    private AclManager       m_aclManager = null;</span>
+
+    /** Resolves wiki actions, JSPs and special pages. */
+<span class="pc" id="L233">    private CommandResolver m_commandResolver = null;</span>
+
+<span class="pc" id="L235">    private TemplateManager  m_templateManager = null;</span>
+
+    /** Does all our diffs for us. */
+    private DifferenceManager m_differenceManager;
+
+    /** Handlers page filters. */
+    private FilterManager    m_filterManager;
+
+    /** Stores the Search manager */
+<span class="pc" id="L244">    private SearchManager    m_searchManager = null;</span>
+
+    /** Facade for managing users */
+<span class="pc" id="L247">    private UserManager      m_userManager = null;</span>
+
+    /** Facade for managing users */
+<span class="pc" id="L250">    private GroupManager     m_groupManager = null;</span>
+
+    private RenderingManager m_renderingManager;
+
+    private EditorManager    m_editorManager;
+
+    private InternationalizationManager m_internationalizationManager;
+
+    private ProgressManager  m_progressManager;
+    
+    private TasksManager m_tasksManager;
+
+    /** Constructs URLs */
+    private URLConstructor   m_urlConstructor;
+
+    /** Generates RSS feed when requested. */
+    private RSSGenerator     m_rssGenerator;
+
+    /** The RSS file to generate. */
+    private String           m_rssFile;
+
+    /** Store the ServletContext that we're in.  This may be null if WikiEngine
+        is not running inside a servlet container (i.e. when testing). */
+<span class="pc" id="L273">    private ServletContext   m_servletContext = null;</span>
+
+    /** If true, all titles will be cleaned. */
+<span class="pc" id="L276">    private boolean          m_beautifyTitle = false;</span>
+
+    /** Stores the template path.  This is relative to &quot;templates&quot;. */
+    private String           m_templateDir;
+
+    /** The default front page name.  Defaults to &quot;Main&quot;. */
+    private String           m_frontPage;
+
+    /** The time when this engine was started. */
+    private Date             m_startTime;
+
+    /** The location where the work directory is. */
+    private String           m_workDir;
+
+    /** Each engine has their own application id. */
+<span class="pc" id="L291">    private String           m_appid = &quot;&quot;;</span>
+
+<span class="pc" id="L293">    private boolean          m_isConfigured = false; // Flag.</span>
+
+
+    /** Each engine has its own workflow manager. */
+<span class="pc" id="L297">    private WorkflowManager m_workflowMgr = null;</span>
+
+    private AdminBeanManager m_adminBeanManager;
+
+    /** Stores wikiengine attributes. */
+<span class="pc" id="L302">    private Map&lt;String,Object&gt; m_attributes = new ConcurrentHashMap&lt;&gt;();</span>
+
+    /**
+     *  Gets a WikiEngine related to this servlet.  Since this method
+     *  is only called from JSP pages (and JspInit()) to be specific,
+     *  we throw a RuntimeException if things don't work.
+     *
+     *  @param config The ServletConfig object for this servlet.
+     *
+     *  @return A WikiEngine instance.
+     *  @throws InternalWikiException in case something fails.  This
+     *          is a RuntimeException, so be prepared for it.
+     */
+
+    // FIXME: It seems that this does not work too well, jspInit()
+    // does not react to RuntimeExceptions, or something...
+
+    public static synchronized WikiEngine getInstance( ServletConfig config )
+        throws InternalWikiException
+    {
+<span class="nc" id="L322">        return getInstance( config.getServletContext(), null );</span>
+    }
+
+    /**
+     *  Gets a WikiEngine related to the servlet. Works like getInstance(ServletConfig),
+     *  but does not force the Properties object. This method is just an optional way
+     *  of initializing a WikiEngine for embedded JSPWiki applications; normally, you
+     *  should use getInstance(ServletConfig).
+     *
+     *  @param config The ServletConfig of the webapp servlet/JSP calling this method.
+     *  @param props  A set of properties, or null, if we are to load JSPWiki's default
+     *                jspwiki.properties (this is the usual case).
+     *
+     *  @return One well-behaving WikiEngine instance.
+     */
+    public static synchronized WikiEngine getInstance( ServletConfig config,
+                                                       Properties props )
+    {
+<span class="nc" id="L340">        return getInstance( config.getServletContext(), props );</span>
+    }
+
+    /**
+     *  Gets a WikiEngine related to the servlet. Works just like getInstance( ServletConfig )
+     *
+     *  @param context The ServletContext of the webapp servlet/JSP calling this method.
+     *  @param props  A set of properties, or null, if we are to load JSPWiki's default
+     *                jspwiki.properties (this is the usual case).
+     *
+     *  @return One fully functional, properly behaving WikiEngine.
+     *  @throws InternalWikiException If the WikiEngine instantiation fails.
+     */
+
+    // FIXME: Potential make-things-easier thingy here: no need to fetch the wikiengine anymore
+    //        Wiki.jsp.jspInit() [really old code]; it's probably even faster to fetch it
+    //        using this method every time than go to pageContext.getAttribute().
+
+    public static synchronized WikiEngine getInstance( ServletContext context,
+                                                       Properties props )
+        throws InternalWikiException
+    {
+<span class="fc" id="L362">        WikiEngine engine = (WikiEngine) context.getAttribute( ATTR_WIKIENGINE );</span>
+
+<span class="pc bpc" id="L364" title="1 of 2 branches missed.">        if( engine == null )</span>
+        {
+<span class="nc" id="L366">            String appid = Integer.toString(context.hashCode()); //FIXME: Kludge, use real type.</span>
+
+<span class="nc" id="L368">            context.log(&quot; Assigning new engine to &quot;+appid);</span>
+            try
+            {
+<span class="nc bnc" id="L371" title="All 2 branches missed.">                if( props == null )</span>
+                {
+<span class="nc" id="L373">                    props = PropertyReader.loadWebAppProps( context );</span>
+                }
+
+<span class="nc" id="L376">                engine = new WikiEngine( context, appid, props );</span>
+<span class="nc" id="L377">                context.setAttribute( ATTR_WIKIENGINE, engine );</span>
+            }
+<span class="nc" id="L379">            catch( Exception e )</span>
+            {
+<span class="nc" id="L381">                context.log( &quot;ERROR: Failed to create a Wiki engine: &quot;+e.getMessage() );</span>
+<span class="nc" id="L382">                log.error( &quot;ERROR: Failed to create a Wiki engine, stacktrace follows &quot; , e);</span>
+<span class="nc" id="L383">                throw new InternalWikiException( &quot;No wiki engine, check logs.&quot; , e);</span>
+<span class="nc" id="L384">            }</span>
+
+        }
+
+<span class="fc" id="L388">        return engine;</span>
+    }
+
+
+    /**
+     *  Instantiate the WikiEngine using a given set of properties.
+     *  Use this constructor for testing purposes only.
+     *
+     *  @param properties A set of properties to use to initialize this WikiEngine.
+     *  @throws WikiException If the initialization fails.
+     */
+    public WikiEngine( Properties properties )
+        throws WikiException
+<span class="nc" id="L401">    {</span>
+<span class="nc" id="L402">        initialize( properties );</span>
+<span class="nc" id="L403">    }</span>
+
+    /**
+     *  Instantiate using this method when you're running as a servlet and
+     *  WikiEngine will figure out where to look for the property
+     *  file.
+     *  Do not use this method - use WikiEngine.getInstance() instead.
+     *
+     *  @param context A ServletContext.
+     *  @param appid   An Application ID.  This application is an unique random string which
+     *                 is used to recognize this WikiEngine.
+     *  @param props   The WikiEngine configuration.
+     *  @throws WikiException If the WikiEngine construction fails.
+     */
+    protected WikiEngine( ServletContext context, String appid, Properties props )
+        throws WikiException
+    {
+<span class="fc" id="L420">        super();</span>
+<span class="fc" id="L421">        m_servletContext = context;</span>
+<span class="fc" id="L422">        m_appid          = appid;</span>
+
+        // Stash the WikiEngine in the servlet context
+<span class="pc bpc" id="L425" title="1 of 2 branches missed.">        if ( context != null )</span>
+        {
+<span class="fc" id="L427">            context.setAttribute( ATTR_WIKIENGINE,  this );</span>
+<span class="fc" id="L428">            m_rootPath = context.getRealPath(&quot;/&quot;);</span>
+        }
+
+        try
+        {
+            //
+            //  Note: May be null, if JSPWiki has been deployed in a WAR file.
+            //
+<span class="fc" id="L436">            initialize( props );</span>
+<span class="fc" id="L437">            log.info(&quot;Root path for this Wiki is: '&quot;+m_rootPath+&quot;'&quot;);</span>
+        }
+<span class="nc" id="L439">        catch( Exception e )</span>
+        {
+<span class="nc" id="L441">            String msg = Release.APPNAME+&quot;: Unable to load and setup properties from jspwiki.properties. &quot;+e.getMessage();</span>
+<span class="nc bnc" id="L442" title="All 2 branches missed.">            if ( context != null )</span>
+            {
+<span class="nc" id="L444">                context.log( msg );</span>
+            }
+<span class="nc" id="L446">            throw new WikiException( msg, e );</span>
+<span class="fc" id="L447">        }</span>
+<span class="fc" id="L448">    }</span>
+
+    /**
+     *  Does all the real initialization.
+     */
+    private void initialize( Properties props )
+        throws WikiException
+    {
+<span class="fc" id="L456">        m_startTime  = new Date();</span>
+<span class="fc" id="L457">        m_properties = props;</span>
+
+        //
+        //  Initialize log4j.  However, make sure that we don't initialize it multiple times.
+        //  By default we load the log4j config statements from jspwiki.properties, unless
+        //  the property jspwiki.use.external.logconfig=true, in that case we let log4j figure out the
+        //  logging configuration.
+        //
+<span class="fc bfc" id="L465" title="All 2 branches covered.">        if( !c_configured )</span>
+        {
+<span class="fc" id="L467">            String useExternalLogConfig = TextUtil.getStringProperty(props,&quot;jspwiki.use.external.logconfig&quot;,&quot;false&quot;);</span>
+<span class="pc bpc" id="L468" title="2 of 4 branches missed.">            if( useExternalLogConfig == null || useExternalLogConfig.equals(&quot;false&quot;))</span>
+            {
+<span class="fc" id="L470">                PropertyConfigurator.configure( props );</span>
+            }
+<span class="fc" id="L472">            c_configured = true;</span>
+        }
+
+<span class="fc" id="L475">        log.info(&quot;*******************************************&quot;);</span>
+<span class="fc" id="L476">        log.info(Release.APPNAME+&quot; &quot;+Release.getVersionString()+&quot; starting. Whee!&quot;);</span>
+
+<span class="fc" id="L478">        fireEvent( WikiEngineEvent.INITIALIZING ); // begin initialization</span>
+
+<span class="fc" id="L480">        log.debug(&quot;Java version: &quot;+System.getProperty(&quot;java.runtime.version&quot;));</span>
+<span class="fc" id="L481">        log.debug(&quot;Java vendor: &quot;+System.getProperty(&quot;java.vm.vendor&quot;));</span>
+<span class="fc" id="L482">        log.debug(&quot;OS: &quot;+System.getProperty(&quot;os.name&quot;)+&quot; &quot;+System.getProperty(&quot;os.version&quot;)+&quot; &quot;+System.getProperty(&quot;os.arch&quot;));</span>
+<span class="fc" id="L483">        log.debug(&quot;Default server locale: &quot;+Locale.getDefault());</span>
+<span class="fc" id="L484">        log.debug(&quot;Default server timezone: &quot;+TimeZone.getDefault().getDisplayName(true, TimeZone.LONG));</span>
+
+<span class="pc bpc" id="L486" title="1 of 2 branches missed.">        if( m_servletContext != null )</span>
+        {
+<span class="fc" id="L488">            log.info(&quot;Servlet container: &quot;+m_servletContext.getServerInfo() );</span>
+<span class="pc bpc" id="L489" title="1 of 2 branches missed.">            if( m_servletContext.getMajorVersion() &lt; 2 ||</span>
+<span class="pc bpc" id="L490" title="2 of 4 branches missed.">                (m_servletContext.getMajorVersion() == 2 &amp;&amp; m_servletContext.getMinorVersion() &lt; 4) )</span>
+            {
+<span class="nc" id="L492">                throw new InternalWikiException(&quot;I require a container which supports at least version 2.4 of Servlet specification&quot;);</span>
+            }
+        }
+
+<span class="fc" id="L496">        log.debug(&quot;Configuring WikiEngine...&quot;);</span>
+
+        //  Initializes the CommandResolver
+<span class="fc" id="L499">        m_commandResolver  = new CommandResolver( this, props );</span>
+
+        //
+        //  Create and find the default working directory.
+        //
+<span class="fc" id="L504">        m_workDir = TextUtil.getStringProperty( props, PROP_WORKDIR, null );</span>
+
+<span class="pc bpc" id="L506" title="1 of 2 branches missed.">        if( m_workDir == null ) {</span>
+<span class="nc" id="L507">            m_workDir = System.getProperty(&quot;java.io.tmpdir&quot;, &quot;.&quot;);</span>
+<span class="nc" id="L508">            m_workDir += File.separator+Release.APPNAME+&quot;-&quot;+m_appid;</span>
+        }
+
+        try {
+<span class="fc" id="L512">            File f = new File( m_workDir );</span>
+<span class="fc" id="L513">            f.mkdirs();</span>
+
+            //
+            //  A bunch of sanity checks
+            //
+<span class="pc bpc" id="L518" title="1 of 2 branches missed.">            if( !f.exists() ) throw new WikiException(&quot;Work directory does not exist: &quot;+m_workDir);</span>
+<span class="pc bpc" id="L519" title="1 of 2 branches missed.">            if( !f.canRead() ) throw new WikiException(&quot;No permission to read work directory: &quot;+m_workDir);</span>
+<span class="pc bpc" id="L520" title="1 of 2 branches missed.">            if( !f.canWrite() ) throw new WikiException(&quot;No permission to write to work directory: &quot;+m_workDir);</span>
+<span class="pc bpc" id="L521" title="1 of 2 branches missed.">            if( !f.isDirectory() ) throw new WikiException(&quot;jspwiki.workDir does not point to a directory: &quot;+m_workDir);</span>
+<span class="nc" id="L522">        } catch( SecurityException e ) {</span>
+<span class="nc" id="L523">            log.fatal( &quot;Unable to find or create the working directory: &quot;+m_workDir, e );</span>
+<span class="nc" id="L524">            throw new IllegalArgumentException( &quot;Unable to find or create the working dir: &quot; + m_workDir, e );</span>
+<span class="fc" id="L525">        }</span>
+
+<span class="fc" id="L527">        log.info(&quot;JSPWiki working directory is '&quot;+m_workDir+&quot;'&quot;);</span>
+
+<span class="fc" id="L529">        m_saveUserInfo   = TextUtil.getBooleanProperty( props, PROP_STOREUSERNAME, m_saveUserInfo );</span>
+<span class="fc" id="L530">        m_useUTF8        = StandardCharsets.UTF_8.name().equals( TextUtil.getStringProperty( props, PROP_ENCODING, StandardCharsets.ISO_8859_1.name() ) );</span>
+<span class="fc" id="L531">        m_beautifyTitle  = TextUtil.getBooleanProperty( props, PROP_BEAUTIFYTITLE, m_beautifyTitle );</span>
+<span class="fc" id="L532">        m_templateDir    = TextUtil.getStringProperty( props, PROP_TEMPLATEDIR, &quot;default&quot; );</span>
+<span class="fc" id="L533">        enforceValidTemplateDirectory();</span>
+<span class="fc" id="L534">        m_frontPage      = TextUtil.getStringProperty( props, PROP_FRONTPAGE,   &quot;Main&quot; );</span>
+
+        //
+        //  Initialize the important modules.  Any exception thrown by the
+        //  managers means that we will not start up.
+        //
+
+        // FIXME: This part of the code is getting unwieldy.  We must think
+        //        of a better way to do the startup-sequence.
+        try
+        {
+<span class="fc" id="L545">            Class&lt; ? &gt; urlclass = ClassUtil.findClass( &quot;org.apache.wiki.url&quot;,</span>
+<span class="fc" id="L546">                                                       TextUtil.getStringProperty( props, PROP_URLCONSTRUCTOR, &quot;DefaultURLConstructor&quot; ) );</span>
+<span class="fc" id="L547">            m_urlConstructor = (URLConstructor) urlclass.newInstance();</span>
+<span class="fc" id="L548">            m_urlConstructor.initialize( this, props );</span>
+
+<span class="fc" id="L550">            m_pageManager           = ClassUtil.getMappedObject( PageManager.class.getName(), this, props );</span>
+<span class="fc" id="L551">            m_pluginManager         = ClassUtil.getMappedObject( PluginManager.class.getName(), this, props );</span>
+<span class="fc" id="L552">            m_differenceManager     = ClassUtil.getMappedObject( DifferenceManager.class.getName(), this, props );</span>
+<span class="fc" id="L553">            m_attachmentManager     = ClassUtil.getMappedObject( AttachmentManager.class.getName(), this, props );</span>
+<span class="fc" id="L554">            m_variableManager       = ClassUtil.getMappedObject( VariableManager.class.getName(), props );</span>
+<span class="fc" id="L555">            m_renderingManager      = ClassUtil.getMappedObject( RenderingManager.class.getName() );</span>
+<span class="fc" id="L556">            m_searchManager         = ClassUtil.getMappedObject( SearchManager.class.getName(), this, props );</span>
+<span class="fc" id="L557">            m_authenticationManager = ClassUtil.getMappedObject( AuthenticationManager.class.getName() );</span>
+<span class="fc" id="L558">            m_authorizationManager  = ClassUtil.getMappedObject( AuthorizationManager.class.getName() );</span>
+<span class="fc" id="L559">            m_userManager           = ClassUtil.getMappedObject( UserManager.class.getName() );</span>
+<span class="fc" id="L560">            m_groupManager          = ClassUtil.getMappedObject( GroupManager.class.getName() );</span>
+<span class="fc" id="L561">            m_editorManager         = ClassUtil.getMappedObject( EditorManager.class.getName(), this );</span>
+<span class="fc" id="L562">            m_editorManager.initialize( props );</span>
+
+<span class="fc" id="L564">            m_progressManager   = new ProgressManager();</span>
+
+            // Initialize the authentication, authorization, user and acl managers
+<span class="fc" id="L567">            m_authenticationManager.initialize( this, props );</span>
+<span class="fc" id="L568">            m_authorizationManager.initialize( this, props );</span>
+<span class="fc" id="L569">            m_userManager.initialize( this, props );</span>
+<span class="fc" id="L570">            m_groupManager.initialize( this, props );</span>
+<span class="fc" id="L571">            m_aclManager = getAclManager();</span>
+
+            // Start the Workflow manager
+<span class="fc" id="L574">            m_workflowMgr = ClassUtil.getMappedObject(WorkflowManager.class.getName());</span>
+<span class="fc" id="L575">            m_workflowMgr.initialize(this, props);</span>
+<span class="fc" id="L576">            m_tasksManager = ClassUtil.getMappedObject(TasksManager.class.getName());</span>
+
+<span class="fc" id="L578">            m_internationalizationManager = ClassUtil.getMappedObject(InternationalizationManager.class.getName(),this);</span>
+<span class="fc" id="L579">            m_templateManager = ClassUtil.getMappedObject(TemplateManager.class.getName(), this, props );</span>
+
+            // Since we want to use a page filters initilize() method
+            // as a engine startup listener where we can initialize global event listeners,
+            // it must be called lastly, so that all object references in the engine
+            // are availabe to the initialize() method
+<span class="fc" id="L585">            m_filterManager = ClassUtil.getMappedObject(FilterManager.class.getName(), this, props );</span>
+
+<span class="fc" id="L587">            m_adminBeanManager = ClassUtil.getMappedObject(AdminBeanManager.class.getName(),this);</span>
+
+            // RenderingManager depends on FilterManager events.
+<span class="fc" id="L590">            m_renderingManager.initialize( this, props );</span>
+
+            //
+            //  ReferenceManager has the side effect of loading all
+            //  pages.  Therefore after this point, all page attributes
+            //  are available.
+            //
+            //  initReferenceManager is indirectly using m_filterManager, therefore
+            //  it has to be called after it was initialized.
+            //
+<span class="fc" id="L600">            initReferenceManager();</span>
+
+            //
+            //  Hook the different manager routines into the system.
+            //
+<span class="fc" id="L605">            m_filterManager.addPageFilter(m_referenceManager, -1001 );</span>
+<span class="fc" id="L606">            m_filterManager.addPageFilter(m_searchManager, -1002 );</span>
+        }
+
+<span class="nc" id="L609">        catch( RuntimeException e )</span>
+        {
+            // RuntimeExceptions may occur here, even if they shouldn't.
+<span class="nc" id="L612">            log.fatal( &quot;Failed to start managers.&quot;, e );</span>
+<span class="nc" id="L613">            throw new WikiException( &quot;Failed to start managers: &quot; + e.getMessage(), e );</span>
+        }
+<span class="nc" id="L615">        catch (ClassNotFoundException e)</span>
+        {
+<span class="nc" id="L617">            log.fatal( &quot;JSPWiki could not start, URLConstructor was not found: &quot; + e.getMessage(), e );</span>
+<span class="nc" id="L618">            throw new WikiException(e.getMessage(), e );</span>
+        }
+<span class="nc" id="L620">        catch (InstantiationException e)</span>
+        {
+<span class="nc" id="L622">            log.fatal( &quot;JSPWiki could not start, URLConstructor could not be instantiated: &quot; + e.getMessage(), e );</span>
+<span class="nc" id="L623">            throw new WikiException(e.getMessage(), e );</span>
+        }
+<span class="nc" id="L625">        catch (IllegalAccessException e)</span>
+        {
+<span class="nc" id="L627">            log.fatal( &quot;JSPWiki could not start, URLConstructor cannot be accessed: &quot; + e.getMessage(), e );</span>
+<span class="nc" id="L628">            throw new WikiException(e.getMessage(), e );</span>
+        }
+<span class="nc" id="L630">        catch( Exception e )</span>
+        {
+            // Final catch-all for everything
+<span class="nc" id="L633">            log.fatal( &quot;JSPWiki could not start, due to an unknown exception when starting.&quot;,e );</span>
+<span class="nc" id="L634">            throw new WikiException( &quot;Failed to start. Caused by: &quot; + e.getMessage() +</span>
+                                     &quot;; please check log files for better information.&quot;, e );
+<span class="fc" id="L636">        }</span>
+
+        //
+        //  Initialize the good-to-have-but-not-fatal modules.
+        //
+        try
+        {
+<span class="fc bfc" id="L643" title="All 2 branches covered.">            if( TextUtil.getBooleanProperty( props,</span>
+                                             RSSGenerator.PROP_GENERATE_RSS,
+                                             false ) )
+            {
+<span class="fc" id="L647">                m_rssGenerator = (RSSGenerator)ClassUtil.getMappedObject(RSSGenerator.class.getName(), this, props );</span>
+            }
+
+<span class="fc" id="L650">            m_pageRenamer = (PageRenamer)ClassUtil.getMappedObject(PageRenamer.class.getName(), this, props );</span>
+        }
+<span class="nc" id="L652">        catch( Exception e )</span>
+        {
+<span class="nc" id="L654">            log.error( &quot;Unable to start RSS generator - JSPWiki will still work, &quot;+</span>
+                       &quot;but there will be no RSS feed.&quot;, e );
+<span class="fc" id="L656">        }</span>
+
+        // Start the RSS generator &amp; generator thread
+<span class="fc bfc" id="L659" title="All 2 branches covered.">        if( m_rssGenerator != null )</span>
+        {
+<span class="fc" id="L661">            m_rssFile = TextUtil.getStringProperty( props,</span>
+                    RSSGenerator.PROP_RSSFILE, &quot;rss.rdf&quot; );
+<span class="fc" id="L663">            File rssFile=null;</span>
+<span class="pc bpc" id="L664" title="1 of 2 branches missed.">            if (m_rssFile.startsWith(File.separator))</span>
+            {
+                // honor absolute pathnames:
+<span class="nc" id="L667">                rssFile = new File(m_rssFile );</span>
+            }
+            else
+            {
+                // relative path names are anchored from the webapp root path:
+<span class="fc" id="L672">                rssFile = new File( getRootPath(), m_rssFile );</span>
+            }
+<span class="fc" id="L674">            int rssInterval = TextUtil.getIntegerProperty( props,</span>
+                    RSSGenerator.PROP_INTERVAL, 3600 );
+<span class="fc" id="L676">            RSSThread rssThread = new RSSThread( this, rssFile, rssInterval );</span>
+<span class="fc" id="L677">            rssThread.start();</span>
+        }
+
+<span class="fc" id="L680">        fireEvent( WikiEngineEvent.INITIALIZED ); // initialization complete</span>
+
+<span class="fc" id="L682">        log.info(&quot;WikiEngine configured.&quot;);</span>
+<span class="fc" id="L683">        m_isConfigured = true;</span>
+<span class="fc" id="L684">    }</span>
+    
+    /**
+     * Checks if the template directory specified in the wiki's properties actually exists. If it doesn't, then {@code m_templateDir} is
+     * set to {@link #DEFAULT_TEMPLATE_NAME}.
+     * &lt;p&gt;
+     * This checks the existence of the &lt;tt&gt;ViewTemplate.jsp&lt;/tt&gt; file, which exists in every template using {@code m_servletContext.getRealPath(&quot;/&quot;)}.
+     * &lt;p&gt;
+     * {@code m_servletContext.getRealPath(&quot;/&quot;)} can return {@code null} on certain servers/conditions (f.ex, packed wars), an extra check
+     * against {@code m_servletContext.getResource} is made.
+     */
+    void enforceValidTemplateDirectory() {
+<span class="pc bpc" id="L696" title="1 of 2 branches missed.">        if( m_servletContext != null ) {</span>
+<span class="fc" id="L697">            final String viewTemplate = &quot;templates&quot; + File.separator + getTemplateDir() + File.separator + &quot;ViewTemplate.jsp&quot;;</span>
+<span class="fc" id="L698">            boolean exists = new File( m_servletContext.getRealPath(&quot;/&quot;) + viewTemplate ).exists();</span>
+<span class="pc bpc" id="L699" title="1 of 2 branches missed.">            if( !exists ) {</span>
+                try {
+<span class="fc" id="L701">                    URL url = m_servletContext.getResource( viewTemplate );</span>
+<span class="pc bpc" id="L702" title="3 of 4 branches missed.">                    exists = url != null &amp;&amp; StringUtils.isNotEmpty( url.getFile() );</span>
+<span class="nc" id="L703">                } catch( MalformedURLException e ) {</span>
+<span class="nc" id="L704">                    exists = false;</span>
+<span class="fc" id="L705">                }</span>
+            }
+<span class="pc bpc" id="L707" title="1 of 2 branches missed.">            if( !exists ) {</span>
+<span class="fc" id="L708">                log.warn( getTemplateDir() + &quot; template not found, updating WikiEngine's default template to &quot; + DEFAULT_TEMPLATE_NAME );</span>
+<span class="fc" id="L709">                m_templateDir = DEFAULT_TEMPLATE_NAME;</span>
+            }
+        }
+<span class="fc" id="L712">    }</span>
+
+    /**
+     *  Initializes the reference manager. Scans all existing WikiPages for
+     *  internal links and adds them to the ReferenceManager object.
+     *
+     *  @throws WikiException If the reference manager initialization fails.
+     */
+    public void initReferenceManager() throws WikiException {
+        try {
+<span class="fc" id="L722">            ArrayList&lt;WikiPage&gt; pages = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L723">            pages.addAll( m_pageManager.getAllPages() );</span>
+<span class="fc" id="L724">            pages.addAll( m_attachmentManager.getAllAttachments() );</span>
+
+            // Build a new manager with default key lists.
+<span class="pc bpc" id="L727" title="1 of 2 branches missed.">            if( m_referenceManager == null )</span>
+            {
+<span class="fc" id="L729">                m_referenceManager = ClassUtil.getMappedObject(ReferenceManager.class.getName(), this );</span>
+<span class="fc" id="L730">                m_referenceManager.initialize( pages );</span>
+            }
+
+<span class="nc" id="L733">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L734">            log.fatal(&quot;PageProvider is unable to list pages: &quot;, e);</span>
+<span class="nc" id="L735">        } catch( ReflectiveOperationException | IllegalArgumentException e ) {</span>
+<span class="nc" id="L736">            throw new WikiException( &quot;Could not instantiate ReferenceManager: &quot; + e.getMessage(), e );</span>
+<span class="pc" id="L737">        }</span>
+<span class="fc" id="L738">    }</span>
+
+    /**
+     *  Returns the set of properties that the WikiEngine was initialized
+     *  with.  Note that this method returns a direct reference, so it's possible
+     *  to manipulate the properties.  However, this is not advised unless you
+     *  really know what you're doing.
+     *
+     *  @return The wiki properties
+     */
+
+    public Properties getWikiProperties()
+    {
+<span class="fc" id="L751">        return m_properties;</span>
+    }
+
+    /**
+     *  Returns the JSPWiki working directory set with &quot;jspwiki.workDir&quot;.
+     *
+     *  @since 2.1.100
+     *  @return The working directory.
+     */
+    public String getWorkDir()
+    {
+<span class="fc" id="L762">        return m_workDir;</span>
+    }
+
+    /**
+     *  Returns the current template directory.
+     *
+     *  @since 1.9.20
+     *  @return The template directory as initialized by the engine.
+     */
+    public String getTemplateDir() 
+    {
+<span class="fc" id="L773">        return m_templateDir;</span>
+    }
+
+    /**
+     *  Returns the current TemplateManager.
+     *
+     *  @return A TemplateManager instance.
+     */
+    public TemplateManager getTemplateManager()
+    {
+<span class="nc" id="L783">        return m_templateManager;</span>
+    }
+
+    /**
+     *  Returns the base URL, telling where this Wiki actually lives.
+     *
+     *  @since 1.6.1
+     *  @return The Base URL.
+     */
+
+    public String getBaseURL()
+    {
+<span class="fc" id="L795">    	String contextPath = m_servletContext.getContextPath();</span>
+
+<span class="fc" id="L797">        return contextPath;</span>
+    }
+
+
+    /**
+     *  Returns the moment when this engine was started.
+     *
+     *  @since 2.0.15.
+     *  @return The start time of this wiki.
+     */
+
+    public Date getStartTime()
+    {
+<span class="nc" id="L810">        return (Date)m_startTime.clone();</span>
+    }
+
+    /**
+     * &lt;p&gt;
+     * Returns the basic absolute URL to a page, without any modifications. You
+     * may add any parameters to this.
+     * &lt;/p&gt;
+     * &lt;p&gt;
+     * Since 2.3.90 it is safe to call this method with &lt;code&gt;null&lt;/code&gt;
+     * pageName, in which case it will default to the front page.
+     * &lt;/p&gt;
+     * @since 2.0.3
+     * @param pageName The name of the page.  May be null, in which case defaults to the front page.
+     * @return An absolute URL to the page.
+     */
+    public String getViewURL( String pageName )
+    {
+<span class="nc bnc" id="L828" title="All 2 branches missed.">        if( pageName == null )</span>
+        {
+<span class="nc" id="L830">            pageName = getFrontPage();</span>
+        }
+<span class="nc" id="L832">        return getURLConstructor().makeURL(WikiContext.VIEW, pageName, &quot;absolute&quot;.equals(PROP_REFSTYLE), null);</span>
+    }
+
+    /**
+     *  Returns the basic URL to an editor.  Please use WikiContext.getURL() or
+     *  WikiEngine.getURL() instead.
+     *
+     *  @see #getURL(String, String, String, boolean)
+     *  @see WikiContext#getURL(String, String)
+     *  @deprecated
+     *
+     *  @param pageName The name of the page.
+     *  @return An URI.
+     *
+     *  @since 2.0.3
+     */
+    @Deprecated
+    public String getEditURL( String pageName )
+    {
+<span class="nc" id="L851">        return m_urlConstructor.makeURL( WikiContext.EDIT, pageName, false, null );</span>
+    }
+
+    /**
+     *  Returns the basic attachment URL.Please use WikiContext.getURL() or
+     *  WikiEngine.getURL() instead.
+     *
+     *  @see #getURL(String, String, String, boolean)
+     *  @see WikiContext#getURL(String, String)
+     *  @since 2.0.42.
+     *  @param attName Attachment name
+     *  @deprecated
+     *  @return An URI.
+     */
+    @Deprecated
+    public String getAttachmentURL( String attName )
+    {
+<span class="nc" id="L868">        return m_urlConstructor.makeURL( WikiContext.ATTACH, attName, false, null );</span>
+    }
+
+    /**
+     *  Returns an URL if a WikiContext is not available.
+     *
+     *  @param context The WikiContext (VIEW, EDIT, etc...)
+     *  @param pageName Name of the page, as usual
+     *  @param params List of parameters. May be null, if no parameters.
+     *  @param absolute If true, will generate an absolute URL regardless of properties setting.
+     *  @return An URL (absolute or relative).
+     */
+    public String getURL( String context, String pageName, String params, boolean absolute )
+    {
+<span class="fc bfc" id="L882" title="All 2 branches covered.">        if( pageName == null ) pageName = getFrontPage();</span>
+<span class="fc" id="L883">        return m_urlConstructor.makeURL( context, pageName, absolute, params );</span>
+    }
+
+    /**
+     *  Returns the default front page, if no page is used.
+     *
+     *  @return The front page name.
+     */
+
+    public String getFrontPage()
+    {
+<span class="fc" id="L894">        return m_frontPage;</span>
+    }
+
+    /**
+     *  Returns the ServletContext that this particular WikiEngine was
+     *  initialized with.  &lt;B&gt;It may return null&lt;/B&gt;, if the WikiEngine is not
+     *  running inside a servlet container!
+     *
+     *  @since 1.7.10
+     *  @return ServletContext of the WikiEngine, or null.
+     */
+
+    public ServletContext getServletContext()
+    {
+<span class="fc" id="L908">        return m_servletContext;</span>
+    }
+
+    /**
+     *  This is a safe version of the Servlet.Request.getParameter() routine.
+     *  Unfortunately, the default version always assumes that the incoming
+     *  character set is ISO-8859-1, even though it was something else.
+     *  This means that we need to make a new string using the correct
+     *  encoding.
+     *  &lt;P&gt;
+     *  For more information, see:
+     *     &lt;A HREF=&quot;http://www.jguru.com/faq/view.jsp?EID=137049&quot;&gt;JGuru FAQ&lt;/A&gt;.
+     *  &lt;P&gt;
+     *  Incidentally, this is almost the same as encodeName(), below.
+     *  I am not yet entirely sure if it's safe to merge the code.
+     *
+     *  @param request The servlet request
+     *  @param name    The parameter name to get.
+     *  @return The parameter value or null
+     *  @since 1.5.3
+     *  @deprecated JSPWiki now requires servlet API 2.3, which has a better
+     *              way of dealing with this stuff.  This will be removed in
+     *              the near future.
+     */
+
+    @Deprecated
+    public String safeGetParameter( ServletRequest request, String name )
+    {
+        try
+        {
+<span class="nc" id="L938">            String res = request.getParameter( name );</span>
+<span class="nc bnc" id="L939" title="All 2 branches missed.">            if( res != null )</span>
+            {
+<span class="nc" id="L941">                res = new String(res.getBytes(&quot;ISO-8859-1&quot;),</span>
+<span class="nc" id="L942">                                 getContentEncoding() );</span>
+            }
+
+<span class="nc" id="L945">            return res;</span>
+        }
+<span class="nc" id="L947">        catch( UnsupportedEncodingException e )</span>
+        {
+<span class="nc" id="L949">            log.fatal( &quot;Unsupported encoding&quot;, e );</span>
+<span class="nc" id="L950">            return &quot;&quot;;</span>
+        }
+
+    }
+
+    /**
+     *  Returns the query string (the portion after the question mark).
+     *
+     *  @param request The HTTP request to parse.
+     *  @return The query string.  If the query string is null,
+     *          returns an empty string.
+     *
+     *  @since 2.1.3
+     */
+    public String safeGetQueryString( HttpServletRequest request )
+    {
+<span class="nc bnc" id="L966" title="All 2 branches missed.">        if (request == null)</span>
+        {
+<span class="nc" id="L968">            return &quot;&quot;;</span>
+        }
+
+        try
+        {
+<span class="nc" id="L973">            String res = request.getQueryString();</span>
+<span class="nc bnc" id="L974" title="All 2 branches missed.">            if( res != null )</span>
+            {
+<span class="nc" id="L976">                res = new String(res.getBytes(&quot;ISO-8859-1&quot;),</span>
+<span class="nc" id="L977">                                 getContentEncoding() );</span>
+
+                //
+                // Ensure that the 'page=xyz' attribute is removed
+                // FIXME: Is it really the mandate of this routine to
+                //        do that?
+                //
+<span class="nc" id="L984">                int pos1 = res.indexOf(&quot;page=&quot;);</span>
+<span class="nc bnc" id="L985" title="All 2 branches missed.">                if (pos1 &gt;= 0)</span>
+                {
+<span class="nc" id="L987">                    String tmpRes = res.substring(0, pos1);</span>
+<span class="nc" id="L988">                    int pos2 = res.indexOf(&quot;&amp;&quot;,pos1) + 1;</span>
+<span class="nc bnc" id="L989" title="All 4 branches missed.">                    if ( (pos2 &gt; 0) &amp;&amp; (pos2 &lt; res.length()) )</span>
+                    {
+<span class="nc" id="L991">                        tmpRes = tmpRes + res.substring(pos2);</span>
+                    }
+<span class="nc" id="L993">                    res = tmpRes;</span>
+                }
+            }
+
+<span class="nc" id="L997">            return res;</span>
+        }
+<span class="nc" id="L999">        catch( UnsupportedEncodingException e )</span>
+        {
+<span class="nc" id="L1001">            log.fatal( &quot;Unsupported encoding&quot;, e );</span>
+<span class="nc" id="L1002">            return &quot;&quot;;</span>
+        }
+    }
+
+    /**
+     *  Returns an URL to some other Wiki that we know.
+     *
+     *  @param  wikiName The name of the other wiki.
+     *  @return null, if no such reference was found.
+     */
+    public String getInterWikiURL( String wikiName )
+    {
+<span class="fc" id="L1014">        return TextUtil.getStringProperty(m_properties,PROP_INTERWIKIREF+wikiName,null);</span>
+    }
+
+    /**
+     *  Returns a collection of all supported InterWiki links.
+     *
+     *  @return A Collection of Strings.
+     */
+    public Collection&lt; String &gt; getAllInterWikiLinks()
+    {
+<span class="nc" id="L1024">        ArrayList&lt; String &gt; list = new ArrayList&lt; &gt;();</span>
+
+<span class="nc bnc" id="L1026" title="All 2 branches missed.">        for( Enumeration&lt; ? &gt; i = m_properties.propertyNames(); i.hasMoreElements(); )</span>
+        {
+<span class="nc" id="L1028">            String prop = ( String )i.nextElement();</span>
+
+<span class="nc bnc" id="L1030" title="All 2 branches missed.">            if( prop.startsWith( PROP_INTERWIKIREF ) )</span>
+            {
+<span class="nc" id="L1032">                list.add( prop.substring( prop.lastIndexOf( &quot;.&quot; ) + 1 ) );</span>
+            }
+<span class="nc" id="L1034">        }</span>
+
+<span class="nc" id="L1036">        return list;</span>
+    }
+
+    /**
+     *  Returns a collection of all image types that get inlined.
+     *
+     *  @return A Collection of Strings with a regexp pattern.
+     */
+    public Collection&lt; String &gt; getAllInlinedImagePatterns()
+    {
+<span class="fc" id="L1046">        Properties props    = getWikiProperties();</span>
+<span class="fc" id="L1047">        ArrayList&lt;String&gt;  ptrnlist = new ArrayList&lt;&gt;();</span>
+
+<span class="fc bfc" id="L1049" title="All 2 branches covered.">        for( Enumeration&lt; ? &gt; e = props.propertyNames(); e.hasMoreElements(); )</span>
+        {
+<span class="fc" id="L1051">            String name = ( String )e.nextElement();</span>
+
+<span class="fc bfc" id="L1053" title="All 2 branches covered.">            if( name.startsWith( PROP_INLINEIMAGEPTRN ) )</span>
+            {
+<span class="fc" id="L1055">                String ptrn = TextUtil.getStringProperty( props, name, null );</span>
+
+<span class="fc" id="L1057">                ptrnlist.add( ptrn );</span>
+            }
+<span class="fc" id="L1059">        }</span>
+
+<span class="fc bfc" id="L1061" title="All 2 branches covered.">        if( ptrnlist.size() == 0 )</span>
+        {
+<span class="fc" id="L1063">            ptrnlist.add( DEFAULT_INLINEPATTERN );</span>
+        }
+
+<span class="fc" id="L1066">        return ptrnlist;</span>
+    }
+
+    /**
+     *  &lt;p&gt;If the page is a special page, then returns a direct URL
+     *  to that page.  Otherwise returns &lt;code&gt;null&lt;/code&gt;.
+     *  This method delegates requests to
+     *  {@link org.apache.wiki.ui.CommandResolver#getSpecialPageReference(String)}.
+     *  &lt;/p&gt;
+     *  &lt;p&gt;
+     *  Special pages are defined in jspwiki.properties using the jspwiki.specialPage
+     *  setting.  They're typically used to give Wiki page names to e.g. custom JSP
+     *  pages.
+     *  &lt;/p&gt;
+     *
+     *  @param original The page to check
+     *  @return A reference to the page, or null, if there's no special page.
+     */
+    public String getSpecialPageReference( String original )
+    {
+<span class="nc" id="L1086">        return m_commandResolver.getSpecialPageReference( original );</span>
+    }
+
+    /**
+     *  Returns the name of the application.
+     *
+     *  @return A string describing the name of this application.
+     */
+
+    // FIXME: Should use servlet context as a default instead of a constant.
+    public String getApplicationName()
+    {
+<span class="fc" id="L1098">        String appName = TextUtil.getStringProperty(m_properties,PROP_APPNAME,Release.APPNAME);</span>
+
+<span class="fc" id="L1100">        return MarkupParser.cleanLink( appName );</span>
+    }
+
+    /**
+     *  Beautifies the title of the page by appending spaces in suitable
+     *  places, if the user has so decreed in the properties when constructing
+     *  this WikiEngine.  However, attachment names are only beautified by
+     *  the name.
+     *
+     *  @param title The title to beautify
+     *  @return A beautified title (or, if beautification is off,
+     *          returns the title without modification)
+     *  @since 1.7.11
+     */
+    public String beautifyTitle( String title )
+    {
+<span class="fc bfc" id="L1116" title="All 2 branches covered.">        if( m_beautifyTitle )</span>
+        {
+            try
+            {
+<span class="fc" id="L1120">                Attachment att = m_attachmentManager.getAttachmentInfo(title);</span>
+
+<span class="fc bfc" id="L1122" title="All 2 branches covered.">                if(att == null)</span>
+                {
+<span class="fc" id="L1124">                    return TextUtil.beautifyString( title );</span>
+                }
+
+<span class="fc" id="L1127">                String parent = TextUtil.beautifyString( att.getParentName() );</span>
+
+<span class="fc" id="L1129">                return parent + &quot;/&quot; + att.getFileName();</span>
+            }
+<span class="nc" id="L1131">            catch( ProviderException e )</span>
+            {
+<span class="nc" id="L1133">                return title;</span>
+            }
+        }
+
+<span class="fc" id="L1137">        return title;</span>
+    }
+
+    /**
+     *  Beautifies the title of the page by appending non-breaking spaces
+     *  in suitable places.  This is really suitable only for HTML output,
+     *  as it uses the &amp;amp;nbsp; -character.
+     *
+     *  @param title The title to beautify
+     *  @return A beautified title.
+     *  @since 2.1.127
+     */
+    public String beautifyTitleNoBreak( String title )
+    {
+<span class="nc bnc" id="L1151" title="All 2 branches missed.">        if( m_beautifyTitle )</span>
+        {
+<span class="nc" id="L1153">            return TextUtil.beautifyString( title, &quot;&amp;nbsp;&quot; );</span>
+        }
+
+<span class="nc" id="L1156">        return title;</span>
+    }
+
+    /**
+     *  Returns true, if the requested page (or an alias) exists.  Will consider
+     *  any version as existing.  Will also consider attachments.
+     *
+     *  @param page WikiName of the page.
+     *  @return true, if page (or attachment) exists.
+     */
+    public boolean pageExists( String page )
+    {
+<span class="fc" id="L1168">        Attachment att = null;</span>
+
+        try
+        {
+<span class="fc bfc" id="L1172" title="All 2 branches covered.">            if( m_commandResolver.getSpecialPageReference(page) != null ) return true;</span>
+
+<span class="fc bfc" id="L1174" title="All 2 branches covered.">            if( getFinalPageName( page ) != null )</span>
+            {
+<span class="fc" id="L1176">                return true;</span>
+            }
+
+<span class="fc" id="L1179">            att = getAttachmentManager().getAttachmentInfo( (WikiContext)null, page );</span>
+        }
+<span class="nc" id="L1181">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L1183">            log.debug(&quot;pageExists() failed to find attachments&quot;,e);</span>
+<span class="fc" id="L1184">        }</span>
+
+<span class="fc bfc" id="L1186" title="All 2 branches covered.">        return att != null;</span>
+    }
+
+    /**
+     *  Returns true, if the requested page (or an alias) exists with the
+     *  requested version.
+     *
+     *  @param page Page name
+     *  @param version Page version
+     *  @return True, if page (or alias, or attachment) exists
+     *  @throws ProviderException If the provider fails.
+     */
+    public boolean pageExists( String page, int version )
+        throws ProviderException
+    {
+<span class="fc bfc" id="L1201" title="All 2 branches covered.">        if( m_commandResolver.getSpecialPageReference(page) != null ) return true;</span>
+
+<span class="fc" id="L1203">        String finalName = getFinalPageName( page );</span>
+
+<span class="fc" id="L1205">        boolean isThere = false;</span>
+
+<span class="fc bfc" id="L1207" title="All 2 branches covered.">        if( finalName != null )</span>
+        {
+            //
+            //  Go and check if this particular version of this page
+            //  exists.
+            //
+<span class="fc" id="L1213">            isThere = m_pageManager.pageExists( finalName, version );</span>
+        }
+
+<span class="fc bfc" id="L1216" title="All 2 branches covered.">        if( isThere == false )</span>
+        {
+            //
+            //  Go check if such an attachment exists.
+            //
+            try
+            {
+<span class="pc bpc" id="L1223" title="1 of 2 branches missed.">                isThere = getAttachmentManager().getAttachmentInfo( (WikiContext)null, page, version ) != null;</span>
+            }
+<span class="nc" id="L1225">            catch( ProviderException e )</span>
+            {
+<span class="nc" id="L1227">                log.debug(&quot;pageExists() failed to find attachments&quot;,e);</span>
+<span class="fc" id="L1228">            }</span>
+        }
+
+<span class="fc" id="L1231">        return isThere;</span>
+    }
+
+    /**
+     *  Returns true, if the requested page (or an alias) exists, with the
+     *  specified version in the WikiPage.
+     *
+     *  @param page A WikiPage object describing the name and version.
+     *  @return true, if the page (or alias, or attachment) exists.
+     *  @throws ProviderException If something goes badly wrong.
+     *  @since 2.0
+     */
+    public boolean pageExists( WikiPage page )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L1246" title="1 of 2 branches missed.">        if( page != null )</span>
+        {
+<span class="fc" id="L1248">            return pageExists( page.getName(), page.getVersion() );</span>
+        }
+<span class="nc" id="L1250">        return false;</span>
+    }
+
+    /**
+     *  Returns the correct page name, or null, if no such
+     *  page can be found.  Aliases are considered. This
+     *  method simply delegates to
+     *  {@link org.apache.wiki.ui.CommandResolver#getFinalPageName(String)}.
+     *  @since 2.0
+     *  @param page Page name.
+     *  @return The rewritten page name, or null, if the page does not exist.
+     *  @throws ProviderException If something goes wrong in the backend.
+     */
+    public String getFinalPageName( String page )
+        throws ProviderException
+    {
+<span class="fc" id="L1266">        return m_commandResolver.getFinalPageName( page );</span>
+    }
+
+    /**
+     *  Turns a WikiName into something that can be
+     *  called through using an URL.
+     *
+     *  @since 1.4.1
+     *  @param pagename A name.  Can be actually any string.
+     *  @return A properly encoded name.
+     *  @see #decodeName(String)
+     */
+    public String encodeName( String pagename )
+    {
+        try
+        {
+<span class="fc bfc" id="L1282" title="All 2 branches covered.">            return URLEncoder.encode( pagename, m_useUTF8 ? &quot;UTF-8&quot; : &quot;ISO-8859-1&quot; );</span>
+        }
+<span class="nc" id="L1284">        catch( UnsupportedEncodingException e )</span>
+        {
+<span class="nc" id="L1286">            throw new InternalWikiException( &quot;ISO-8859-1 not a supported encoding!?!  Your platform is borked.&quot; , e);</span>
+        }
+    }
+
+    /**
+     *  Decodes a URL-encoded request back to regular life.  This properly heeds
+     *  the encoding as defined in the settings file.
+     *
+     *  @param pagerequest The URL-encoded string to decode
+     *  @return A decoded string.
+     *  @see #encodeName(String)
+     */
+    public String decodeName( String pagerequest )
+    {
+        try
+        {
+<span class="pc bpc" id="L1302" title="1 of 2 branches missed.">            return URLDecoder.decode( pagerequest, m_useUTF8 ? &quot;UTF-8&quot; : &quot;ISO-8859-1&quot; );</span>
+        }
+<span class="nc" id="L1304">        catch( UnsupportedEncodingException e )</span>
+        {
+<span class="nc" id="L1306">            throw new InternalWikiException(&quot;ISO-8859-1 not a supported encoding!?!  Your platform is borked.&quot;, e);</span>
+        }
+    }
+
+    /**
+     *  Returns the IANA name of the character set encoding we're
+     *  supposed to be using right now.
+     *
+     *  @since 1.5.3
+     *  @return The content encoding (either UTF-8 or ISO-8859-1).
+     */
+    public String getContentEncoding()
+    {
+<span class="fc bfc" id="L1319" title="All 2 branches covered.">        if( m_useUTF8 )</span>
+<span class="fc" id="L1320">            return &quot;UTF-8&quot;;</span>
+
+<span class="fc" id="L1322">        return &quot;ISO-8859-1&quot;;</span>
+    }
+
+    /**
+     * Returns the {@link org.apache.wiki.workflow.WorkflowManager} associated with this
+     * WikiEngine. If the WIkiEngine has not been initialized, this method will return
+     * &lt;code&gt;null&lt;/code&gt;.
+     * @return the task queue
+     */
+    public WorkflowManager getWorkflowManager()
+    {
+<span class="fc" id="L1333">        return m_workflowMgr;</span>
+    }
+
+    /**
+     *  Returns the un-HTMLized text of the latest version of a page.
+     *  This method also replaces the &amp;lt; and &amp;amp; -characters with
+     *  their respective HTML entities, thus making it suitable
+     *  for inclusion on an HTML page.  If you want to have the
+     *  page text without any conversions, use getPureText().
+     *
+     *  @param page WikiName of the page to fetch.
+     *  @return WikiText.
+     */
+    public String getText( String page )
+    {
+<span class="fc" id="L1348">        return getText( page, WikiPageProvider.LATEST_VERSION );</span>
+    }
+
+    /**
+     *  Returns the un-HTMLized text of the given version of a page.
+     *  This method also replaces the &amp;lt; and &amp;amp; -characters with
+     *  their respective HTML entities, thus making it suitable
+     *  for inclusion on an HTML page.  If you want to have the
+     *  page text without any conversions, use getPureText().
+     *
+     *
+     * @param page WikiName of the page to fetch
+     * @param version  Version of the page to fetch
+     * @return WikiText.
+     */
+    public String getText( String page, int version )
+    {
+<span class="fc" id="L1365">        String result = getPureText( page, version );</span>
+
+        //
+        //  Replace ampersand first, or else all quotes and stuff
+        //  get replaced as well with &amp;quot; etc.
+        //
+        /*
+        result = TextUtil.replaceString( result, &quot;&amp;&quot;, &quot;&amp;amp;&quot; );
+        */
+
+<span class="fc" id="L1375">        result = TextUtil.replaceEntities( result );</span>
+
+<span class="fc" id="L1377">        return result;</span>
+    }
+
+    /**
+     *  Returns the un-HTMLized text of the given version of a page in
+     *  the given context.  USE THIS METHOD if you don't know what
+     *  doing.
+     *  &lt;p&gt;
+     *  This method also replaces the &amp;lt; and &amp;amp; -characters with
+     *  their respective HTML entities, thus making it suitable
+     *  for inclusion on an HTML page.  If you want to have the
+     *  page text without any conversions, use getPureText().
+     *
+     *  @since 1.9.15.
+     *  @param context The WikiContext
+     *  @param page    A page reference (not an attachment)
+     *  @return The page content as HTMLized String.
+     *  @see   #getPureText(WikiPage)
+     */
+    public String getText( WikiContext context, WikiPage page )
+    {
+<span class="nc" id="L1398">        return getText( page.getName(), page.getVersion() );</span>
+    }
+
+
+    /**
+     *  Returns the pure text of a page, no conversions.  Use this
+     *  if you are writing something that depends on the parsing
+     *  of the page.  Note that you should always check for page
+     *  existence through pageExists() before attempting to fetch
+     *  the page contents.
+     *
+     *  @param page    The name of the page to fetch.
+     *  @param version If WikiPageProvider.LATEST_VERSION, then uses the
+     *  latest version.
+     *  @return The page contents.  If the page does not exist,
+     *          returns an empty string.
+     */
+    // FIXME: Should throw an exception on unknown page/version?
+    public String getPureText( String page, int version )
+    {
+<span class="fc" id="L1418">        String result = null;</span>
+
+        try
+        {
+<span class="fc" id="L1422">            result = m_pageManager.getPageText( page, version );</span>
+        }
+<span class="fc" id="L1424">        catch( ProviderException e )</span>
+        {
+            // FIXME
+        }
+        finally
+        {
+<span class="fc bfc" id="L1430" title="All 2 branches covered.">            if( result == null )</span>
+<span class="fc" id="L1431">                result = &quot;&quot;;</span>
+        }
+
+<span class="fc" id="L1434">        return result;</span>
+    }
+
+    /**
+     *  Returns the pure text of a page, no conversions.  Use this
+     *  if you are writing something that depends on the parsing
+     *  the page. Note that you should always check for page
+     *  existence through pageExists() before attempting to fetch
+     *  the page contents.
+     *
+     *  @param page A handle to the WikiPage
+     *  @return String of WikiText.
+     *  @since 2.1.13.
+     */
+    public String getPureText( WikiPage page )
+    {
+<span class="fc" id="L1450">        return getPureText( page.getName(), page.getVersion() );</span>
+    }
+
+    /**
+     *  Returns the converted HTML of the page using a different
+     *  context than the default context.
+     *
+     *  @param  context A WikiContext in which you wish to render this page in.
+     *  @param  page WikiPage reference.
+     *  @return HTML-rendered version of the page.
+     */
+
+    public String getHTML( WikiContext context, WikiPage page )
+    {
+<span class="fc" id="L1464">        String pagedata = null;</span>
+
+<span class="fc" id="L1466">        pagedata = getPureText( page.getName(), page.getVersion() );</span>
+
+<span class="fc" id="L1468">        String res = textToHTML( context, pagedata );</span>
+
+<span class="fc" id="L1470">        return res;</span>
+    }
+
+    /**
+     *  Returns the converted HTML of the page.
+     *
+     *  @param page WikiName of the page to convert.
+     *  @return HTML-rendered version of the page.
+     */
+    public String getHTML( String page )
+    {
+<span class="fc" id="L1481">        return getHTML( page, WikiPageProvider.LATEST_VERSION );</span>
+    }
+
+    /**
+     *  Returns the converted HTML of the page's specific version.
+     *  The version must be a positive integer, otherwise the current
+     *  version is returned.
+     *
+     *  @param pagename WikiName of the page to convert.
+     *  @param version Version number to fetch
+     *  @return HTML-rendered page text.
+     */
+    public String getHTML( String pagename, int version )
+    {
+<span class="fc" id="L1495">        WikiPage page = getPage( pagename, version );</span>
+
+<span class="fc" id="L1497">        WikiContext context = new WikiContext( this,</span>
+                                               page );
+<span class="fc" id="L1499">        context.setRequestContext( WikiContext.NONE );</span>
+
+<span class="fc" id="L1501">        String res = getHTML( context, page );</span>
+
+<span class="fc" id="L1503">        return res;</span>
+    }
+
+    /**
+     *  Converts raw page data to HTML.
+     *
+     *  @param pagedata Raw page data to convert to HTML
+     *  @param context  The WikiContext in which the page is to be rendered
+     *  @return Rendered page text
+     */
+    public String textToHTML( WikiContext context, String pagedata )
+    {
+<span class="fc" id="L1515">        String result = &quot;&quot;;</span>
+
+<span class="fc" id="L1517">        boolean runFilters = &quot;true&quot;.equals(m_variableManager.getValue(context,PROP_RUNFILTERS,&quot;true&quot;));</span>
+
+<span class="fc" id="L1519">        StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L1520">        sw.start();</span>
+        try
+        {
+<span class="pc bpc" id="L1523" title="1 of 2 branches missed.">            if( runFilters )</span>
+<span class="fc" id="L1524">                pagedata = m_filterManager.doPreTranslateFiltering( context, pagedata );</span>
+
+<span class="fc" id="L1526">            result = m_renderingManager.getHTML( context, pagedata );</span>
+
+<span class="pc bpc" id="L1528" title="1 of 2 branches missed.">            if( runFilters )</span>
+<span class="fc" id="L1529">                result = m_filterManager.doPostTranslateFiltering( context, result );</span>
+        }
+<span class="nc" id="L1531">        catch( FilterException e )</span>
+        {
+            // FIXME: Don't yet know what to do
+<span class="fc" id="L1534">        }</span>
+<span class="fc" id="L1535">        sw.stop();</span>
+<span class="pc bpc" id="L1536" title="1 of 2 branches missed.">        if( log.isDebugEnabled() )</span>
+<span class="nc" id="L1537">            log.debug(&quot;Page &quot;+context.getRealPage().getName()+&quot; rendered, took &quot;+sw );</span>
+
+<span class="fc" id="L1539">        return result;</span>
+    }
+
+    /**
+     * Protected method that signals that the WikiEngine will be
+     * shut down by the servlet container. It is called by
+     * {@link WikiServlet#destroy()}. When this method is called,
+     * it fires a &quot;shutdown&quot; WikiEngineEvent to all registered
+     * listeners.
+     */
+    protected void shutdown()
+    {
+<span class="nc" id="L1551">        fireEvent( WikiEngineEvent.SHUTDOWN );</span>
+<span class="nc" id="L1552">        m_filterManager.destroy();</span>
+<span class="nc" id="L1553">    }</span>
+
+    /**
+     *  Reads a WikiPageful of data from a String and returns all links
+     *  internal to this Wiki in a Collection.
+     *
+     *  @param page The WikiPage to scan
+     *  @param pagedata The page contents
+     *  @return a Collection of Strings
+     */
+    public Collection&lt; String &gt; scanWikiLinks( WikiPage page, String pagedata ) {
+<span class="fc" id="L1564">        LinkCollector localCollector = new LinkCollector();</span>
+
+<span class="fc" id="L1566">        textToHTML( new WikiContext( this, page ),</span>
+                    pagedata,
+                    localCollector,
+                    null,
+                    localCollector,
+                    false,
+                    true );
+
+<span class="fc" id="L1574">        return localCollector.getLinks();</span>
+    }
+
+    /**
+     *  Just convert WikiText to HTML.
+     *
+     *  @param context The WikiContext in which to do the conversion
+     *  @param pagedata The data to render
+     *  @param localLinkHook Is called whenever a wiki link is found
+     *  @param extLinkHook   Is called whenever an external link is found
+     *
+     *  @return HTML-rendered page text.
+     */
+
+    public String textToHTML( WikiContext context,
+                              String pagedata,
+                              StringTransmutator localLinkHook,
+                              StringTransmutator extLinkHook )
+    {
+<span class="nc" id="L1593">        return textToHTML( context, pagedata, localLinkHook, extLinkHook, null, true, false );</span>
+    }
+
+    /**
+     *  Just convert WikiText to HTML.
+     *
+     *  @param context The WikiContext in which to do the conversion
+     *  @param pagedata The data to render
+     *  @param localLinkHook Is called whenever a wiki link is found
+     *  @param extLinkHook   Is called whenever an external link is found
+     *  @param attLinkHook   Is called whenever an attachment link is found
+     *  @return HTML-rendered page text.
+     */
+
+    public String textToHTML( WikiContext context,
+                              String pagedata,
+                              StringTransmutator localLinkHook,
+                              StringTransmutator extLinkHook,
+                              StringTransmutator attLinkHook )
+    {
+<span class="fc" id="L1613">        return textToHTML( context, pagedata, localLinkHook, extLinkHook, attLinkHook, true, false );</span>
+    }
+
+    /**
+     *  Helper method for doing the HTML translation.
+     *
+     *  @param context The WikiContext in which to do the conversion
+     *  @param pagedata The data to render
+     *  @param localLinkHook Is called whenever a wiki link is found
+     *  @param extLinkHook   Is called whenever an external link is found
+     *  @param parseAccessRules Parse the access rules if we encounter them
+     *  @param justParse Just parses the pagedata, does not actually render.  In this case,
+     *                   this methods an empty string.
+     *  @return HTML-rendered page text.
+
+     */
+    private String textToHTML( WikiContext context,
+                               String pagedata,
+                               StringTransmutator localLinkHook,
+                               StringTransmutator extLinkHook,
+                               StringTransmutator attLinkHook,
+                               boolean            parseAccessRules,
+                               boolean            justParse )
+    {
+<span class="fc" id="L1637">        String result = &quot;&quot;;</span>
+
+<span class="pc bpc" id="L1639" title="1 of 2 branches missed.">        if( pagedata == null )</span>
+        {
+<span class="nc" id="L1641">            log.error(&quot;NULL pagedata to textToHTML()&quot;);</span>
+<span class="nc" id="L1642">            return null;</span>
+        }
+
+<span class="fc" id="L1645">        boolean runFilters = &quot;true&quot;.equals(m_variableManager.getValue(context,PROP_RUNFILTERS,&quot;true&quot;));</span>
+
+        try
+        {
+<span class="fc" id="L1649">            StopWatch sw = new StopWatch();</span>
+<span class="fc" id="L1650">            sw.start();</span>
+
+<span class="pc bpc" id="L1652" title="2 of 4 branches missed.">            if( runFilters &amp;&amp; m_filterManager != null )</span>
+<span class="fc" id="L1653">                pagedata = m_filterManager.doPreTranslateFiltering( context, pagedata );</span>
+
+<span class="fc" id="L1655">            MarkupParser mp = m_renderingManager.getParser( context, pagedata );</span>
+<span class="fc" id="L1656">            mp.addLocalLinkHook( localLinkHook );</span>
+<span class="fc" id="L1657">            mp.addExternalLinkHook( extLinkHook );</span>
+<span class="fc" id="L1658">            mp.addAttachmentLinkHook( attLinkHook );</span>
+
+<span class="fc bfc" id="L1660" title="All 2 branches covered.">            if( !parseAccessRules ) mp.disableAccessRules();</span>
+
+<span class="fc" id="L1662">            WikiDocument doc = mp.parse();</span>
+
+            //
+            //  In some cases it's better just to parse, not to render
+            //
+<span class="fc bfc" id="L1667" title="All 2 branches covered.">            if( !justParse )</span>
+            {
+<span class="fc" id="L1669">                result = m_renderingManager.getHTML( context, doc );</span>
+
+<span class="pc bpc" id="L1671" title="2 of 4 branches missed.">                if( runFilters &amp;&amp; m_filterManager != null )</span>
+<span class="fc" id="L1672">                    result = m_filterManager.doPostTranslateFiltering( context, result );</span>
+            }
+
+<span class="fc" id="L1675">            sw.stop();</span>
+
+<span class="pc bpc" id="L1677" title="1 of 2 branches missed.">            if( log.isDebugEnabled() )</span>
+<span class="nc" id="L1678">                log.debug(&quot;Page &quot;+context.getRealPage().getName()+&quot; rendered, took &quot;+sw );</span>
+        }
+<span class="nc" id="L1680">        catch( IOException e )</span>
+        {
+<span class="nc" id="L1682">            log.error( &quot;Failed to scan page data: &quot;, e );</span>
+        }
+<span class="nc" id="L1684">        catch( FilterException e )</span>
+        {
+<span class="nc" id="L1686">        	log.error( &quot;page filter threw exception: &quot;, e );</span>
+            // FIXME: Don't yet know what to do
+<span class="pc" id="L1688">        }</span>
+
+<span class="fc" id="L1690">        return result;</span>
+    }
+
+    /**
+     *  Updates all references for the given page.
+     *
+     *  @param page wiki page for which references should be updated
+     */
+    public void updateReferences( WikiPage page )
+    {
+<span class="fc" id="L1700">        String pageData = getPureText( page.getName(), WikiProvider.LATEST_VERSION );</span>
+
+<span class="fc" id="L1702">        m_referenceManager.updateReferences( page.getName(),</span>
+<span class="fc" id="L1703">                                             scanWikiLinks( page, pageData ) );</span>
+<span class="fc" id="L1704">    }</span>
+
+
+    /**
+     *  Writes the WikiText of a page into the page repository. If the &lt;code&gt;jspwiki.properties&lt;/code&gt; file contains
+     *  the property &lt;code&gt;jspwiki.approver.workflow.saveWikiPage&lt;/code&gt; and its value resolves to a valid user, 
+     *  {@link org.apache.wiki.auth.authorize.Group} or {@link org.apache.wiki.auth.authorize.Role}, this method will
+     *  place a {@link org.apache.wiki.workflow.Decision} in the approver's workflow inbox and throw a 
+     *  {@link org.apache.wiki.workflow.DecisionRequiredException}. If the submitting user is authenticated and the 
+     *  page save is rejected, a notification will be placed in the user's decision queue.
+     *
+     *  @since 2.1.28
+     *  @param context The current WikiContext
+     *  @param text    The Wiki markup for the page.
+     *  @throws WikiException if the save operation encounters an error during the save operation. If the page-save 
+     *  operation requires approval, the exception will be of type {@link org.apache.wiki.workflow.DecisionRequiredException}. 
+     *  Individual PageFilters, such as the {@link org.apache.wiki.filters.SpamFilter} may also throw a 
+     *  {@link org.apache.wiki.api.exceptions.RedirectException}.
+     */
+    public void saveText( WikiContext context, String text ) throws WikiException {
+        // Check if page data actually changed; bail if not
+<span class="fc" id="L1725">        WikiPage page = context.getPage();</span>
+<span class="fc" id="L1726">        String oldText = getPureText( page );</span>
+<span class="fc" id="L1727">        String proposedText = TextUtil.normalizePostData( text );</span>
+<span class="pc bpc" id="L1728" title="1 of 4 branches missed.">        if ( oldText != null &amp;&amp; oldText.equals( proposedText ) ) {</span>
+<span class="fc" id="L1729">            return;</span>
+        }
+
+        // Check if creation of empty pages is allowed; bail if not
+<span class="fc" id="L1733">        boolean allowEmpty = TextUtil.getBooleanProperty( m_properties, PROP_ALLOW_CREATION_OF_EMPTY_PAGES, false );</span>
+<span class="pc bpc" id="L1734" title="1 of 6 branches missed.">        if ( !allowEmpty &amp;&amp; !pageExists( page ) &amp;&amp; text.trim().equals( &quot;&quot; ) ) {</span>
+<span class="fc" id="L1735">            return;</span>
+        }
+
+        // Create approval workflow for page save; add the diffed, proposed and old text versions as 
+        // Facts for the approver (if approval is required). If submitter is authenticated, any reject 
+        // messages will appear in his/her workflow inbox.
+<span class="fc" id="L1741">        WorkflowBuilder builder = WorkflowBuilder.getBuilder( this );</span>
+<span class="fc" id="L1742">        Principal submitter = context.getCurrentUser();</span>
+<span class="fc" id="L1743">        Step prepTask = m_tasksManager.buildPreSaveWikiPageTask( context, proposedText );</span>
+<span class="fc" id="L1744">        Step completionTask = m_tasksManager.buildSaveWikiPageTask();</span>
+<span class="fc" id="L1745">        String diffText = m_differenceManager.makeDiff( context, oldText, proposedText );</span>
+<span class="fc" id="L1746">        boolean isAuthenticated = context.getWikiSession().isAuthenticated();</span>
+<span class="fc" id="L1747">        Fact[] facts = new Fact[ 5 ];</span>
+<span class="fc" id="L1748">        facts[ 0 ] = new Fact( WorkflowManager.WF_WP_SAVE_FACT_PAGE_NAME, page.getName() );</span>
+<span class="fc" id="L1749">        facts[ 1 ] = new Fact( WorkflowManager.WF_WP_SAVE_FACT_DIFF_TEXT, diffText );</span>
+<span class="fc" id="L1750">        facts[ 2 ] = new Fact( WorkflowManager.WF_WP_SAVE_FACT_PROPOSED_TEXT, proposedText );</span>
+<span class="fc" id="L1751">        facts[ 3 ] = new Fact( WorkflowManager.WF_WP_SAVE_FACT_CURRENT_TEXT, oldText);</span>
+<span class="fc" id="L1752">        facts[ 4 ] = new Fact( WorkflowManager.WF_WP_SAVE_FACT_IS_AUTHENTICATED, Boolean.valueOf( isAuthenticated ) );</span>
+<span class="fc bfc" id="L1753" title="All 2 branches covered.">        String rejectKey = isAuthenticated ? WorkflowManager.WF_WP_SAVE_REJECT_MESSAGE_KEY : null;</span>
+<span class="fc" id="L1754">        Workflow workflow = builder.buildApprovalWorkflow( submitter,</span>
+                                                           WorkflowManager.WF_WP_SAVE_APPROVER,
+                                                           prepTask,
+                                                           WorkflowManager.WF_WP_SAVE_DECISION_MESSAGE_KEY,
+                                                           facts,
+                                                           completionTask,
+                                                           rejectKey );
+<span class="fc" id="L1761">        m_workflowMgr.start( workflow );</span>
+
+        // Let callers know if the page-save requires approval
+<span class="fc bfc" id="L1764" title="All 2 branches covered.">        if ( workflow.getCurrentStep() instanceof Decision ) {</span>
+<span class="fc" id="L1765">            throw new DecisionRequiredException( &quot;The page contents must be approved before they become active.&quot; );</span>
+        }
+<span class="fc" id="L1767">    }</span>
+
+    /**
+     *  Returns the number of pages in this Wiki
+     *  @return The total number of pages.
+     */
+    public int getPageCount()
+    {
+<span class="nc" id="L1775">        return m_pageManager.getTotalPageCount();</span>
+    }
+
+    /**
+     *  Returns the provider name.
+     *  @return The full class name of the current page provider.
+     */
+
+    public String getCurrentProvider()
+    {
+<span class="nc" id="L1785">        return m_pageManager.getProvider().getClass().getName();</span>
+    }
+
+    /**
+     *  Return information about current provider.  This method just calls
+     *  the corresponding PageManager method, which in turn calls the
+     *  provider method.
+     *
+     *  @return A textual description of the current provider.
+     *  @since 1.6.4
+     */
+    public String getCurrentProviderInfo()
+    {
+<span class="nc" id="L1798">        return m_pageManager.getProviderDescription();</span>
+    }
+
+    /**
+     *  Returns a Collection of WikiPages, sorted in time
+     *  order of last change (i.e. first object is the most
+     *  recently changed).  This method also includes attachments.
+     *
+     *  @return Set of WikiPage objects.
+     */
+
+    // FIXME: Should really get a Date object and do proper comparisons. This is terribly wasteful.
+    public Set&lt; WikiPage &gt; getRecentChanges()
+    {
+        try {
+<span class="fc" id="L1813">            Collection&lt;WikiPage&gt;   pages = m_pageManager.getAllPages();</span>
+<span class="fc" id="L1814">            Collection&lt;Attachment&gt;  atts = m_attachmentManager.getAllAttachments();</span>
+
+<span class="fc" id="L1816">            TreeSet&lt;WikiPage&gt; sortedPages = new TreeSet&lt;&gt;( new PageTimeComparator() );</span>
+
+<span class="fc" id="L1818">            sortedPages.addAll( pages );</span>
+<span class="fc" id="L1819">            sortedPages.addAll( atts );</span>
+
+<span class="fc" id="L1821">            return sortedPages;</span>
+<span class="nc" id="L1822">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L1823">            log.error( &quot;Unable to fetch all pages: &quot;,e);</span>
+<span class="nc" id="L1824">            return null;</span>
+        }
+    }
+
+    /**
+     *  Finds the corresponding WikiPage object based on the page name.  It always finds
+     *  the latest version of a page.
+     *
+     *  @param pagereq The name of the page to look for.
+     *  @return A WikiPage object, or null, if the page by the name could not be found.
+     */
+
+    public WikiPage getPage( String pagereq )
+    {
+<span class="fc" id="L1838">        return getPage( pagereq, WikiProvider.LATEST_VERSION );</span>
+    }
+
+    /**
+     *  Finds the corresponding WikiPage object base on the page name and version.
+     *
+     *  @param pagereq The name of the page to look for.
+     *  @param version The version number to look for.  May be WikiProvider.LATEST_VERSION,
+     *  in which case it will look for the latest version (and this method then becomes
+     *  the equivalent of getPage(String).
+     *
+     *  @return A WikiPage object, or null, if the page could not be found; or if there
+     *  is no such version of the page.
+     *  @since 1.6.7.
+     */
+
+    public WikiPage getPage( String pagereq, int version )
+    {
+        try
+        {
+<span class="fc" id="L1858">            WikiPage p = m_pageManager.getPageInfo( pagereq, version );</span>
+
+<span class="fc bfc" id="L1860" title="All 2 branches covered.">            if( p == null )</span>
+            {
+<span class="fc" id="L1862">                p = m_attachmentManager.getAttachmentInfo( (WikiContext)null, pagereq );</span>
+            }
+
+<span class="fc" id="L1865">            return p;</span>
+        }
+<span class="nc" id="L1867">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L1869">            log.error( &quot;Unable to fetch page info&quot;,e);</span>
+<span class="nc" id="L1870">            return null;</span>
+        }
+    }
+
+
+    /**
+     *  Returns a Collection of WikiPages containing the version history of a page.
+     *
+     *  @param page Name of the page to look for
+     *  @return an ordered List of WikiPages, each corresponding to a different revision of the page.
+     */
+    public List&lt; ? extends WikiPage &gt; getVersionHistory( String page ) {
+<span class="fc" id="L1882">        List&lt; ? extends WikiPage &gt; c = null;</span>
+
+        try {
+<span class="fc" id="L1885">            c = m_pageManager.getVersionHistory( page );</span>
+
+<span class="pc bpc" id="L1887" title="1 of 2 branches missed.">            if( c == null ) {</span>
+<span class="nc" id="L1888">                c = m_attachmentManager.getVersionHistory( page );</span>
+            }
+<span class="nc" id="L1890">        } catch( ProviderException e ) {</span>
+<span class="nc" id="L1891">            log.error( &quot;FIXME&quot;, e );</span>
+<span class="fc" id="L1892">        }</span>
+
+<span class="fc" id="L1894">        return c;</span>
+    }
+
+    /**
+     *  Returns a diff of two versions of a page.
+     *  &lt;p&gt;
+     *  Note that the API was changed in 2.6 to provide a WikiContext object!
+     *
+     *  @param context The WikiContext of the page you wish to get a diff from
+     *  @param version1 Version number of the old page.  If WikiPageProvider.LATEST_VERSION (-1), then uses current page.
+     *  @param version2 Version number of the new page.  If WikiPageProvider.LATEST_VERSION (-1), then uses current page.
+     *
+     *  @return A HTML-ized difference between two pages.  If there is no difference, returns an empty string.
+     */
+    public String getDiff( WikiContext context, int version1, int version2 )
+    {
+<span class="nc" id="L1910">        String page = context.getPage().getName();</span>
+<span class="nc" id="L1911">        String page1 = getPureText( page, version1 );</span>
+<span class="nc" id="L1912">        String page2 = getPureText( page, version2 );</span>
+
+        // Kludge to make diffs for new pages to work this way.
+
+<span class="nc bnc" id="L1916" title="All 2 branches missed.">        if( version1 == WikiPageProvider.LATEST_VERSION )</span>
+        {
+<span class="nc" id="L1918">            page1 = &quot;&quot;;</span>
+        }
+
+<span class="nc" id="L1921">        String diff  = m_differenceManager.makeDiff( context, page1, page2 );</span>
+
+<span class="nc" id="L1923">        return diff;</span>
+    }
+
+    /**
+     *  Returns this object's ReferenceManager.
+     *  @return The current ReferenceManager instance.
+     *
+     *  @since 1.6.1
+     */
+    public ReferenceManager getReferenceManager()
+    {
+<span class="fc" id="L1934">        return m_referenceManager;</span>
+    }
+
+    /**
+     *  Returns the current rendering manager for this wiki application.
+     *
+     *  @since 2.3.27
+     * @return A RenderingManager object.
+     */
+    public RenderingManager getRenderingManager()
+    {
+<span class="fc" id="L1945">        return m_renderingManager;</span>
+    }
+
+    /**
+     *  Returns the current plugin manager.
+     *
+     *  In 2.10 the PluginManager will be returned instead of the generic
+     *
+     *  @since 1.6.1
+     *  @return The current PluginManager instance
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt; T extends PluginManager &gt; T getPluginManager()
+    {
+<span class="fc" id="L1959">        return (T)m_pluginManager;</span>
+    }
+
+    /**
+     *  Returns the current variable manager.
+     *  @return The current VariableManager.
+     */
+
+    public VariableManager getVariableManager()
+    {
+<span class="fc" id="L1969">        return m_variableManager;</span>
+    }
+
+    /**
+     *  Shortcut to getVariableManager().getValue(). However, this method does not
+     *  throw a NoSuchVariableException, but returns null in case the variable does
+     *  not exist.
+     *
+     *  @param context WikiContext to look the variable in
+     *  @param name Name of the variable to look for
+     *  @return Variable value, or null, if there is no such variable.
+     *  @since 2.2
+     */
+    public String getVariable( WikiContext context, String name ) {
+        try {
+<span class="fc" id="L1984">            return m_variableManager.getValue( context, name );</span>
+<span class="fc" id="L1985">        } catch( NoSuchVariableException e ) {</span>
+<span class="fc" id="L1986">            return null;</span>
+        }
+    }
+    
+    /**
+     *  Throws an exception if a property is not found.
+     *
+     *  @param props A set of properties to search the key in.
+     *  @param key   The key to look for.
+     *  @return The required property
+     *
+     *  @throws NoRequiredPropertyException If the search key is not in the property set.
+     *  @since 2.0.26 (on TextUtils, moved To WikiEngine on 2.11.0-M1)
+     */
+    public String getRequiredProperty( Properties props, String key ) throws NoRequiredPropertyException {
+<span class="fc" id="L2001">        String value = TextUtil.getStringProperty( props, key, null );</span>
+<span class="fc bfc" id="L2002" title="All 2 branches covered.">        if( value == null ) {</span>
+<span class="fc" id="L2003">            throw new NoRequiredPropertyException( &quot;Required property not found&quot;, key );</span>
+        }
+<span class="fc" id="L2005">        return value;</span>
+    }
+
+    /**
+     *  Returns the current PageManager which is responsible for storing
+     *  and managing WikiPages.
+     *
+     *  @return The current PageManager instance.
+     */
+    public PageManager getPageManager()
+    {
+<span class="fc" id="L2016">        return m_pageManager;</span>
+    }
+
+    /**
+     * Returns the CommandResolver for this wiki engine.
+     * @return the resolver
+     */
+    public CommandResolver getCommandResolver()
+    {
+<span class="fc" id="L2025">        return m_commandResolver;</span>
+    }
+
+    /**
+     *  Returns the current AttachmentManager, which is responsible for
+     *  storing and managing attachments.
+     *
+     *  @since 1.9.31.
+     *  @return The current AttachmentManager instance
+     */
+    public AttachmentManager getAttachmentManager()
+    {
+<span class="fc" id="L2037">        return m_attachmentManager;</span>
+    }
+
+    /**
+     *  Returns the currently used authorization manager.
+     *
+     *  @return The current AuthorizationManager instance
+     */
+    public AuthorizationManager getAuthorizationManager()
+    {
+<span class="fc" id="L2047">        return m_authorizationManager;</span>
+    }
+
+    /**
+     *  Returns the currently used authentication manager.
+     *
+     *  @return The current AuthenticationManager instance.
+     */
+    public AuthenticationManager getAuthenticationManager()
+    {
+<span class="fc" id="L2057">        return m_authenticationManager;</span>
+    }
+
+    /**
+     *  Returns the manager responsible for the filters.
+     *  @since 2.1.88
+     *  @return The current FilterManager instance
+     */
+    @SuppressWarnings(&quot;unchecked&quot;)
+    public &lt; T extends FilterManager &gt; T getFilterManager()
+    {
+<span class="fc" id="L2068">        return (T)m_filterManager;</span>
+    }
+
+    /**
+     *  Returns the manager responsible for searching the Wiki.
+     *  @since 2.2.21
+     *  @return The current SearchManager instance
+     */
+    public SearchManager getSearchManager()
+    {
+<span class="fc" id="L2078">        return m_searchManager;</span>
+    }
+
+    /**
+     *  Returns the progress manager we're using
+     *  @return A ProgressManager
+     *  @since 2.6
+     */
+    public ProgressManager getProgressManager()
+    {
+<span class="nc" id="L2088">        return m_progressManager;</span>
+    }
+
+    /**
+     *  Figure out to which page we are really going to.  Considers
+     *  special page names from the jspwiki.properties, and possible aliases.
+     *  This method delgates requests to
+     *  {@link org.apache.wiki.WikiContext#getRedirectURL()}.
+     *  @param context The Wiki Context in which the request is being made.
+     *  @return A complete URL to the new page to redirect to
+     *  @since 2.2
+     */
+
+    public String getRedirectURL( WikiContext context )
+    {
+<span class="nc" id="L2103">        return context.getRedirectURL();</span>
+    }
+
+    /**
+     *  Shortcut to create a WikiContext from a supplied HTTP request,
+     *  using a default wiki context.
+     *  @param request the HTTP request
+     *  @param requestContext the default context to use
+     *  @return a new WikiContext object.
+     *
+     *  @see org.apache.wiki.ui.CommandResolver
+     *  @see org.apache.wiki.ui.Command
+     *  @since 2.1.15.
+     */
+    // FIXME: We need to have a version which takes a fixed page
+    //        name as well, or check it elsewhere.
+    public WikiContext createContext( HttpServletRequest request,
+                                      String requestContext )
+    {
+<span class="pc bpc" id="L2122" title="1 of 2 branches missed.">        if( !m_isConfigured )</span>
+        {
+<span class="nc" id="L2124">            throw new InternalWikiException(&quot;WikiEngine has not been properly started.  It is likely that the configuration is faulty.  Please check all logs for the possible reason.&quot;);</span>
+        }
+
+        // Build the wiki context
+<span class="fc" id="L2128">        Command command = m_commandResolver.findCommand( request, requestContext );</span>
+<span class="fc" id="L2129">        return new WikiContext( this, request, command );</span>
+    }
+
+    /**
+     *  Deletes a page or an attachment completely, including all versions.  If the page
+     *  does not exist, does nothing.
+     *
+     * @param pageName The name of the page.
+     * @throws ProviderException If something goes wrong.
+     */
+    public void deletePage( String pageName )
+        throws ProviderException
+    {
+<span class="fc" id="L2142">        WikiPage p = getPage( pageName );</span>
+
+<span class="fc bfc" id="L2144" title="All 2 branches covered.">        if( p != null )</span>
+        {
+<span class="fc bfc" id="L2146" title="All 2 branches covered.">            if( p instanceof Attachment )</span>
+            {
+<span class="fc" id="L2148">                m_attachmentManager.deleteAttachment( (Attachment) p );</span>
+            }
+            else
+            {
+<span class="fc" id="L2152">                Collection&lt;String&gt; refTo = m_referenceManager.findRefersTo(pageName);</span>
+
+<span class="fc bfc" id="L2154" title="All 2 branches covered.">                if (m_attachmentManager.hasAttachments( p ))</span>
+                {
+<span class="fc" id="L2156">                    List&lt; Attachment &gt; attachments = m_attachmentManager.listAttachments( p );</span>
+<span class="fc bfc" id="L2157" title="All 2 branches covered.">                    for( Iterator&lt; Attachment &gt; atti = attachments.iterator(); atti.hasNext(); )</span>
+                    {
+<span class="fc" id="L2159">                        Attachment attachment = atti.next();</span>
+<span class="fc" id="L2160">                        refTo.remove(attachment.getName());</span>
+
+<span class="fc" id="L2162">                        m_attachmentManager.deleteAttachment( attachment );</span>
+<span class="fc" id="L2163">                    }</span>
+                }
+<span class="fc" id="L2165">                m_pageManager.deletePage( p );</span>
+<span class="fc" id="L2166">                firePageEvent( WikiPageEvent.PAGE_DELETED, pageName );</span>
+            }
+        }
+<span class="fc" id="L2169">    }</span>
+
+    /**
+     *  Deletes a specific version of a page or an attachment.
+     *
+     *  @param page The page object.
+     *  @throws ProviderException If something goes wrong.
+     */
+    public void deleteVersion( WikiPage page )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L2180" title="1 of 2 branches missed.">        if( page instanceof Attachment )</span>
+        {
+<span class="nc" id="L2182">            m_attachmentManager.deleteVersion( (Attachment) page );</span>
+        }
+        else
+        {
+<span class="fc" id="L2186">            m_pageManager.deleteVersion( page );</span>
+        }
+<span class="fc" id="L2188">    }</span>
+
+    /**
+     *  Returns the URL of the global RSS file.  May be null, if the
+     *  RSS file generation is not operational.
+     *  @since 1.7.10
+     *  @return The global RSS url
+     */
+    public String getGlobalRSSURL()
+    {
+<span class="nc bnc" id="L2198" title="All 4 branches missed.">        if( m_rssGenerator != null &amp;&amp; m_rssGenerator.isEnabled() )</span>
+        {
+<span class="nc" id="L2200">            return getBaseURL()+ &quot;/&quot; + m_rssFile;</span>
+        }
+
+<span class="nc" id="L2203">        return null;</span>
+    }
+
+    /**
+     *  Returns the root path.  The root path is where the WikiEngine is
+     *  located in the file system.
+     *
+     *  @since 2.2
+     *  @return A path to where the Wiki is installed in the local filesystem.
+     */
+    public String getRootPath()
+    {
+<span class="fc" id="L2215">        return m_rootPath;</span>
+    }
+
+    /**
+     * @since 2.2.6
+     * @return the URL constructor
+     */
+    public URLConstructor getURLConstructor()
+    {
+<span class="fc" id="L2224">        return m_urlConstructor;</span>
+    }
+
+    /**
+     * Returns the RSSGenerator. If the property &lt;code&gt;jspwiki.rss.generate&lt;/code&gt;
+     * has not been set to &lt;code&gt;true&lt;/code&gt;, this method will return &lt;code&gt;null&lt;/code&gt;,
+     * &lt;em&gt;and callers should check for this value.&lt;/em&gt;
+     * @since 2.1.165
+     * @return the RSS generator
+     */
+    public RSSGenerator getRSSGenerator()
+    {
+<span class="fc" id="L2236">        return m_rssGenerator;</span>
+    }
+
+    /**
+     * Renames, or moves, a wiki page. Can also alter referring wiki
+     * links to point to the renamed page.
+     *
+     * @param context           The context during which this rename takes
+     *                          place.
+     * @param renameFrom        Name of the source page.
+     * @param renameTo          Name of the destination page.
+     * @param changeReferrers   If true, then changes any referring links
+     *                          to point to the renamed page.
+     *
+     * @return The name of the page that the source was renamed to.
+     *
+     * @throws WikiException    In the case of an error, such as the destination
+     *                          page already existing.
+     */
+    public String renamePage( WikiContext context,
+                              String renameFrom,
+                              String renameTo,
+                              boolean changeReferrers)
+        throws WikiException
+    {
+<span class="fc" id="L2261">        String newPageName = m_pageRenamer.renamePage(context, renameFrom, renameTo, changeReferrers);</span>
+<span class="fc" id="L2262">        firePageRenameEvent(renameFrom, newPageName);</span>
+<span class="fc" id="L2263">        return newPageName;</span>
+    }
+
+    /**
+     *  Returns the PageRenamer employed by this WikiEngine.
+     *  @since 2.5.141
+     *  @return The current PageRenamer instance.
+     */
+    public PageRenamer getPageRenamer()
+    {
+<span class="nc" id="L2273">        return m_pageRenamer;</span>
+    }
+
+    /**
+     *  Returns the UserManager employed by this WikiEngine.
+     *  @since 2.3
+     *  @return The current UserManager instance.
+     */
+    public UserManager getUserManager()
+    {
+<span class="fc" id="L2283">        return m_userManager;</span>
+    }
+
+    /**
+     *  Returns the TasksManager employed by this WikiEngine.
+     *  @return The current TasksManager instance.
+     */
+    public TasksManager getTasksManager()
+    {
+<span class="fc" id="L2292">        return m_tasksManager;</span>
+    }
+
+    /**
+     *  Returns the GroupManager employed by this WikiEngine.
+     *  @since 2.3
+     *  @return The current GroupManager instance
+     */
+    public GroupManager getGroupManager()
+    {
+<span class="fc" id="L2302">        return m_groupManager;</span>
+    }
+
+    /**
+     *  Returns the current {@link AdminBeanManager}.
+     *
+     *  @return The current {@link AdminBeanManager}.
+     *  @since  2.6
+     */
+    public AdminBeanManager getAdminBeanManager() {
+<span class="nc" id="L2312">        return m_adminBeanManager;</span>
+    }
+
+    /**
+     *  Returns the AclManager employed by this WikiEngine.
+     *  The AclManager is lazily initialized.
+     *  &lt;p&gt;
+     *  The AclManager implementing class may be set by the
+     *  System property {@link #PROP_ACL_MANAGER_IMPL}.
+     *  &lt;/p&gt;
+     *
+     * @since 2.3
+     * @return The current AclManager.
+     */
+    public AclManager getAclManager()
+    {
+<span class="fc bfc" id="L2328" title="All 2 branches covered.">        if( m_aclManager == null )</span>
+        {
+            try
+            {
+<span class="fc" id="L2332">                String s = m_properties.getProperty( PROP_ACL_MANAGER_IMPL, ClassUtil.getMappedClass( AclManager.class.getName() ).getName() );</span>
+<span class="fc" id="L2333">                m_aclManager = ClassUtil.getMappedObject(s); // TODO: I am not sure whether this is the right call</span>
+<span class="fc" id="L2334">                m_aclManager.initialize( this, m_properties );</span>
+            }
+<span class="nc" id="L2336">            catch ( ReflectiveOperationException | IllegalArgumentException e )</span>
+            {
+<span class="nc" id="L2338">                log.fatal( &quot;unable to instantiate class for AclManager: &quot; + e.getMessage() );</span>
+<span class="nc" id="L2339">                throw new InternalWikiException( &quot;Cannot instantiate AclManager, please check logs.&quot;, e );</span>
+<span class="fc" id="L2340">            }</span>
+        }
+<span class="fc" id="L2342">        return m_aclManager;</span>
+    }
+
+    /**
+     *  Returns the DifferenceManager so that texts can be compared.
+     *  @return the difference manager
+     */
+    public DifferenceManager getDifferenceManager()
+    {
+<span class="nc" id="L2351">        return m_differenceManager;</span>
+    }
+
+    /**
+     *  Returns the current EditorManager instance.
+     *
+     *  @return The current EditorManager.
+     */
+    public EditorManager getEditorManager()
+    {
+<span class="fc" id="L2361">        return m_editorManager;</span>
+    }
+
+    /**
+     *  Returns the current i18n manager.
+     *
+     *  @return The current Intertan... Interante... Internatatializ... Whatever.
+     */
+    public InternationalizationManager getInternationalizationManager()
+    {
+<span class="fc" id="L2371">        return m_internationalizationManager;</span>
+    }
+
+    /**
+     * Registers a WikiEventListener with this instance.
+     * @param listener the event listener
+     */
+    public final synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="fc" id="L2380">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="fc" id="L2381">    }</span>
+
+    /**
+     * Un-registers a WikiEventListener with this instance.
+     * @param listener the event listener
+     */
+    public final synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L2389">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L2390">    }</span>
+
+    /**
+     * Fires a WikiEngineEvent to all registered listeners.
+     * @param type  the event type
+     */
+    protected final void fireEvent( int type )
+    {
+<span class="fc bfc" id="L2398" title="All 2 branches covered.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="fc" id="L2400">            WikiEventManager.fireEvent(this,new WikiEngineEvent(this,type));</span>
+        }
+<span class="fc" id="L2402">    }</span>
+
+    /**
+     * Fires a WikiPageEvent to all registered listeners.
+     * @param type  the event type
+     */
+    protected final void firePageEvent( int type, String pageName )
+    {
+<span class="pc bpc" id="L2410" title="1 of 2 branches missed.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="fc" id="L2412">            WikiEventManager.fireEvent(this,new WikiPageEvent(this,type,pageName));</span>
+        }
+<span class="fc" id="L2414">    }</span>
+
+    /**
+     * Fires a WikiPageRenameEvent to all registered listeners.
+     * @param oldName the former page name
+     * @param newName the new page name
+     */
+    protected final void firePageRenameEvent(String oldName, String newName )
+    {
+<span class="pc bpc" id="L2423" title="1 of 2 branches missed.">        if ( WikiEventManager.isListening(this) )</span>
+        {
+<span class="fc" id="L2425">            WikiEventManager.fireEvent(this,new WikiPageRenameEvent(this,oldName,newName));</span>
+        }
+<span class="fc" id="L2427">    }</span>
+
+    /**
+     * Adds an attribute to the engine for the duration of this engine.  The
+     * value is not persisted.
+     *
+     * @since 2.4.91
+     * @param key the attribute name
+     * @param value the value
+     */
+    public void setAttribute( String key, Object value )
+    {
+<span class="fc" id="L2439">        m_attributes.put( key, value );</span>
+<span class="fc" id="L2440">    }</span>
+
+    /**
+     *  Gets an attribute from the engine.
+     *
+     *  @param key the attribute name
+     *  @return the value
+     */
+    public Object getAttribute( String key )
+    {
+<span class="fc" id="L2450">        return m_attributes.get( key );</span>
+    }
+
+    /**
+     *  Removes an attribute.
+     *
+     *  @param key The key of the attribute to remove.
+     *  @return The previous attribute, if it existed.
+     */
+    public Object removeAttribute( String key )
+    {
+<span class="nc" id="L2461">        return m_attributes.remove( key );</span>
+    }
+
+    /**
+     *  Returns a WatchDog for current thread.
+     *
+     *  @return The current thread WatchDog.
+     *  @since 2.4.92
+     */
+    public WatchDog getCurrentWatchDog()
+    {
+<span class="fc" id="L2472">        return WatchDog.getCurrentWatchDog(this);</span>
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

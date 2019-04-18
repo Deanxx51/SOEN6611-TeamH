@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>UserDatabaseLoginModule.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.auth.login</a> &gt; <span class="el_source">UserDatabaseLoginModule.java</span></div><h1>UserDatabaseLoginModule.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.    
+ */
+package org.apache.wiki.auth.login;
+
+import java.io.IOException;
+
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.NameCallback;
+import javax.security.auth.callback.PasswordCallback;
+import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.FailedLoginException;
+import javax.security.auth.login.LoginException;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.auth.NoSuchPrincipalException;
+import org.apache.wiki.auth.WikiPrincipal;
+import org.apache.wiki.auth.user.UserDatabase;
+import org.apache.wiki.auth.user.UserProfile;
+
+/**
+ * &lt;p&gt;
+ * Logs in a user based on a username, password, and static password file
+ * location. This module must be used with a CallbackHandler (such as
+ * {@link WikiCallbackHandler}) that supports the following Callback types:
+ * &lt;/p&gt;
+ * &lt;ol&gt;
+ * &lt;li&gt;{@link javax.security.auth.callback.NameCallback}- supplies the
+ * username&lt;/li&gt;
+ * &lt;li&gt;{@link javax.security.auth.callback.PasswordCallback}- supplies the
+ * password&lt;/li&gt;
+ * &lt;li&gt;{@link org.apache.wiki.auth.login.UserDatabaseCallback}- supplies the
+ * {@link org.apache.wiki.auth.user.UserDatabase}&lt;/li&gt;
+ * &lt;/ol&gt;
+ * &lt;p&gt;
+ * After authentication, a Principals based on the login name will be created
+ * and associated with the Subject.
+ * &lt;/p&gt;
+ * @since 2.3
+ */
+<span class="fc" id="L57">public class UserDatabaseLoginModule extends AbstractLoginModule</span>
+{
+
+<span class="fc" id="L60">    private static final Logger log = Logger.getLogger( UserDatabaseLoginModule.class );</span>
+
+    /**
+     * @see javax.security.auth.spi.LoginModule#login()
+     * 
+     * {@inheritDoc}
+     */
+    public boolean login() throws LoginException
+    {
+<span class="fc" id="L69">        UserDatabaseCallback ucb = new UserDatabaseCallback();</span>
+<span class="fc" id="L70">        NameCallback ncb = new NameCallback( &quot;User name&quot; );</span>
+<span class="fc" id="L71">        PasswordCallback pcb = new PasswordCallback( &quot;Password&quot;, false );</span>
+<span class="fc" id="L72">        Callback[] callbacks = new Callback[]</span>
+        { ucb, ncb, pcb };
+        try
+        {
+<span class="fc" id="L76">            m_handler.handle( callbacks );</span>
+<span class="fc" id="L77">            UserDatabase db = ucb.getUserDatabase();</span>
+<span class="fc" id="L78">            String username = ncb.getName();</span>
+<span class="fc" id="L79">            String password = new String( pcb.getPassword() );</span>
+
+            // Look up the user and compare the password hash
+<span class="pc bpc" id="L82" title="1 of 2 branches missed.">            if ( db == null )</span>
+            {
+<span class="nc" id="L84">                throw new FailedLoginException( &quot;No user database: check the callback handler code!&quot; );</span>
+            }
+<span class="fc" id="L86">            UserProfile profile = db.findByLoginName( username );</span>
+<span class="fc" id="L87">            String storedPassword = profile.getPassword();</span>
+<span class="pc bpc" id="L88" title="2 of 4 branches missed.">            if ( storedPassword != null &amp;&amp; db.validatePassword( username, password ) )</span>
+            {
+<span class="pc bpc" id="L90" title="1 of 2 branches missed.">                if ( log.isDebugEnabled() )</span>
+                {
+<span class="nc" id="L92">                    log.debug( &quot;Logged in user database user &quot; + username );</span>
+                }
+
+                // If login succeeds, commit these principals/roles
+<span class="fc" id="L96">                m_principals.add( new WikiPrincipal( username,  WikiPrincipal.LOGIN_NAME ) );</span>
+
+<span class="fc" id="L98">                return true;</span>
+            }
+<span class="nc" id="L100">            throw new FailedLoginException( &quot;The username or password is incorrect.&quot; );</span>
+        }
+<span class="nc" id="L102">        catch( IOException e )</span>
+        {
+<span class="nc" id="L104">            String message = &quot;IO exception; disallowing login.&quot;;</span>
+<span class="nc" id="L105">            log.error( message, e );</span>
+<span class="nc" id="L106">            throw new LoginException( message );</span>
+        }
+<span class="nc" id="L108">        catch( UnsupportedCallbackException e )</span>
+        {
+<span class="nc" id="L110">            String message = &quot;Unable to handle callback; disallowing login.&quot;;</span>
+<span class="nc" id="L111">            log.error( message, e );</span>
+<span class="nc" id="L112">            throw new LoginException( message );</span>
+        }
+<span class="fc" id="L114">        catch( NoSuchPrincipalException e )</span>
+        {
+<span class="fc" id="L116">            throw new FailedLoginException( &quot;The username or password is incorrect.&quot; );</span>
+        }
+    }
+
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>WikiBodyTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">WikiBodyTag.java</span></div><h1>WikiBodyTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspException;
+import javax.servlet.jsp.PageContext;
+import javax.servlet.jsp.tagext.BodyTagSupport;
+import javax.servlet.jsp.tagext.TryCatchFinally;
+
+import org.apache.log4j.Logger;
+
+import org.apache.wiki.WikiContext;
+
+
+/**
+ *  This is a class that provides the same services as the WikiTagBase, but this time it
+ *   works for the BodyTagSupport base class.
+ */
+<span class="nc" id="L37">public abstract class WikiBodyTag extends BodyTagSupport implements TryCatchFinally {</span>
+
+	private static final long serialVersionUID = -6732266865112847897L;
+	protected WikiContext m_wikiContext;
+<span class="nc" id="L41">    private static final Logger log = Logger.getLogger( WikiBodyTag.class );</span>
+
+    public int doStartTag() throws JspException
+    {
+        try
+        {
+<span class="nc" id="L47">            m_wikiContext = (WikiContext) pageContext.getAttribute( WikiTagBase.ATTR_CONTEXT,</span>
+                                                                    PageContext.REQUEST_SCOPE );
+
+<span class="nc bnc" id="L50" title="All 2 branches missed.">            if( m_wikiContext == null )</span>
+            {
+<span class="nc" id="L52">                throw new JspException(&quot;WikiContext may not be NULL - serious internal problem!&quot;);</span>
+            }
+
+<span class="nc" id="L55">            return doWikiStartTag();</span>
+        }
+<span class="nc" id="L57">        catch( Exception e )</span>
+        {
+<span class="nc" id="L59">            log.error( &quot;Tag failed&quot;, e );</span>
+<span class="nc" id="L60">            throw new JspException( &quot;Tag failed, check logs: &quot;+e.getMessage() );</span>
+        }
+    }
+
+    /**
+     * A local stub for doing tags.  This is just called after the local variables
+     * have been set.
+     * @return As doStartTag()
+     * @throws JspException
+     * @throws IOException
+     */
+    public abstract int doWikiStartTag() throws JspException, IOException;
+
+    public void doCatch(Throwable arg0) throws Throwable
+    {
+<span class="nc" id="L75">    }</span>
+
+    public void doFinally()
+    {
+<span class="nc" id="L79">        m_wikiContext = null;</span>
+<span class="nc" id="L80">    }  </span>
+    
+    
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

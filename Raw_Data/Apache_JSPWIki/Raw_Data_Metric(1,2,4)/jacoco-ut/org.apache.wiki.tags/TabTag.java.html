@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>TabTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">TabTag.java</span></div><h1>TabTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import javax.servlet.jsp.JspTagException;
+
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Generates single tabbed page layout.
+ *  Works together with the tabbedSection javascript.  Note that if you do not
+ *  specify an url, the body contents of the tag are loaded by the tag itself.
+ *
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;id - ID for this tab. (mandatory)
+ *    &lt;LI&gt;title - Title of this tab. (mandatory)
+ *    &lt;LI&gt;accesskey - Single char usable as quick accesskey (alt- or ctrl-) (optional)
+ *    &lt;li&gt;url - If you &lt;i&gt;don't&lt;/i&gt; want to create a Javascript-enabled tag, you can use this
+ *              to make the tab look just the usual tag, but instead, it will actually link
+ *              to that page.  This can be useful in certain cases where you have something
+ *              that you want to look like a part of a tag, but for example, due to it being
+ *              very big in size, don't want to include it as a part of the page content
+ *              every time.
+ *  &lt;/UL&gt;
+ *
+ *  @since v2.3.63
+ */
+
+<span class="nc" id="L49">public class TabTag extends WikiTagBase</span>
+{
+    private static final long serialVersionUID = -8534125226484616489L;
+    private String m_accesskey;
+    private String m_tabTitle;
+    private String m_url;
+
+    /**
+     * {@inheritDoc}
+     */
+    public void doFinally()
+    {
+<span class="nc" id="L61">        super.doFinally();</span>
+
+<span class="nc" id="L63">        m_accesskey = null;</span>
+<span class="nc" id="L64">        m_tabTitle  = null;</span>
+<span class="nc" id="L65">        m_url       = null;</span>
+<span class="nc" id="L66">    }</span>
+
+    /**
+     * Sets the tab title.
+     * @param aTabTitle the tab title
+     */
+    public void setTitle(String aTabTitle)
+    {
+<span class="nc" id="L74">        m_tabTitle = TextUtil.replaceEntities( aTabTitle );</span>
+<span class="nc" id="L75">    }</span>
+
+    /**
+     * Sets the tab access key.
+     * @param anAccesskey the access key
+     */
+    public void setAccesskey(String anAccesskey)
+    {
+<span class="nc" id="L83">        m_accesskey = TextUtil.replaceEntities( anAccesskey ); //take only the first char</span>
+<span class="nc" id="L84">    }</span>
+
+    /**
+     * Sets the tab URL.
+     * @param url the URL
+     */
+    public void setUrl( String url )
+    {
+<span class="nc" id="L92">        m_url = TextUtil.replaceEntities( url );</span>
+<span class="nc" id="L93">    }</span>
+
+    // insert &lt;u&gt; ..accesskey.. &lt;/u&gt; in title
+    private boolean handleAccesskey()
+    {
+<span class="nc bnc" id="L98" title="All 4 branches missed.">        if( (m_tabTitle == null) || (m_accesskey == null) ) return false;</span>
+
+<span class="nc" id="L100">        int pos = m_tabTitle.toLowerCase().indexOf( m_accesskey.toLowerCase() );</span>
+<span class="nc bnc" id="L101" title="All 2 branches missed.">        if( pos &gt; -1 )</span>
+        {
+<span class="nc" id="L103">            m_tabTitle = m_tabTitle.substring( 0, pos ) + &quot;&lt;span class='accesskey'&gt;&quot;</span>
+<span class="nc" id="L104">                       + m_tabTitle.charAt( pos ) + &quot;&lt;/span&gt;&quot; + m_tabTitle.substring( pos+1 );</span>
+        }
+<span class="nc" id="L106">        return true;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public int doWikiStartTag() throws JspTagException
+    {
+<span class="nc" id="L114">        TabbedSectionTag parent=(TabbedSectionTag)findAncestorWithClass( this, TabbedSectionTag.class );</span>
+
+        //
+        //  Sanity checks
+        //
+<span class="nc bnc" id="L119" title="All 2 branches missed.">        if( getId() == null )</span>
+        {
+<span class="nc" id="L121">            throw new JspTagException(&quot;Tab Tag without \&quot;id\&quot; attribute&quot;);</span>
+        }
+<span class="nc bnc" id="L123" title="All 2 branches missed.">        if( m_tabTitle == null )</span>
+        {
+<span class="nc" id="L125">            throw new JspTagException(&quot;Tab Tag without \&quot;tabTitle\&quot; attribute&quot;);</span>
+        }
+<span class="nc bnc" id="L127" title="All 2 branches missed.">        if( parent == null )</span>
+        {
+<span class="nc" id="L129">            throw new JspTagException(&quot;Tab Tag without parent \&quot;TabbedSection\&quot; Tag&quot;);</span>
+        }
+
+<span class="nc bnc" id="L132" title="All 2 branches missed.">        if( !parent.isStateGenerateTabBody() ) return SKIP_BODY;</span>
+
+<span class="nc" id="L134">        StringBuilder sb = new StringBuilder(32);</span>
+
+<span class="nc" id="L136">        sb.append( &quot;&lt;div id=\&quot;&quot;+ getId() + &quot;\&quot;&quot; );</span>
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if( !parent.validateDefaultTab( getId()) )</span>
+        {
+<span class="nc" id="L140">            sb.append( &quot; class=\&quot;hidetab\&quot;&quot; );</span>
+        }
+<span class="nc" id="L142">        sb.append( &quot; &gt;\n&quot; );</span>
+
+        try
+        {
+<span class="nc" id="L146">            pageContext.getOut().write( sb.toString() );</span>
+        }
+<span class="nc" id="L148">        catch( java.io.IOException e )</span>
+        {
+<span class="nc" id="L150">            throw new JspTagException( &quot;IO Error: &quot; + e.getMessage() );</span>
+<span class="nc" id="L151">        }</span>
+
+<span class="nc" id="L153">        return EVAL_BODY_INCLUDE;</span>
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    public int doEndTag() throws JspTagException
+    {
+<span class="nc" id="L161">        TabbedSectionTag parent=(TabbedSectionTag)findAncestorWithClass( this, TabbedSectionTag.class );</span>
+
+<span class="nc" id="L163">        StringBuilder sb = new StringBuilder();</span>
+
+<span class="nc bnc" id="L165" title="All 2 branches missed.">        if( parent.isStateFindDefaultTab() )</span>
+        {
+            //inform the parent of each tab
+<span class="nc" id="L168">            parent.validateDefaultTab( getId() );</span>
+        }
+<span class="nc bnc" id="L170" title="All 2 branches missed.">        else if( parent.isStateGenerateTabBody() )</span>
+        {
+<span class="nc" id="L172">            sb.append( &quot;&lt;/div&gt;\n&quot; );</span>
+        }
+<span class="nc bnc" id="L174" title="All 2 branches missed.">        else if( parent.isStateGenerateTabMenu() )</span>
+        {
+<span class="nc" id="L176">            sb.append( &quot;&lt;a&quot; );</span>
+
+<span class="nc bnc" id="L178" title="All 2 branches missed.">            if( parent.validateDefaultTab( getId() ) )</span>
+            {
+<span class="nc" id="L180">                sb.append( &quot; class=\&quot;activetab\&quot;&quot; );</span>
+            }
+
+<span class="nc" id="L183">            sb.append( &quot; id=\&quot;menu-&quot; + getId() + &quot;\&quot;&quot; );</span>
+
+<span class="nc bnc" id="L185" title="All 2 branches missed.">            if( m_url != null )</span>
+            {
+<span class="nc" id="L187">                sb.append( &quot; href='&quot;+m_url+&quot;'&quot; );</span>
+            }
+
+<span class="nc bnc" id="L190" title="All 2 branches missed.">            if( handleAccesskey() )</span>
+            {
+<span class="nc" id="L192">                sb.append( &quot; accesskey=\&quot;&quot; + m_accesskey + &quot;\&quot;&quot; );</span>
+            }
+
+<span class="nc" id="L195">            sb.append( &quot; &gt;&quot; );</span>
+<span class="nc" id="L196">            sb.append( m_tabTitle );</span>
+<span class="nc" id="L197">            sb.append( &quot;&lt;/a&gt;&quot; );</span>
+        }
+
+        try
+        {
+<span class="nc" id="L202">            pageContext.getOut().write( sb.toString() );</span>
+        }
+<span class="nc" id="L204">        catch( IOException e )</span>
+        {
+<span class="nc" id="L206">            throw new JspTagException( &quot;IO Error: &quot; + e.getMessage() );</span>
+<span class="nc" id="L207">        }</span>
+
+<span class="nc" id="L209">        return EVAL_PAGE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

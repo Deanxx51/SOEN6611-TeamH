@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DiffLinkTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">DiffLinkTag.java</span></div><h1>DiffLinkTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+import javax.servlet.jsp.JspWriter;
+
+import org.apache.wiki.*;
+
+/**
+ *  Writes a diff link.  Body of the link becomes the link text.
+ *  &lt;P&gt;&lt;B&gt;Attributes&lt;/B&gt;&lt;/P&gt;
+ *  &lt;UL&gt;
+ *    &lt;LI&gt;page - Page name to refer to.  Default is the current page.&lt;/LI&gt;
+ *    &lt;LI&gt;version - The older of these versions.  May be an integer to
+ *        signify a version number, or the text &quot;latest&quot; to signify the latest version.
+ *        If not specified, will default to &quot;latest&quot;.  May also be &quot;previous&quot; to signify
+ *        a version prior to this particular version.&lt;/LI&gt;
+ *    &lt;LI&gt;newVersion - The newer of these versions.  Can also be &quot;latest&quot;, or &quot;previous&quot;.  Defaults to &quot;latest&quot;.&lt;/LI&gt;
+ *  &lt;/UL&gt;
+ *
+ *  If the page does not exist, this tag will fail silently, and not evaluate
+ *  its body contents.
+ *
+ *  @since 2.0
+ */
+<span class="nc" id="L43">public class DiffLinkTag</span>
+    extends WikiLinkTag
+{
+    private static final long serialVersionUID = 0L;
+    
+    public static final String VER_LATEST   = &quot;latest&quot;;
+    public static final String VER_PREVIOUS = &quot;previous&quot;;
+    public static final String VER_CURRENT  = &quot;current&quot;;
+
+<span class="nc" id="L52">    private String m_version    = VER_LATEST;</span>
+<span class="nc" id="L53">    private String m_newVersion = VER_LATEST;</span>
+
+    public void initTag()
+    {
+<span class="nc" id="L57">        super.initTag();</span>
+<span class="nc" id="L58">        m_version = m_newVersion = VER_LATEST;</span>
+<span class="nc" id="L59">    }</span>
+
+    public final String getVersion()
+    {
+<span class="nc" id="L63">        return m_version;</span>
+    }
+
+    public void setVersion( String arg )
+    {
+<span class="nc" id="L68">        m_version = arg;</span>
+<span class="nc" id="L69">    }</span>
+
+    public final String getNewVersion()
+    {
+<span class="nc" id="L73">        return m_newVersion;</span>
+    }
+
+    public void setNewVersion( String arg )
+    {
+<span class="nc" id="L78">        m_newVersion = arg;</span>
+<span class="nc" id="L79">    }</span>
+
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc" id="L84">        WikiEngine engine   = m_wikiContext.getEngine();</span>
+<span class="nc" id="L85">        String     pageName = m_pageName;</span>
+
+<span class="nc bnc" id="L87" title="All 2 branches missed.">        if( m_pageName == null )</span>
+        {
+<span class="nc bnc" id="L89" title="All 2 branches missed.">            if( m_wikiContext.getPage() != null )</span>
+            {
+<span class="nc" id="L91">                pageName = m_wikiContext.getPage().getName();</span>
+            }
+            else
+            {
+<span class="nc" id="L95">                return SKIP_BODY;</span>
+            }
+        }
+
+<span class="nc" id="L99">        JspWriter out = pageContext.getOut();</span>
+
+<span class="nc" id="L101">        int r1 = 0;</span>
+<span class="nc" id="L102">        int r2 = 0;</span>
+
+        //
+        //  In case the page does not exist, we fail silently.
+        //
+<span class="nc bnc" id="L107" title="All 2 branches missed.">        if(!engine.pageExists(pageName))</span>
+        {
+<span class="nc" id="L109">            return SKIP_BODY;</span>
+        }
+
+<span class="nc bnc" id="L112" title="All 2 branches missed.">        if( VER_LATEST.equals(getVersion()) )</span>
+        {
+<span class="nc" id="L114">            WikiPage latest = engine.getPage( pageName, </span>
+                                              WikiProvider.LATEST_VERSION );
+
+<span class="nc bnc" id="L117" title="All 2 branches missed.">            if( latest == null )</span>
+            {
+                // This may occur if matchEnglishPlurals is on, and we access the wrong page name
+<span class="nc" id="L120">                return SKIP_BODY;</span>
+            }
+<span class="nc" id="L122">            r1 = latest.getVersion();</span>
+<span class="nc" id="L123">        }</span>
+<span class="nc bnc" id="L124" title="All 2 branches missed.">        else if( VER_PREVIOUS.equals(getVersion()) )</span>
+        {
+<span class="nc" id="L126">            r1 = m_wikiContext.getPage().getVersion() - 1;</span>
+<span class="nc bnc" id="L127" title="All 2 branches missed.">            r1 = (r1 &lt; 1 ) ? 1 : r1;</span>
+        }
+<span class="nc bnc" id="L129" title="All 2 branches missed.">        else if( VER_CURRENT.equals(getVersion()) )</span>
+        {
+<span class="nc" id="L131">            r1 = m_wikiContext.getPage().getVersion();</span>
+        }
+        else
+        {
+<span class="nc" id="L135">            r1 = Integer.parseInt( getVersion() );</span>
+        }
+
+<span class="nc bnc" id="L138" title="All 2 branches missed.">        if( VER_LATEST.equals(getNewVersion()) )</span>
+        {
+<span class="nc" id="L140">            WikiPage latest = engine.getPage( pageName,</span>
+                                              WikiProvider.LATEST_VERSION );
+
+<span class="nc" id="L143">            r2 = latest.getVersion();</span>
+<span class="nc" id="L144">        }</span>
+<span class="nc bnc" id="L145" title="All 2 branches missed.">        else if( VER_PREVIOUS.equals(getNewVersion()) )</span>
+        {
+<span class="nc" id="L147">            r2 = m_wikiContext.getPage().getVersion() - 1;</span>
+<span class="nc bnc" id="L148" title="All 2 branches missed.">            r2 = (r2 &lt; 1 ) ? 1 : r2;</span>
+        }
+<span class="nc bnc" id="L150" title="All 2 branches missed.">        else if( VER_CURRENT.equals(getNewVersion()) )</span>
+        {
+<span class="nc" id="L152">            r2 = m_wikiContext.getPage().getVersion();</span>
+        }
+        else
+        {
+<span class="nc" id="L156">            r2 = Integer.parseInt( getNewVersion() );</span>
+        }
+
+<span class="nc" id="L159">        String url = m_wikiContext.getURL( WikiContext.DIFF,</span>
+                                           pageName,
+                                           &quot;r1=&quot;+r1+&quot;&amp;amp;r2=&quot;+r2 );
+<span class="nc bnc" id="L162" title="All 3 branches missed.">        switch( m_format )</span>
+        {
+          case ANCHOR:
+<span class="nc" id="L165">            out.print(&quot;&lt;a href=\&quot;&quot;+url+&quot;\&quot;&gt;&quot;);</span>
+
+<span class="nc" id="L167">            break;</span>
+
+          case URL:
+<span class="nc" id="L170">            out.print( url );</span>
+            break;
+        }
+
+<span class="nc" id="L174">        return EVAL_BODY_INCLUDE;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

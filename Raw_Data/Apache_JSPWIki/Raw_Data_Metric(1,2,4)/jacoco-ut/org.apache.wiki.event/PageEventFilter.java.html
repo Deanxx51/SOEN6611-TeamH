@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>PageEventFilter.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.event</a> &gt; <span class="el_source">PageEventFilter.java</span></div><h1>PageEventFilter.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+
+package org.apache.wiki.event;
+
+import org.apache.wiki.api.filters.BasicPageFilter;
+import org.apache.wiki.api.exceptions.FilterException;
+
+import org.apache.wiki.WikiContext;
+import java.util.Properties;
+
+/**
+  * Fires WikiPageEvents for page events.
+  * &lt;p&gt;
+  * Adding a PageEventFilter to the FilterManager will automatically
+  * attach an event delegate with the WikiEventManager to provide for
+  * firing and listener management. All that remains is then adding
+  * the listener to the filter via the WikiEventManager. This is quite
+  * simple:
+  * &lt;/p&gt;
+  * &lt;pre&gt;
+  *    PageEventFilter filter = new PageEventFilter();
+  *    engine.getFilterManager().addPageFilter(filter,5000);
+  *    // attach listener to filter
+  *    WikiEventManager.addWikiEventListener(filter,listener);
+  * &lt;/pre&gt;
+  * &lt;p&gt;
+  * This class provides convenience methods for adding and removing
+  * WikiEventListeners.
+  * &lt;/p&gt;
+  *
+  * @see org.apache.wiki.event.WikiEventManager
+  */
+<span class="nc" id="L50">public class PageEventFilter extends BasicPageFilter</span>
+{
+
+    /**
+      * Called whenever a new PageFilter is instantiated and reset.
+      */
+    public void initialize( Properties properties )
+            throws FilterException
+    {
+        //
+<span class="nc" id="L60">    }</span>
+
+    /**
+      * This method is called whenever a page has been loaded from the provider,
+      * but not yet been sent through the TranslatorReader.  Note that you cannot
+      * do HTML translation here, because TranslatorReader is likely to escape it.
+      *
+      * @param wikiContext The current wikicontext.
+      * @param content     WikiMarkup.
+      */
+    public String preTranslate( WikiContext wikiContext, String content )
+            throws FilterException
+    {
+<span class="nc" id="L73">        fireEvent( WikiPageEvent.PRE_TRANSLATE, wikiContext );</span>
+<span class="nc" id="L74">        return content;</span>
+    }
+
+
+    /**
+      * This method is called after a page has been fed through the TranslatorReader,
+      * so anything you are seeing here is translated content.  If you want to
+      * do any of your own WikiMarkup2HTML translation, do it here.
+      */
+    public String postTranslate( WikiContext wikiContext, String htmlContent )
+            throws FilterException
+    {
+<span class="nc" id="L86">        fireEvent( WikiPageEvent.POST_TRANSLATE, wikiContext );</span>
+<span class="nc" id="L87">        return htmlContent;</span>
+    }
+
+
+    /**
+      * This method is called before the page has been saved to the PageProvider.
+      */
+    public String preSave( WikiContext wikiContext, String content )
+            throws FilterException
+    {
+<span class="nc" id="L97">        fireEvent( WikiPageEvent.PRE_SAVE, wikiContext );</span>
+<span class="nc" id="L98">        return content;</span>
+    }
+
+
+    /**
+      * This method is called after the page has been successfully saved.
+      * If the saving fails for any reason, then this method will not
+      * be called.
+      * &lt;p&gt;
+      * Since the result is discarded from this method, this is only useful
+      * for things like counters, etc.
+      */
+    public void postSave( WikiContext wikiContext, String content )
+            throws FilterException
+    {
+<span class="nc" id="L113">        fireEvent( WikiPageEvent.POST_SAVE, wikiContext );</span>
+<span class="nc" id="L114">    }</span>
+
+
+    // events processing .......................................................
+
+
+    /**
+     *  Registers a WikiEventListener with this instance.
+     *  This is a convenience method.
+     *
+     * @param listener the event listener
+     */
+    public final synchronized void addWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L128">        WikiEventManager.addWikiEventListener( this, listener );</span>
+<span class="nc" id="L129">    }</span>
+
+    /**
+     *  Un-registers a WikiEventListener with this instance.
+     *  This is a convenience method.
+     *
+     * @param listener the event listener
+     */
+    public final synchronized void removeWikiEventListener( WikiEventListener listener )
+    {
+<span class="nc" id="L139">        WikiEventManager.removeWikiEventListener( this, listener );</span>
+<span class="nc" id="L140">    }</span>
+
+    /**
+     *  Fires a WikiPageEvent of the provided type and page name
+     *  to all registered listeners. Only &lt;tt&gt;PAGE_LOCK&lt;/tt&gt; and
+     *  &lt;tt&gt;PAGE_UNLOCK&lt;/tt&gt; event types will fire an event; other
+     *  event types are ignored.
+     *
+     * @see org.apache.wiki.event.WikiPageEvent
+     * @param type      the WikiPageEvent type to be fired.
+     * @param context   the WikiContext of the event.
+     */
+    protected final void fireEvent( int type, WikiContext context )
+    {
+<span class="nc bnc" id="L154" title="All 4 branches missed.">        if ( WikiEventManager.isListening(this) &amp;&amp; WikiPageEvent.isValidType(type) )</span>
+        {
+<span class="nc" id="L156">            WikiPageEvent event = new WikiPageEvent(</span>
+<span class="nc" id="L157">                    context.getEngine(),</span>
+                    type,
+<span class="nc" id="L159">                    context.getPage().getName());</span>
+<span class="nc" id="L160">            WikiEventManager.fireEvent(this,event);</span>
+        }
+<span class="nc" id="L162">    }</span>
+
+} // end org.apache.wiki.event.PageEventFilter
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

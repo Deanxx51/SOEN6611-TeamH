@@ -1,0 +1,681 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>AttachmentManager.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.attachment</a> &gt; <span class="el_source">AttachmentManager.java</span></div><h1>AttachmentManager.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.
+ */
+package org.apache.wiki.attachment;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.List;
+import java.util.Properties;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.WikiProvider;
+import org.apache.wiki.api.exceptions.NoRequiredPropertyException;
+import org.apache.wiki.api.exceptions.ProviderException;
+import org.apache.wiki.api.exceptions.WikiException;
+import org.apache.wiki.pages.PageManager;
+import org.apache.wiki.parser.MarkupParser;
+import org.apache.wiki.providers.WikiAttachmentProvider;
+import org.apache.wiki.util.ClassUtil;
+
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
+
+
+/**
+ *  Provides facilities for handling attachments.  All attachment handling goes through this class.
+ *  &lt;p&gt;
+ *  The AttachmentManager provides a facade towards the current WikiAttachmentProvider that is in use.
+ *  It is created by the WikiEngine as a singleton object, and can be requested through the WikiEngine.
+ *
+ *  @since 1.9.28
+ */
+public class AttachmentManager
+{
+    /**
+     *  The property name for defining the attachment provider class name.
+     */
+    public static final String  PROP_PROVIDER = &quot;jspwiki.attachmentProvider&quot;;
+
+    /**
+     *  The maximum size of attachments that can be uploaded.
+     */
+    public static final String  PROP_MAXSIZE  = &quot;jspwiki.attachment.maxsize&quot;;
+
+    /**
+     *  A space-separated list of attachment types which can be uploaded
+     */
+    public static final String PROP_ALLOWEDEXTENSIONS    = &quot;jspwiki.attachment.allowed&quot;;
+
+    /**
+     *  A space-separated list of attachment types which cannot be uploaded
+     */
+    public static final String PROP_FORDBIDDENEXTENSIONS = &quot;jspwiki.attachment.forbidden&quot;;
+
+<span class="fc" id="L82">    static Logger log = Logger.getLogger( AttachmentManager.class );</span>
+    private WikiAttachmentProvider m_provider;
+    private WikiEngine             m_engine;
+<span class="fc" id="L85">    private CacheManager m_cacheManager = CacheManager.getInstance();</span>
+
+    private Cache m_dynamicAttachments;
+    /** Name of the page cache. */
+    public static final String CACHE_NAME = &quot;jspwiki.dynamicAttachmentCache&quot;;
+
+    /** The capacity of the cache, if you want something else, tweak ehcache.xml. */
+    public static final int   DEFAULT_CACHECAPACITY   = 1000;
+
+    /**
+     *  Creates a new AttachmentManager.  Note that creation will never fail,
+     *  but it's quite likely that attachments do not function.
+     *  &lt;p&gt;
+     *  &lt;b&gt;DO NOT CREATE&lt;/b&gt; an AttachmentManager on your own, unless you really
+     *  know what you're doing.  Just use WikiEngine.getAttachmentManager() if
+     *  you're making a module for JSPWiki.
+     *
+     *  @param engine The wikiengine that owns this attachment manager.
+     *  @param props  A list of properties from which the AttachmentManager will seek
+     *  its configuration.  Typically this is the &quot;jspwiki.properties&quot;.
+     */
+
+    // FIXME: Perhaps this should fail somehow.
+    public AttachmentManager( WikiEngine engine, Properties props )
+<span class="fc" id="L109">    {</span>
+        String classname;
+
+<span class="fc" id="L112">        m_engine = engine;</span>
+
+
+        //
+        //  If user wants to use a cache, then we'll use the CachingProvider.
+        //
+<span class="fc" id="L118">        boolean useCache = &quot;true&quot;.equals(props.getProperty( PageManager.PROP_USECACHE ));</span>
+
+<span class="fc bfc" id="L120" title="All 2 branches covered.">        if( useCache )</span>
+        {
+<span class="fc" id="L122">            classname = &quot;org.apache.wiki.providers.CachingAttachmentProvider&quot;;</span>
+        }
+        else
+        {
+<span class="fc" id="L126">            classname = props.getProperty( PROP_PROVIDER );</span>
+        }
+
+        //
+        //  If no class defined, then will just simply fail.
+        //
+<span class="pc bpc" id="L132" title="1 of 2 branches missed.">        if( classname == null )</span>
+        {
+<span class="nc" id="L134">            log.info( &quot;No attachment provider defined - disabling attachment support.&quot; );</span>
+<span class="nc" id="L135">            return;</span>
+        }
+
+        //
+        //  Create and initialize the provider.
+        //
+<span class="fc" id="L141">        String cacheName = engine.getApplicationName() + &quot;.&quot; + CACHE_NAME;</span>
+        try {
+<span class="fc bfc" id="L143" title="All 2 branches covered.">            if (m_cacheManager.cacheExists(cacheName)) {</span>
+<span class="fc" id="L144">                m_dynamicAttachments = m_cacheManager.getCache(cacheName);</span>
+            } else {
+<span class="fc" id="L146">                log.info(&quot;cache with name &quot; + cacheName + &quot; not found in ehcache.xml, creating it with defaults.&quot;);</span>
+<span class="fc" id="L147">                m_dynamicAttachments = new Cache(cacheName, DEFAULT_CACHECAPACITY, false, false, 0, 0);</span>
+<span class="fc" id="L148">                m_cacheManager.addCache(m_dynamicAttachments);</span>
+            }
+
+<span class="fc" id="L151">            Class&lt;?&gt; providerclass = ClassUtil.findClass(&quot;org.apache.wiki.providers&quot;, classname);</span>
+
+<span class="fc" id="L153">            m_provider = (WikiAttachmentProvider) providerclass.newInstance();</span>
+
+<span class="fc" id="L155">            m_provider.initialize(m_engine, props);</span>
+<span class="nc" id="L156">        } catch( ClassNotFoundException e )</span>
+        {
+<span class="nc" id="L158">            log.error( &quot;Attachment provider class not found&quot;,e);</span>
+        }
+<span class="nc" id="L160">        catch( InstantiationException e )</span>
+        {
+<span class="nc" id="L162">            log.error( &quot;Attachment provider could not be created&quot;, e );</span>
+        }
+<span class="nc" id="L164">        catch( IllegalAccessException e )</span>
+        {
+<span class="nc" id="L166">            log.error( &quot;You may not access the attachment provider class&quot;, e );</span>
+        }
+<span class="nc" id="L168">        catch( NoRequiredPropertyException e )</span>
+        {
+<span class="nc" id="L170">            log.error( &quot;Attachment provider did not find a property that it needed: &quot;+e.getMessage(), e );</span>
+<span class="nc" id="L171">            m_provider = null; // No, it did not work.</span>
+        }
+<span class="nc" id="L173">        catch( IOException e )</span>
+        {
+<span class="nc" id="L175">            log.error( &quot;Attachment provider reports IO error&quot;, e );</span>
+<span class="nc" id="L176">            m_provider = null;</span>
+<span class="pc" id="L177">        }</span>
+<span class="fc" id="L178">    }</span>
+
+    /**
+     *  Returns true, if attachments are enabled and running.
+     *
+     *  @return A boolean value indicating whether attachment functionality is enabled.
+     */
+    public boolean attachmentsEnabled()
+    {
+<span class="pc bpc" id="L187" title="1 of 2 branches missed.">        return m_provider != null;</span>
+    }
+
+    /**
+     *  Gets info on a particular attachment, latest version.
+     *
+     *  @param name A full attachment name.
+     *  @return Attachment, or null, if no such attachment exists.
+     *  @throws ProviderException If something goes wrong.
+     */
+    public Attachment getAttachmentInfo( String name )
+        throws ProviderException
+    {
+<span class="fc" id="L200">        return getAttachmentInfo( name, WikiProvider.LATEST_VERSION );</span>
+    }
+
+    /**
+     *  Gets info on a particular attachment with the given version.
+     *
+     *  @param name A full attachment name.
+     *  @param version A version number.
+     *  @return Attachment, or null, if no such attachment or version exists.
+     *  @throws ProviderException If something goes wrong.
+     */
+
+    public Attachment getAttachmentInfo( String name, int version )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L215" title="1 of 2 branches missed.">        if( name == null )</span>
+        {
+<span class="nc" id="L217">            return null;</span>
+        }
+
+<span class="fc" id="L220">        return getAttachmentInfo( null, name, version );</span>
+    }
+
+    /**
+     *  Figures out the full attachment name from the context and
+     *  attachment name.
+     *
+     *  @param context The current WikiContext
+     *  @param attachmentname The file name of the attachment.
+     *  @return Attachment, or null, if no such attachment exists.
+     *  @throws ProviderException If something goes wrong.
+     */
+    public Attachment getAttachmentInfo( WikiContext context,
+                                         String attachmentname )
+        throws ProviderException
+    {
+<span class="fc" id="L236">        return getAttachmentInfo( context, attachmentname, WikiProvider.LATEST_VERSION );</span>
+    }
+
+    /**
+     *  Figures out the full attachment name from the context and attachment name.
+     *
+     *  @param context The current WikiContext
+     *  @param attachmentname The file name of the attachment.
+     *  @return Attachment, or null, if no such attachment exists.
+     *  @throws ProviderException If something goes wrong.
+     */
+    public String getAttachmentInfoName( WikiContext context,
+                                         String attachmentname )
+    {
+<span class="fc" id="L250">        Attachment att = null;</span>
+
+        try
+        {
+<span class="fc" id="L254">            att = getAttachmentInfo( context, attachmentname );</span>
+        }
+<span class="nc" id="L256">        catch( ProviderException e )</span>
+        {
+<span class="nc" id="L258">            log.warn(&quot;Finding attachments failed: &quot;,e);</span>
+<span class="nc" id="L259">            return null;</span>
+<span class="fc" id="L260">        }</span>
+
+<span class="fc bfc" id="L262" title="All 2 branches covered.">        if( att != null )</span>
+        {
+<span class="fc" id="L264">            return att.getName();</span>
+        }
+<span class="fc bfc" id="L266" title="All 2 branches covered.">        else if( attachmentname.indexOf('/') != -1 )</span>
+        {
+<span class="fc" id="L268">            return attachmentname;</span>
+        }
+
+<span class="fc" id="L271">        return null;</span>
+    }
+
+    /**
+     *  Figures out the full attachment name from the context and
+     *  attachment name.
+     *
+     *  @param context The current WikiContext
+     *  @param attachmentname The file name of the attachment.
+     *  @param version A particular version.
+     *  @return Attachment, or null, if no such attachment or version exists.
+     *  @throws ProviderException If something goes wrong.
+     */
+
+    public Attachment getAttachmentInfo( WikiContext context,
+                                         String attachmentname,
+                                         int version )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L290" title="1 of 2 branches missed.">        if( m_provider == null )</span>
+        {
+<span class="nc" id="L292">            return null;</span>
+        }
+
+<span class="fc" id="L295">        WikiPage currentPage = null;</span>
+
+<span class="fc bfc" id="L297" title="All 2 branches covered.">        if( context != null )</span>
+        {
+<span class="fc" id="L299">            currentPage = context.getPage();</span>
+        }
+
+        //
+        //  Figure out the parent page of this attachment.  If we can't find it,
+        //  we'll assume this refers directly to the attachment.
+        //
+<span class="fc" id="L306">        int cutpt = attachmentname.lastIndexOf('/');</span>
+
+<span class="fc bfc" id="L308" title="All 2 branches covered.">        if( cutpt != -1 )</span>
+        {
+<span class="fc" id="L310">            String parentPage = attachmentname.substring(0,cutpt);</span>
+<span class="fc" id="L311">            parentPage = MarkupParser.cleanLink( parentPage );</span>
+<span class="fc" id="L312">            attachmentname = attachmentname.substring(cutpt+1);</span>
+
+            // If we for some reason have an empty parent page name;
+            // this can't be an attachment
+<span class="fc bfc" id="L316" title="All 2 branches covered.">            if(parentPage.length() == 0) return null;</span>
+
+<span class="fc" id="L318">            currentPage = m_engine.getPage( parentPage );</span>
+
+            //
+            // Go check for legacy name
+            //
+            // FIXME: This should be resolved using CommandResolver,
+            //        not this adhoc way.  This also assumes that the
+            //        legacy charset is a subset of the full allowed set.
+<span class="fc bfc" id="L326" title="All 2 branches covered.">            if( currentPage == null )</span>
+            {
+<span class="fc" id="L328">                currentPage = m_engine.getPage( MarkupParser.wikifyLink( parentPage ) );</span>
+            }
+        }
+
+        //
+        //  If the page cannot be determined, we cannot possibly find the
+        //  attachments.
+        //
+<span class="pc bpc" id="L336" title="1 of 4 branches missed.">        if( currentPage == null || currentPage.getName().length() == 0 )</span>
+        {
+<span class="fc" id="L338">            return null;</span>
+        }
+
+        // System.out.println(&quot;Seeking info on &quot;+currentPage+&quot;::&quot;+attachmentname);
+
+        //
+        //  Finally, figure out whether this is a real attachment or a generated attachment.
+        //
+<span class="fc" id="L346">        Attachment att = getDynamicAttachment( currentPage.getName()+&quot;/&quot;+attachmentname );</span>
+
+<span class="pc bpc" id="L348" title="1 of 2 branches missed.">        if( att == null )</span>
+        {
+<span class="fc" id="L350">            att = m_provider.getAttachmentInfo( currentPage, attachmentname, version );</span>
+        }
+
+<span class="fc" id="L353">        return att;</span>
+    }
+
+    /**
+     *  Returns the list of attachments associated with a given wiki page.
+     *  If there are no attachments, returns an empty Collection.
+     *
+     *  @param wikipage The wiki page from which you are seeking attachments for.
+     *  @return a valid collection of attachments.
+     *  @throws ProviderException If there was something wrong in the backend.
+     */
+    public List&lt; Attachment &gt; listAttachments( WikiPage wikipage ) throws ProviderException {
+<span class="pc bpc" id="L365" title="1 of 2 branches missed.">        if( m_provider == null ) {</span>
+<span class="nc" id="L366">            return new ArrayList&lt;&gt;();</span>
+        }
+
+<span class="fc" id="L369">        List&lt; Attachment &gt;atts = new ArrayList&lt;&gt;( m_provider.listAttachments( wikipage ) );</span>
+<span class="fc" id="L370">        Collections.&lt; Attachment &gt;sort( atts, Comparator.comparing( Attachment::getName, m_engine.getPageManager().getPageSorter() ) );</span>
+
+<span class="fc" id="L372">        return atts;</span>
+    }
+
+    /**
+     *  Returns true, if the page has any attachments at all.  This is
+     *  a convinience method.
+     *
+     *
+     *  @param wikipage The wiki page from which you are seeking attachments for.
+     *  @return True, if the page has attachments, else false.
+     */
+    public boolean hasAttachments( WikiPage wikipage )
+    {
+        try
+        {
+<span class="fc bfc" id="L387" title="All 2 branches covered.">            return listAttachments( wikipage ).size() &gt; 0;</span>
+        }
+<span class="nc" id="L389">        catch( Exception e ) {}</span>
+
+<span class="nc" id="L391">        return false;</span>
+    }
+
+    /**
+     *  Finds a (real) attachment from the repository as a stream.
+     *
+     *  @param att Attachment
+     *  @return An InputStream to read from.  May return null, if
+     *          attachments are disabled.
+     *  @throws IOException If the stream cannot be opened
+     *  @throws ProviderException If the backend fails due to some other reason.
+     */
+    public InputStream getAttachmentStream( Attachment att )
+        throws IOException,
+               ProviderException
+    {
+<span class="fc" id="L407">        return getAttachmentStream( null, att );</span>
+    }
+
+    /**
+     *  Returns an attachment stream using the particular WikiContext.  This method
+     *  should be used instead of getAttachmentStream(Attachment), since it also allows
+     *  the DynamicAttachments to function.
+     *
+     *  @param ctx The Wiki Context
+     *  @param att The Attachment to find
+     *  @return An InputStream.  May return null, if attachments are disabled.  You must
+     *          take care of closing it.
+     *  @throws ProviderException If the backend fails due to some reason
+     *  @throws IOException If the stream cannot be opened
+     */
+    public InputStream getAttachmentStream( WikiContext ctx, Attachment att )
+        throws ProviderException, IOException
+    {
+<span class="pc bpc" id="L425" title="1 of 2 branches missed.">        if( m_provider == null )</span>
+        {
+<span class="nc" id="L427">            return null;</span>
+        }
+
+<span class="pc bpc" id="L430" title="1 of 2 branches missed.">        if( att instanceof DynamicAttachment )</span>
+        {
+<span class="nc" id="L432">            return ((DynamicAttachment)att).getProvider().getAttachmentData( ctx, att );</span>
+        }
+
+<span class="fc" id="L435">        return m_provider.getAttachmentData( att );</span>
+    }
+
+
+
+    /**
+     *  Stores a dynamic attachment.  Unlike storeAttachment(), this just stores
+     *  the attachment in the memory.
+     *
+     *  @param ctx A WikiContext
+     *  @param att An attachment to store
+     */
+    public void storeDynamicAttachment( WikiContext ctx, DynamicAttachment att )
+    {
+<span class="nc" id="L449">        m_dynamicAttachments.put(new Element(att.getName(), att));</span>
+<span class="nc" id="L450">    }</span>
+
+    /**
+     *  Finds a DynamicAttachment.  Normally, you should just use getAttachmentInfo(),
+     *  since that will find also DynamicAttachments.
+     *
+     *  @param name The name of the attachment to look for
+     *  @return An Attachment, or null.
+     *  @see #getAttachmentInfo(String)
+     */
+
+    public DynamicAttachment getDynamicAttachment(String name) {
+<span class="fc" id="L462">        Element element = m_dynamicAttachments.get(name);</span>
+<span class="fc bfc" id="L463" title="All 2 branches covered.">        if (element != null) {</span>
+<span class="fc" id="L464">            return (DynamicAttachment) element.getObjectValue();</span>
+        } else {
+            //
+            //  Remove from cache, it has expired.
+            //
+<span class="fc" id="L469">            m_dynamicAttachments.put(new Element(name, null));</span>
+
+<span class="fc" id="L471">            return null;</span>
+        }
+    }
+
+    /**
+     *  Stores an attachment that lives in the given file.
+     *  If the attachment did not exist previously, this method
+     *  will create it.  If it did exist, it stores a new version.
+     *
+     *  @param att Attachment to store this under.
+     *  @param source A file to read from.
+     *
+     *  @throws IOException If writing the attachment failed.
+     *  @throws ProviderException If something else went wrong.
+     */
+    public void storeAttachment( Attachment att, File source )
+        throws IOException,
+               ProviderException
+    {
+<span class="fc" id="L490">        FileInputStream in = null;</span>
+
+        try
+        {
+<span class="fc" id="L494">            in = new FileInputStream( source );</span>
+<span class="fc" id="L495">            storeAttachment( att, in );</span>
+        }
+        finally
+        {
+<span class="pc bpc" id="L499" title="1 of 2 branches missed.">            if( in != null ) in.close();</span>
+        }
+<span class="fc" id="L501">    }</span>
+
+    /**
+     *  Stores an attachment directly from a stream.
+     *  If the attachment did not exist previously, this method
+     *  will create it.  If it did exist, it stores a new version.
+     *
+     *  @param att Attachment to store this under.
+     *  @param in  InputStream from which the attachment contents will be read.
+     *
+     *  @throws IOException If writing the attachment failed.
+     *  @throws ProviderException If something else went wrong.
+     */
+    public void storeAttachment( Attachment att, InputStream in )
+        throws IOException,
+               ProviderException
+    {
+<span class="pc bpc" id="L518" title="1 of 2 branches missed.">        if( m_provider == null )</span>
+        {
+<span class="nc" id="L520">            return;</span>
+        }
+
+        //
+        //  Checks if the actual, real page exists without any modifications
+        //  or aliases.  We cannot store an attachment to a non-existent page.
+        //
+<span class="fc bfc" id="L527" title="All 2 branches covered.">        if( !m_engine.getPageManager().pageExists( att.getParentName() ) )</span>
+        {
+            // the caller should catch the exception and use the exception text as an i18n key
+<span class="fc" id="L530">            throw new ProviderException(  &quot;attach.parent.not.exist&quot;  );</span>
+        }
+
+<span class="fc" id="L533">        m_provider.putAttachmentData( att, in );</span>
+
+<span class="fc" id="L535">        m_engine.getReferenceManager().updateReferences( att.getName(), new ArrayList&lt; String &gt;() );</span>
+
+<span class="fc" id="L537">        WikiPage parent = new WikiPage( m_engine, att.getParentName() );</span>
+<span class="fc" id="L538">        m_engine.updateReferences( parent );</span>
+
+<span class="fc" id="L540">        m_engine.getSearchManager().reindexPage( att );</span>
+<span class="fc" id="L541">    }</span>
+
+    /**
+     *  Returns a list of versions of the attachment.
+     *
+     *  @param attachmentName A fully qualified name of the attachment.
+     *
+     *  @return A list of Attachments.  May return null, if attachments are
+     *          disabled.
+     *  @throws ProviderException If the provider fails for some reason.
+     */
+    public List&lt;Attachment&gt; getVersionHistory( String attachmentName )
+        throws ProviderException
+    {
+<span class="nc bnc" id="L555" title="All 2 branches missed.">        if( m_provider == null )</span>
+        {
+<span class="nc" id="L557">            return null;</span>
+        }
+
+<span class="nc" id="L560">        Attachment att = getAttachmentInfo( (WikiContext)null, attachmentName );</span>
+
+<span class="nc bnc" id="L562" title="All 2 branches missed.">        if( att != null )</span>
+        {
+<span class="nc" id="L564">            return m_provider.getVersionHistory( att );</span>
+        }
+
+<span class="nc" id="L567">        return null;</span>
+    }
+
+    /**
+     *  Returns a collection of Attachments, containing each and every attachment
+     *  that is in this Wiki.
+     *
+     *  @return A collection of attachments.  If attachments are disabled, will
+     *          return an empty collection.
+     *  @throws ProviderException If something went wrong with the backend
+     */
+    public Collection&lt;Attachment&gt; getAllAttachments() throws ProviderException {
+<span class="pc bpc" id="L579" title="1 of 2 branches missed.">        if( attachmentsEnabled() ) {</span>
+<span class="fc" id="L580">            return m_provider.listAllChanged( new Date(0L) );</span>
+        }
+
+<span class="nc" id="L583">        return new ArrayList&lt;&gt;();</span>
+    }
+
+    /**
+     *  Returns the current attachment provider.
+     *
+     *  @return The current provider.  May be null, if attachments are disabled.
+     */
+    public WikiAttachmentProvider getCurrentProvider()
+    {
+<span class="fc" id="L593">        return m_provider;</span>
+    }
+
+    /**
+     *  Deletes the given attachment version.
+     *
+     *  @param att The attachment to delete
+     *  @throws ProviderException If something goes wrong with the backend.
+     */
+    public void deleteVersion( Attachment att )
+        throws ProviderException
+    {
+<span class="nc bnc" id="L605" title="All 2 branches missed.">        if( m_provider == null ) return;</span>
+
+<span class="nc" id="L607">        m_provider.deleteVersion( att );</span>
+<span class="nc" id="L608">    }</span>
+
+    /**
+     *  Deletes all versions of the given attachment.
+     *  @param att The Attachment to delete.
+     *  @throws ProviderException if something goes wrong with the backend.
+     */
+    // FIXME: Should also use events!
+    public void deleteAttachment( Attachment att )
+        throws ProviderException
+    {
+<span class="pc bpc" id="L619" title="1 of 2 branches missed.">        if( m_provider == null ) return;</span>
+
+<span class="fc" id="L621">        m_provider.deleteAttachment( att );</span>
+
+<span class="fc" id="L623">        m_engine.getSearchManager().pageRemoved( att );</span>
+
+<span class="fc" id="L625">        m_engine.getReferenceManager().clearPageEntries( att.getName() );</span>
+
+<span class="fc" id="L627">    }</span>
+
+    /**
+     *  Validates the filename and makes sure it is legal.  It trims and splits
+     *  and replaces bad characters.
+     *
+     *  @param filename
+     *  @return A validated name with annoying characters replaced.
+     *  @throws WikiException If the filename is not legal (e.g. empty)
+     */
+    static String validateFileName( String filename )
+        throws WikiException
+    {
+<span class="pc bpc" id="L640" title="2 of 4 branches missed.">        if( filename == null || filename.trim().length() == 0 )</span>
+        {
+<span class="nc" id="L642">            log.error(&quot;Empty file name given.&quot;);</span>
+
+            // the caller should catch the exception and use the exception text as an i18n key
+<span class="nc" id="L645">            throw new WikiException(  &quot;attach.empty.file&quot; );</span>
+        }
+
+        //
+        //  Should help with IE 5.22 on OSX
+        //
+<span class="fc" id="L651">        filename = filename.trim();</span>
+
+        // If file name ends with .jsp or .jspf, the user is being naughty!
+<span class="pc bpc" id="L654" title="2 of 4 branches missed.">        if( filename.toLowerCase().endsWith( &quot;.jsp&quot; ) || filename.toLowerCase().endsWith(&quot;.jspf&quot;) )</span>
+        {
+<span class="nc" id="L656">            log.info( &quot;Attempt to upload a file with a .jsp/.jspf extension.  In certain cases this &quot; +</span>
+                      &quot;can trigger unwanted security side effects, so we're preventing it.&quot; );
+            //
+            // the caller should catch the exception and use the exception text as an i18n key
+<span class="nc" id="L660">            throw new WikiException(  &quot;attach.unwanted.file&quot;  );</span>
+        }
+
+        //
+        //  Some browser send the full path info with the filename, so we need
+        //  to remove it here by simply splitting along slashes and then taking the path.
+        //
+
+<span class="fc" id="L668">        String[] splitpath = filename.split( &quot;[/\\\\]&quot; );</span>
+<span class="fc" id="L669">        filename = splitpath[splitpath.length-1];</span>
+
+        //
+        //  Remove any characters that might be a problem. Most
+        //  importantly - characters that might stop processing
+        //  of the URL.
+        //
+<span class="fc" id="L676">        filename = StringUtils.replaceChars( filename, &quot;#?\&quot;'&quot;, &quot;____&quot; );</span>
+
+<span class="fc" id="L678">        return filename;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

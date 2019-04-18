@@ -1,0 +1,3686 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" type="text/css" href="../style.css">
+</head>
+<body>
+
+
+<h1>WikiAjaxDispatcherServlet.java</h1>
+
+<table class="src">
+
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_1'/>
+1
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_1'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/*</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_2'/>
+2
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_2'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_3'/>
+3
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_3'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    Licensed to the Apache Software Foundation (ASF) under one</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_4'/>
+4
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_4'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    or more contributor license agreements.  See the NOTICE file</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_5'/>
+5
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_5'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    distributed with this work for additional information</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_6'/>
+6
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_6'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    regarding copyright ownership.  The ASF licenses this file</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_7'/>
+7
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_7'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    to you under the Apache License, Version 2.0 (the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_8'/>
+8
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_8'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    &#34;License&#34;); you may not use this file except in compliance</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_9'/>
+9
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_9'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    with the License.  You may obtain a copy of the License at</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_10'/>
+10
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_10'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_11'/>
+11
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_11'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>       http://www.apache.org/licenses/LICENSE-2.0</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_12'/>
+12
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_12'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_13'/>
+13
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_13'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    Unless required by applicable law or agreed to in writing,</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_14'/>
+14
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_14'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    software distributed under the License is distributed on an</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_15'/>
+15
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_15'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    &#34;AS IS&#34; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_16'/>
+16
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_16'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    KIND, either express or implied.  See the License for the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_17'/>
+17
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_17'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    specific language governing permissions and limitations</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_18'/>
+18
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_18'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    under the License.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_19'/>
+19
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_19'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_20'/>
+20
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_20'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>package org.apache.wiki.ajax;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_21'/>
+21
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_21'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_22'/>
+22
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_22'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.io.IOException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_23'/>
+23
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_23'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.security.Permission;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_24'/>
+24
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_24'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.ArrayList;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_25'/>
+25
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_25'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Arrays;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_26'/>
+26
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_26'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.HashMap;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_27'/>
+27
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_27'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.List;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_28'/>
+28
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_28'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import java.util.Map;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_29'/>
+29
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_29'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_30'/>
+30
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_30'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.servlet.ServletConfig;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_31'/>
+31
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_31'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.servlet.ServletException;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_32'/>
+32
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_32'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.servlet.http.HttpServlet;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_33'/>
+33
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_33'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.servlet.http.HttpServletRequest;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_34'/>
+34
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_34'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import javax.servlet.http.HttpServletResponse;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_35'/>
+35
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_35'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_36'/>
+36
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_36'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.commons.lang.StringUtils;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_37'/>
+37
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_37'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.log4j.Logger;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_38'/>
+38
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_38'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.WikiEngine;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_39'/>
+39
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_39'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.WikiSession;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_40'/>
+40
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_40'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.auth.AuthorizationManager;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_41'/>
+41
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_41'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.auth.permissions.PagePermission;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_42'/>
+42
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_42'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>import org.apache.wiki.util.TextUtil;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_43'/>
+43
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_43'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_44'/>
+44
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_44'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>/**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_45'/>
+45
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_45'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * This provides a simple ajax servlet for handling /ajax/&#60;ClassName&#62; requests.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_46'/>
+46
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_46'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * HttpServlet classes need to be registered using {@link WikiAjaxDispatcherServlet#registerServlet(WikiAjaxServlet)}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_47'/>
+47
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_47'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_48'/>
+48
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_48'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> * @since 2.10.2-svn12</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_49'/>
+49
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_49'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''> */</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_50'/>
+50
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_50'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>public class WikiAjaxDispatcherServlet extends HttpServlet {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_51'/>
+51
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_51'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private static final long serialVersionUID = 1L;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_52'/>
+52
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_52'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private static Map&#60;String,AjaxServletContainer&#62; ajaxServlets = new HashMap&#60;String,AjaxServletContainer&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_53'/>
+53
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_53'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    static final Logger log = Logger.getLogger(WikiAjaxDispatcherServlet.class.getName());</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_54'/>
+54
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_54'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    private String PATH_AJAX = &#34;/ajax/&#34;;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_55'/>
+55
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_55'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private WikiEngine m_engine;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_56'/>
+56
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_56'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_57'/>
+57
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_57'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_58'/>
+58
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_58'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@inheritDoc}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_59'/>
+59
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_59'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_60'/>
+60
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_60'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * This sets the AjaxPath to &#34;/ajax/&#34; as configured in &#34;jspwiki.ajax.url.prefix&#34;.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_61'/>
+61
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_61'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Note: Do not change this without also changing the web.xml file.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_62'/>
+62
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_62'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_63'/>
+63
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_63'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_64'/>
+64
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_64'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void init(ServletConfig config)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_65'/>
+65
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_65'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            throws ServletException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_66'/>
+66
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_66'>1</a>
+<span>
+1. init : removed call to javax/servlet/http/HttpServlet::init &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        super.init(config);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_67'/>
+67
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_67'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        m_engine = WikiEngine.getInstance(config);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_68'/>
+68
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_68'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        PATH_AJAX = &#34;/&#34;+TextUtil.getStringProperty(m_engine.getWikiProperties(), &#34;jspwiki.ajax.url.prefix&#34;, &#34;ajax&#34;)+&#34;/&#34;;</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_69'/>
+69
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_69'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        log.info(&#34;WikiAjaxDispatcherServlet initialized.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_70'/>
+70
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_70'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_71'/>
+71
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_71'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_72'/>
+72
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_72'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_73'/>
+73
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_73'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Register a {@link WikiAjaxServlet} using the servlet mapping as the alias</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_74'/>
+74
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_74'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_75'/>
+75
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_75'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public static void registerServlet(WikiAjaxServlet servlet) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_76'/>
+76
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_76'>1</a>
+<span>
+1. registerServlet : removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::registerServlet &rarr; SURVIVED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='survived'>        registerServlet(servlet.getServletMapping(),servlet);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_77'/>
+77
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_77'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_78'/>
+78
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_78'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_79'/>
+79
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_79'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_80'/>
+80
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_80'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Register a {@link WikiAjaxServlet} with a specific alias, and default permission {@link PagePermission#VIEW}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_81'/>
+81
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_81'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_82'/>
+82
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_82'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public static void registerServlet(String alias, WikiAjaxServlet servlet) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_83'/>
+83
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_83'>1</a>
+<span>
+1. registerServlet : removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::registerServlet &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        registerServlet(alias, servlet, PagePermission.VIEW);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_84'/>
+84
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_84'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_85'/>
+85
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_85'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_86'/>
+86
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_86'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_87'/>
+87
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_87'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Regster a {@link WikiAjaxServlet} given an alias, the servlet, and the permission.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_88'/>
+88
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_88'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * This creates a temporary bundle object called {@link WikiAjaxDispatcherServlet.AjaxServletContainer}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_89'/>
+89
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_89'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param alias the uri link to this servlet</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_90'/>
+90
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_90'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param servlet the servlet being registered</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_91'/>
+91
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_91'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param perm the permission required to execute the servlet.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_92'/>
+92
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_92'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_93'/>
+93
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_93'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public static void registerServlet(String alias, WikiAjaxServlet servlet, Permission perm) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_94'/>
+94
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_94'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        log.info(&#34;WikiAjaxDispatcherServlet registering &#34;+alias+&#34;=&#34;+servlet+&#34; perm=&#34;+perm);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_95'/>
+95
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_95'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        ajaxServlets.put(alias,new AjaxServletContainer(alias, servlet, perm));</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_96'/>
+96
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_96'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_97'/>
+97
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_97'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_98'/>
+98
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_98'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_99'/>
+99
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_99'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Calls {@link #performAction}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_100'/>
+100
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_100'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_101'/>
+101
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_101'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_102'/>
+102
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_102'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void doPost(HttpServletRequest req, HttpServletResponse res)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_103'/>
+103
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_103'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            throws IOException, ServletException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_104'/>
+104
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_104'>1</a>
+<span>
+1. doPost : removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::performAction &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        performAction(req,res);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_105'/>
+105
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_105'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_106'/>
+106
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_106'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_107'/>
+107
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_107'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_108'/>
+108
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_108'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Calls {@link #performAction}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_109'/>
+109
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_109'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_110'/>
+110
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_110'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_111'/>
+111
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_111'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public void doGet(HttpServletRequest req, HttpServletResponse res)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_112'/>
+112
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_112'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            throws IOException, ServletException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_113'/>
+113
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_113'>1</a>
+<span>
+1. doGet : removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::performAction &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        performAction(req,res);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_114'/>
+114
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_114'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_115'/>
+115
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_115'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_116'/>
+116
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_116'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_117'/>
+117
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_117'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * The main method which get the requestURI &#34;/ajax/&#60;ServletName&#62;&#34;, gets the</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_118'/>
+118
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_118'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * {@link #getServletName} and finds the servlet using {@link #findServletByName}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_119'/>
+119
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_119'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * It then calls {@link WikiAjaxServlet#service} method.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_120'/>
+120
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_120'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param req the inbound request</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_121'/>
+121
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_121'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param res the outbound response</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_122'/>
+122
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_122'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws IOException</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_123'/>
+123
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_123'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws ServletException if no registered servlet can be found</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_124'/>
+124
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_124'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_125'/>
+125
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_125'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private void performAction(HttpServletRequest req, HttpServletResponse res)</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_126'/>
+126
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_126'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            throws IOException, ServletException {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_127'/>
+127
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_127'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        final String path = req.getRequestURI();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_128'/>
+128
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_128'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        final String servletName = getServletName(path);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_129'/>
+129
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_129'>1</a>
+<span>
+1. performAction : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if (servletName!=null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_130'/>
+130
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_130'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            final AjaxServletContainer container = findServletContainer(servletName);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_131'/>
+131
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_131'>1</a>
+<span>
+1. performAction : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>            if (container != null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_132'/>
+132
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_132'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                final WikiAjaxServlet servlet = container.servlet;</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_133'/>
+133
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_133'>1</a>
+<span>
+1. performAction : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                if ( validatePermission(req,container) ) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_134'/>
+134
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_134'>1</a>
+<span>
+1. performAction : removed call to javax/servlet/http/HttpServletRequest::setCharacterEncoding &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    req.setCharacterEncoding(m_engine.getContentEncoding());</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_135'/>
+135
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_135'>1</a>
+<span>
+1. performAction : removed call to javax/servlet/http/HttpServletResponse::setCharacterEncoding &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    res.setCharacterEncoding(m_engine.getContentEncoding());</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_136'/>
+136
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_136'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    final String actionName = AjaxUtil.getNextPathPart(req.getRequestURI(), servlet.getServletMapping());</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_137'/>
+137
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_137'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    log.debug(&#34;actionName=&#34;+actionName);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_138'/>
+138
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_138'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    final Object params = req.getParameter(&#34;params&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_139'/>
+139
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_139'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    log.debug(&#34;params=&#34;+params);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_140'/>
+140
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_140'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    List&#60;String&#62; paramValues = new ArrayList&#60;String&#62;();</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_141'/>
+141
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_141'>1</a>
+<span>
+1. performAction : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    if (params instanceof String) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_142'/>
+142
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_142'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                        final String paramString = (String)params;</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_143'/>
+143
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_143'>1</a>
+<span>
+1. performAction : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                        if (StringUtils.isNotBlank(paramString)) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_144'/>
+144
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_144'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                            paramValues = Arrays.asList(paramString.trim().split(&#34;,&#34;));</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_145'/>
+145
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_145'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_146'/>
+146
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_146'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                    }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_147'/>
+147
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_147'>1</a>
+<span>
+1. performAction : removed call to org/apache/wiki/ajax/WikiAjaxServlet::service &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>                    servlet.service(req, res, actionName, paramValues);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_148'/>
+148
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_148'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                } else {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_149'/>
+149
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_149'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                    log.warn(&#34;Servlet container &#34;+container+&#34; not authorised. Permission required.&#34;);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_150'/>
+150
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_150'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>                }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_151'/>
+151
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_151'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            } else {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_152'/>
+152
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_152'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                log.error(&#34;No registered class for servletName=&#34; + servletName + &#34; in path=&#34; + path);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_153'/>
+153
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_153'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>                throw new ServletException(&#34;No registered class for servletName=&#34; + servletName);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_154'/>
+154
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_154'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>            }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_155'/>
+155
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_155'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_156'/>
+156
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_156'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_157'/>
+157
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_157'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_158'/>
+158
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_158'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_159'/>
+159
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_159'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Validate the permission of the {@link WikiAjaxServlet} using the {@link AuthorizationManager#checkPermission}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_160'/>
+160
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_160'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_161'/>
+161
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_161'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param req the servlet request</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_162'/>
+162
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_162'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param container the container info of the servlet</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_163'/>
+163
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_163'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return true if permission is valid</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_164'/>
+164
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_164'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_165'/>
+165
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_165'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private boolean validatePermission(HttpServletRequest req, AjaxServletContainer container) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_166'/>
+166
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_166'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        final WikiEngine e = WikiEngine.getInstance(req.getSession().getServletContext(), null);</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_167'/>
+167
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_167'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>        boolean valid = false;</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_168'/>
+168
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_168'>1</a>
+<span>
+1. validatePermission : negated conditional &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        if (container != null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_169'/>
+169
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_169'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class=''>            valid = e.getAuthorizationManager().checkPermission(WikiSession.getWikiSession(e, req), container.permission);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_170'/>
+170
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_170'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_171'/>
+171
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_171'>1</a>
+<span>
+1. validatePermission : replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        return valid;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_172'/>
+172
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_172'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_173'/>
+173
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_173'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_174'/>
+174
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_174'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_175'/>
+175
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_175'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Get the ServletName from the requestURI &#34;/ajax/&#60;ServletName&#62;&#34;, using {@link AjaxUtil#getNextPathPart}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_176'/>
+176
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_176'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_177'/>
+177
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_177'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param path The requestURI, which must contains &#34;/ajax/&#60;ServletName&#62;&#34; in the path</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_178'/>
+178
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_178'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return The ServletName for the requestURI, or null</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_179'/>
+179
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_179'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @throws ServletException if the path is invalid</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_180'/>
+180
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_180'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_181'/>
+181
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_181'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public String getServletName(String path) throws ServletException {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_182'/>
+182
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_182'>1</a>
+<span>
+1. getServletName : mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::getServletName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return AjaxUtil.getNextPathPart(path, PATH_AJAX);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_183'/>
+183
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_183'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_184'/>
+184
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_184'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_185'/>
+185
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_185'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_186'/>
+186
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_186'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Find the {@link AjaxServletContainer} as registered in {@link #registerServlet}.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_187'/>
+187
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_187'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_188'/>
+188
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_188'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param servletName the name of the servlet from {@link #getServletName}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_189'/>
+189
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_189'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return The first servlet found, or null.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_190'/>
+190
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_190'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_191'/>
+191
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_191'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private AjaxServletContainer findServletContainer(String servletAlias) {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_192'/>
+192
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_192'>1</a>
+<span>
+1. findServletContainer : mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletContainer to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>        return ajaxServlets.get(servletAlias);</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_193'/>
+193
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_193'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_194'/>
+194
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_194'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_195'/>
+195
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_195'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    /**</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_196'/>
+196
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_196'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * Find the {@link WikiAjaxServlet} given the servletAlias that it was registered with.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_197'/>
+197
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_197'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     *</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_198'/>
+198
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_198'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @param servletAlias the value provided to {@link #registerServlet}</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_199'/>
+199
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_199'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     * @return the {@link WikiAjaxServlet} given the servletAlias that it was registered with.</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_200'/>
+200
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_200'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>     */</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_201'/>
+201
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_201'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    public WikiAjaxServlet findServletByName(String servletAlias) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_202'/>
+202
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_202'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        final AjaxServletContainer container = ajaxServlets.get(servletAlias);</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_203'/>
+203
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_203'>1</a>
+<span>
+1. findServletByName : negated conditional &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        if (container != null) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_204'/>
+204
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_204'>1</a>
+<span>
+1. findServletByName : mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletByName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>            return container.servlet;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_205'/>
+205
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_205'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_206'/>
+206
+</td>
+<td class='killed'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_206'>1</a>
+<span>
+1. findServletByName : mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletByName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED<br/>
+
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class='killed'>        return null;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_207'/>
+207
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_207'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_208'/>
+208
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_208'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_209'/>
+209
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_209'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    private static class AjaxServletContainer {</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_210'/>
+210
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_210'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        String alias;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_211'/>
+211
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_211'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        WikiAjaxServlet servlet;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_212'/>
+212
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_212'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        Permission permission;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_213'/>
+213
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_213'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_214'/>
+214
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_214'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        public AjaxServletContainer(String alias, WikiAjaxServlet servlet, Permission permission) {</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_215'/>
+215
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_215'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            this.alias = alias;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_216'/>
+216
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_216'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            this.servlet = servlet;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_217'/>
+217
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_217'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>            this.permission = permission;</span></pre></td></tr>
+
+
+<tr>
+<td class='covered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_218'/>
+218
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_218'></a>
+<span>
+</span>
+</span>
+</td>
+<td class='covered'><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_219'/>
+219
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_219'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_220'/>
+220
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_220'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        @Override</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_221'/>
+221
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_221'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        public String toString() {</span></pre></td></tr>
+
+
+<tr>
+<td class='uncovered'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_222'/>
+222
+</td>
+<td class='survived'>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_222'>1</a>
+<span>
+1. toString : mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet$AjaxServletContainer::toString to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE<br/>
+
+</span>
+</span>
+</td>
+<td class='uncovered'><pre><span  class='survived'>            return getClass().getSimpleName()+&#34; &#34;+alias+&#34;=&#34;+servlet.getClass().getSimpleName()+&#34; permission=&#34;+permission;</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_223'/>
+223
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_223'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>        }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_224'/>
+224
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_224'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>    }</span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_225'/>
+225
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_225'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''></span></pre></td></tr>
+
+
+<tr>
+<td class='na'>
+<a name='org.pitest.mutationtest.report.html.SourceFile@6f214d_226'/>
+226
+</td>
+<td class=''>
+<span class='pop'>
+<a href='#grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_226'></a>
+<span>
+</span>
+</span>
+</td>
+<td class=''><pre><span  class=''>}</span></pre></td></tr>
+
+
+
+<tr><td></td><td></td><td><h2>Mutations</h2></td></tr>
+
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_66'>66</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_66'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>init<br/><b>Killed by : </b>none</span></span> removed call to javax/servlet/http/HttpServlet::init &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_76'>76</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_76'/> 
+
+<p class='SURVIVED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>registerServlet<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::registerServlet &rarr; SURVIVED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_83'>83</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_83'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>registerServlet<br/><b>Killed by : </b>org.apache.wiki.auth.user.XMLUserDatabaseTest.testGetWikiNames()</span></span> removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::registerServlet &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_104'>104</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_104'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>doPost<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::performAction &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_113'>113</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_113'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>doGet<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/ajax/WikiAjaxDispatcherServlet::performAction &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_129'>129</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_129'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_131'>131</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_131'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_133'>133</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_133'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_134'>134</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_134'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> removed call to javax/servlet/http/HttpServletRequest::setCharacterEncoding &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_135'>135</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_135'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> removed call to javax/servlet/http/HttpServletResponse::setCharacterEncoding &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_141'>141</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_141'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_143'>143</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_143'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_147'>147</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_147'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>performAction<br/><b>Killed by : </b>none</span></span> removed call to org/apache/wiki/ajax/WikiAjaxServlet::service &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_168'>168</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_168'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>validatePermission<br/><b>Killed by : </b>none</span></span> negated conditional &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_171'>171</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_171'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>validatePermission<br/><b>Killed by : </b>none</span></span> replaced return of integer sized value with (x == 0 ? 1 : 0) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_182'>182</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_182'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>getServletName<br/><b>Killed by : </b>org.apache.wiki.WikiAjaxServletTest.testServlets()</span></span> mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::getServletName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_192'>192</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_192'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>findServletContainer<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletContainer to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_203'>203</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_203'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>findServletByName<br/><b>Killed by : </b>org.apache.wiki.WikiAjaxServletTest.testServlets()</span></span> negated conditional &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_204'>204</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_204'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>findServletByName<br/><b>Killed by : </b>org.apache.wiki.WikiAjaxServletTest.testServlets()</span></span> mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletByName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_206'>206</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_206'/> 
+
+<p class='KILLED'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>findServletByName<br/><b>Killed by : </b>org.apache.wiki.WikiAjaxServletTest.testServlets()</span></span> mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet::findServletByName to ( if (x != null) null else throw new RuntimeException ) &rarr; KILLED</p> 
+</td>
+</tr>
+<tr>
+<td><a href='#org.pitest.mutationtest.report.html.SourceFile@6f214d_222'>222</a></td> 
+<td></td>
+<td>
+
+<a name='grouporg.pitest.mutationtest.report.html.SourceFile@6f214d_222'/> 
+
+<p class='NO_COVERAGE'><span class='pop'>1.<span><b>1</b><br/><b>Location : </b>toString<br/><b>Killed by : </b>none</span></span> mutated return of Object value for org/apache/wiki/ajax/WikiAjaxDispatcherServlet$AjaxServletContainer::toString to ( if (x != null) null else throw new RuntimeException ) &rarr; NO_COVERAGE</p> 
+</td>
+</tr>
+
+</table>
+
+
+<h2>Active mutators</h2>
+<ul>
+<li class='mutator'>INCREMENTS_MUTATOR</li>
+<li class='mutator'>VOID_METHOD_CALL_MUTATOR</li>
+<li class='mutator'>RETURN_VALS_MUTATOR</li>
+<li class='mutator'>MATH_MUTATOR</li>
+<li class='mutator'>NEGATE_CONDITIONALS_MUTATOR</li>
+<li class='mutator'>INVERT_NEGS_MUTATOR</li>
+<li class='mutator'>CONDITIONALS_BOUNDARY_MUTATOR</li>
+
+</ul>
+
+<h2>Tests examined</h2>
+<ul>
+<li>org.apache.wiki.auth.AuthorizationManagerTest.testPrincipalAcl() (32 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testListLinksWithAttachments() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed4() (45 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionWithPath() (31 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerNoWikiName() (57 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel3() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExt2() (30 ms)</li><li>org.apache.wiki.WikiSessionTest.testIsIPAddress() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testErroneousHyperlink() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpacesInLinks2() (37 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testSelfReference() (31 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym() (51 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmInClude() (58 ms)</li><li>org.apache.wiki.WikiEngineTest.testOldVersionVars() (98 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDotsInBeginning() (15 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testHeadingVariables() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExtNofollow() (1468 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetAttribute() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginDoublyQuotedArgs() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testAlias2() (14 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testEmptyURL() (14 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL3() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testAlias() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraExclamation() (29 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDelete() (12 ms)</li><li>org.apache.wiki.WikiSessionTest.testAuthenticationCookieWhenOn() (47 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveBuiltInRoles() (27 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs() (62 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBrokenLink1() (51 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames() (33 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testMultiInvocation() (45 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsSorted() (51 ms)</li><li>org.apache.wiki.WikiEngineTest.testCreateEmptyPage() (45 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLWhenAllowedPre() (47 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testAttachURL1() (11 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGroupMembership() (32 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testStaticPermission() (38 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testContextLimits() (122 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsWithPrefix() (29 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testInlineImages() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel2() (26 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfile() (25 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testOtherURL1() (11 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude() (66 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet2() (73 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidate() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testItalicAcrossLinebreak() (25 ms)</li><li>org.apache.wiki.render.WysiwygEditingRendererTest.testUndefinedPageLink() (27 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationChangesHistory() (34 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testNoChanges() (109 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptyBold() (33 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL2() (13 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testEditURL1() (16 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testDelete() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginQuotedArgs2() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename1() (35 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testRenameOfEscapedLinks() (58 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink2() (60 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testLineBreak() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginWikiText() (36 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testIsUserInRole() (26 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug25() (76 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinksAttachment() (36 ms)</li><li>org.apache.wiki.WikiAjaxServletTest.testServlets() (72 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testDecisionWorkflow() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLInPre() (30 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testValidateFileName() (44 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithPunctuation() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testXSS1() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCFirstAndLast() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities() (29 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBrokenLink2() (55 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNote() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTableLink() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd6() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet1() (25 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetRenamedUserProfile() (189 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedList() (26 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testAlice() (26 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet3() (51 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAuthenticatedSession() (25 ms)</li><li>org.apache.wiki.VariableManagerTest.testNonExistantVariable() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages2() (25 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testSave() (20 ms)</li><li>org.apache.wiki.WikiSessionTest.testUserPrincipal() (23 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testReferenceWidth() (65 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert4() (27 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testVersionHistory() (372 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL5() (12 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testPre() (17 ms)</li><li>org.apache.wiki.WikiEngineTest.testChangeNoteOldVersion2() (75 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStore() (50 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testTitleSearch2() (6055 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGetRoles() (24 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testMaxReferences() (61 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilineList2() (26 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testAttachmentChange() (80 ms)</li><li>org.apache.wiki.rss.RSSGeneratorTest.testBlogRSS2() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageTextShort2() (31 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testSave() (29 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersion2() (47 ms)</li><li>org.apache.wiki.filters.DefaultFilterManagerTest.testInitParams() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink3() (29 ms)</li><li>org.apache.wiki.filters.DefaultFilterManagerTest.testInitFilters() (17 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidateNotNull() (23 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetLockExpiry() (18 ms)</li><li>org.apache.wiki.util.MailUtilTest.testSendMail() (52 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleNumbers() (42 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testGroups() (25 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentDirectory() (50 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testEquals2() (15 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRulerCombo() (31 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testRoleAcl() (33 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testSelf() (100 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testGroups() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape() (34 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testAttachURL1() (11 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet4() (54 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testPutAttachmentUTF8() (27 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testShow() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptyItalic() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel4() (23 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testExtendedLinks() (48 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL4() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageText() (60 ms)</li><li>org.apache.wiki.rss.RSSGeneratorTest.testBlogRSS() (52 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilineList1() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortPluginInsert() (30 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersionUTF8() (50 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testParseGroup() (29 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsComplex2() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImagesLink2() (28 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeCC() (54 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testValidatePassword() (22 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentPage2() (32 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByEmail() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRenderingSpeed1() (436 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testErroneousHyperlink2() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet2() (24 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude2() (72 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testRemove() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph3() (34 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testRecentChanges() (33 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand1() (45 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC2() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinks2() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLongRuler() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages4() (26 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension5() (26 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case1() (32 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomJAASLoginModule() (46 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRulerCombo2() (27 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmExClude() (74 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomAuthorizer() (42 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testRecursive() (26 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL2() (15 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL2() (13 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testLoginCustomWithGroup() (50 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testSave() (2199 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL7() (13 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testAuthor() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch3() (28 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageNameSingular() (57 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testBoldItalic() (11 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testBuildApprovalWorkflowDeny() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldAcrossLinebreak() (39 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent2() (23 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChange() (38 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testVariableInsert() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDivStyle1() (26 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testInheritedPermissions() (32 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testSingleReferral() (65 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetRequiredProperty() (105 ms)</li><li>org.apache.wiki.WikiSessionTest.testAssertionCookie() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksInterWiki2() (23 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testRecursive2() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities1() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph2() (38 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testBob() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testInlineImages3() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginInsertJS() (38 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testRenameOfEscapedLinks2() (50 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testAttachURLRelative1() (10 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedList2() (25 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL3() (19 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL3() (10 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension4() (24 ms)</li><li>org.apache.wiki.ui.admin.beans.PluginBeanTest.testDoGet() (13 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL6() (11 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtrafileInAttachmentDir() (2040 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testScandinavianLetters() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch2() (25 ms)</li><li>org.apache.wiki.WikiEngineTest.testLatestGet() (48 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNoteOldVersion() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent3() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs2() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNonExistant() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDivStyle2() (33 ms)</li><li>org.apache.wiki.providers.CachingProviderTest.testSneakyAdd() (4042 ms)</li><li>org.apache.wiki.ui.GroupCommandTest.testStaticCommand() (16 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd3() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginHTMLInsert() (32 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationSimple() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreak() (22 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testScandinavianLettersUTF8() (14 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testBecomesUnreferenced() (202 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginNoInsert() (38 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testBuildApprovalWorkflow() (15 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksInterWiki1() (24 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testPageInfo() (31 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPageEntities2() (45 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testRefersTo() (97 ms)</li><li>org.apache.wiki.PageManagerTest.testPageCacheExists() (1373 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptySecondLevelList2() (30 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testHasRoleOrPrincipal() (25 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testNonexistentPage() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed2() (34 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeleteVersion2() (86 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLEntities2() (33 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testPrintAcl() (29 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAdminView() (49 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case3() (27 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItemsComplex() (31 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testRequiresApproval() (13 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testOtherURL2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSetHTML() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortPluginInsert2() (33 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testUnsafePattern() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTML2() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreWithLines() (34 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testInitPlugin() (17 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreWithoutExt() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithPunctuation2() (48 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testInheritedAclPermissions() (42 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTTAcrossLines() (26 ms)</li><li>org.apache.wiki.plugin.UndefinedPagesPluginTest.testCount() (55 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testMultiples() (31 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testParmMax() (67 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testDecisions() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename2() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent4() (186 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testGetRoles() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedPlugin2() (33 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs2() (53 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testRoles() (21 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByWikiName() (22 ms)</li><li>org.apache.wiki.plugin.GroupsTest.testTag() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs3() (26 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd2() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoPlugin() (31 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testIsContainerAuthorized() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler3() (41 ms)</li><li>org.apache.wiki.ui.InputValidatorTest.testValidateEmail() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinkJS1() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreakEscape() (28 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testExclude3() (68 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTT() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanEscape() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksNamed3() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTML() (30 ms)</li><li>org.apache.wiki.ui.PageCommandTest.testTargetedCommand() (38 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpacesInLinks1() (38 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension6() (27 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case2() (42 ms)</li><li>org.apache.wiki.WikiEngineTest.testNonExistentPage() (30 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testAttachURL1() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd() (32 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL1() (11 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testPageInfo() (33 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testEditURL1() (13 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testListAttachments() (46 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL1() (14 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountEntries() (67 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleArticle() (42 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testNonExistantDirectory() (14 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert3() (12 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAdminView2() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testScandicPagename1() (31 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationMultiChangesNoCache() (51 ms)</li><li>org.apache.wiki.workflow.OutcomeTest.testMessage() (11 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testExtraPagename3() (34 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testNonexistentPage() (53 ms)</li><li>org.apache.wiki.render.WysiwygEditingRendererTest.testDefinedPageLink() (25 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testAdd1() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs4() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch4() (26 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testParserPlugin() (21 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testList1() (22 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testGetPermissions() (30 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testDelete() (4362 ms)</li><li>org.apache.wiki.VariableManagerTest.testPageName() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testShortRuler2() (45 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePage() (47 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHTMLWhenAllowed() (135 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateBothExist() (75 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCollectingLinks() (24 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsSpace() (44 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate1() (151 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testRemove() (19 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTableLinkEscapedBar() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks2() (25 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testGroups() (4247 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC6() (41 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksPluralMatch() (32 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testCount() (78 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testIncrement2() (16 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testExternalAnchor() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph7() (35 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testCustomProperties() (15 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExists() (517 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL6() (12 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testUserPolicy() (51 ms)</li><li>org.apache.wiki.WikiEngineTest.testReadLinks() (37 ms)</li><li>org.apache.wiki.WikiEngineTest.testRename() (52 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testNonExistant2() (126 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testWorkflows() (15 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsUTF1() (51 ms)</li><li>org.apache.wiki.plugin.ReferringUndefinedPagesPluginTest.testSimple() (52 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testGetWikiNames() (19 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage2() (14 ms)</li><li>org.apache.wiki.auth.authorize.WebContainerAuthorizerTest.testConstraints() (36 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginUserAllowed() (26 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL6() (13 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindStaticWikiAction() (25 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testDeleteByLoginName() (18 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsert() (13 ms)</li><li>org.apache.wiki.VariableManagerTest.testMixedCase() (25 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testAttachURLRelative1() (12 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetOldVersion() (44 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs4() (83 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs5() (34 ms)</li><li>org.apache.wiki.WikiEngineTest.testEncodeNameLatin1() (39 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtradirInAttachmentDir() (2037 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testSerialization() (28 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeAnchor() (45 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testSlashesInPageNames() (16 ms)</li><li>org.apache.wiki.ui.WikiCommandTest.testStaticCommand() (17 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testEquals() (23 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePageAndAttachments2() (56 ms)</li><li>org.apache.wiki.auth.user.UserProfileTest.testSetUid() (13 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testTitleSearch() (6053 ms)</li><li>org.apache.wiki.PageManagerTest.testPageCacheNotInUse() (51 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC5() (47 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetHTML() (63 ms)</li><li>org.apache.wiki.plugin.UndefinedPagesPluginTest.testSimpleUndefined() (42 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMixedListOnSameLevel() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph6() (33 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testQuotedArgs() (15 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testIncrement() (16 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateBothExist2() (98 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand4() (25 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithException() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre2() (37 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleInsertions() (105 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC() (30 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL7() (11 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testNonexistantPage() (23 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testBold() (22 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testHTML() (30 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExistsUTF2() (48 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMillionChanges() (453 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape5() (33 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList2() (14 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationInfoAvailable() (34 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug85_case4() (42 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate2() (158 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testGetRoles() (26 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testWithBlanks1() (29 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testEmptySecondLevelList() (25 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL7() (15 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testAttributes() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePlugin1() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMultilinePluginBodyContent() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading3() (23 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkBold() (44 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPage() (43 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testSimpleRename() (57 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym2() (60 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithApproval() (19 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedPlugin1() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre3() (38 ms)</li><li>org.apache.wiki.WikiEngineTest.testAttachmentRefs3() (81 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs6() (27 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testSamePage() (53 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCamelCaseInPre() (31 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeWithBlanks2() (71 ms)</li><li>org.apache.wiki.WikiSessionTest.testRoles() (27 ms)</li><li>org.apache.wiki.WikiEngineTest.testEncodeNameUTF8() (64 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTTLinks() (34 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testOtherURL2() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC4() (37 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph5() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldItalic() (33 ms)</li><li>org.apache.wiki.WikiEngineTest.testCreatePage() (56 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testSimilarNames() (29 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand3() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable4() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperLinks6() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks5() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkInList() (37 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL4() (18 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape4() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList3() (13 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL4() (14 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationWithSimpleHistory() (31 ms)</li><li>org.apache.wiki.ui.WikiCommandTest.testTargetedCommand() (14 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveUsers() (29 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension3() (28 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testDeleteVersion() (37 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testEmptyURL() (11 ms)</li><li>org.apache.wiki.auth.authorize.JDBCGroupDatabaseTest.testResave() (3198 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginQuotedArgs() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape3() (36 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeleteVersion() (85 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage4() (14 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreByVersion() (44 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testMissingPlugin() (28 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testSlashesInPageNamesUTF8() (15 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByFullName() (18 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testEnabled() (50 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitleAcronym3() (50 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageName() (56 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testCircularRefs() (144 ms)</li><li>org.apache.wiki.VariableManagerTest.testPageName2() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription3() (34 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testReferrers() (97 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyleTable() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAmpersand2() (40 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList() (18 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionNoParams() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs7() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginWikiText2() (34 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testCustomJAASLoginModuleOptions() (44 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testOtherURL1() (12 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByUid() (16 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks3() (33 ms)</li><li>org.apache.wiki.providers.FileSystemProviderTest.testDirectoryIsFile() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph4() (55 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCC3() (28 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testAssertedSession() (22 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testSimple() (52 ms)</li><li>org.apache.wiki.auth.GroupManagerTest.testGroupAddEvents() (27 ms)</li><li>org.apache.wiki.VariableManagerTest.testExpand2() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable5() (29 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginIPAllowed() (28 ms)</li><li>org.apache.wiki.WikiSessionTest.testAuthenticationCookieDefaults() (24 ms)</li><li>org.apache.wiki.url.ShortURLConstructorTest.testViewURL5() (15 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testList4() (16 ms)</li><li>org.apache.wiki.workflow.ApprovalWorkflowTest.testSaveWikiPageWithRejection() (18 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testParmInClude() (57 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeadingHyperlinks() (22 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginUserNotAllowed() (25 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testUnderscore() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testSimpleInsertNoPackage3() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBrokenPageTextShort() (35 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testOtherURL2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedList2() (32 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testEmptyURL() (9 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testViewURL5() (19 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testExtension2() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPreEscape2() (32 ms)</li><li>org.apache.wiki.render.RenderingManagerTest.testCache() (504 ms)</li><li>org.apache.wiki.auth.authorize.XMLGroupDatabaseTest.testResave() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginInsert() (33 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testCheckin() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs() (31 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testTwinVar() (17 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription2() (33 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFinalPageName() (25 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testFindByLoginName() (16 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUncreated() (77 ms)</li><li>org.apache.wiki.plugin.TableOfContentsTest.testNumberedItems() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs8() (29 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllNoExtension() (2043 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testRule() (15 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testCharlie() (23 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testMigrationMultiChangesHistory() (41 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testNoInsert() (17 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testExternalAnchor2() (17 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsExclude() (57 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testLoginCustom() (26 ms)</li><li>org.apache.wiki.plugin.PageViewPluginTest.testShowCountsBasic() (61 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert2() (24 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testActorDecisions() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable2() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkWithScandics() (39 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testNoRecentChanges() (53 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle4() (28 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch() (2128 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks3() (26 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanNested() (30 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testOtherURL1() (13 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals1() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink() (48 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph() (32 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames2() (32 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testSimpleVar() (15 ms)</li><li>org.apache.wiki.WikiEngineTest.testDeletePageAndAttachments() (53 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testRecentChangesWithAttachments() (34 ms)</li><li>org.apache.wiki.ui.GroupCommandTest.testTargetedCommand() (14 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated2() (32 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testItalic() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDeadlySpammer() (490 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanJavascript() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCURLs9() (29 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch3() (6080 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd3() (32 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testAdd() (17 ms)</li><li>org.apache.wiki.plugin.ReferringPagesPluginTest.testInclude() (69 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription5() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet3() (36 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testResolveGroups() (20 ms)</li><li>org.apache.wiki.WikiSessionTest.testIPAddress() (19 ms)</li><li>org.apache.wiki.render.CreoleRendererTest.testPlugins() (13 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable3() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle3() (32 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testNumberArgs() (12 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testDefaultProvider() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks4() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testFootnote2() (31 ms)</li><li>org.apache.wiki.plugin.RecentChangesPluginTest.testParmExClude() (61 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testReassign() (21 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert3() (26 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals2() (12 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testStart() (12 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleDeletions() (95 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPre() (35 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBoldAcrossParagraph() (31 ms)</li><li>org.apache.wiki.auth.acl.DefaultAclManagerTest.testAclRegex() (28 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testBug21() (55 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testSingularReferences() (115 ms)</li><li>org.apache.wiki.WikiEngineTest.testFinalPageNamePlural() (64 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPunctuatedWikiNames3() (32 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testChangeNoteOldVersion2() (41 ms)</li><li>org.apache.wiki.WikiEngineTest.testParsedVariables() (46 ms)</li><li>org.apache.wiki.xmlrpc.RPCHandlerTest.testListLinks() (31 ms)</li><li>org.apache.wiki.WikiEngineTest.testPutPageEntities() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink() (41 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testAttachURLRelative1() (9 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testExists2() (48 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAmpersand1() (42 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch2() (6062 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testLinebreakClear() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd2() (33 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSet4() (31 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription4() (24 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdateFoobar2s() (81 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testDescription() (33 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfileWithDenial() (34 ms)</li><li>org.apache.wiki.auth.AuthorizationManagerTest.testDefaultPermissions() (30 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testMultipleStore() (51 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetUserProfileWithApproval() (41 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeWithBlanks() (60 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle2() (25 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink3() (35 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testSpecialPageReference() (24 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testFootnote1() (26 ms)</li><li>org.apache.wiki.providers.CachingProviderTest.testInitialization() (30 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUpdatePluralOnlyRef() (78 ms)</li><li>org.apache.wiki.url.DefaultURLConstructorTest.testViewURL1() (11 ms)</li><li>org.apache.wiki.plugin.DefaultPluginManagerTest.testQuotedArgs2() (12 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testRuler() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading1() (25 ms)</li><li>org.apache.wiki.url.ShortViewURLConstructorTest.testEditURL1() (10 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals3() (13 ms)</li><li>org.apache.wiki.plugin.CounterPluginTest.testSimpleCount() (12 ms)</li><li>org.apache.wiki.plugin.InsertPageTest.testWithBlanks2() (2665 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testPluralSingularUpdate3() (176 ms)</li><li>org.apache.wiki.WikiEngineTest.testSpacedNames1() (43 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAllExtrafile() (2036 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHeading2() (23 ms)</li><li>org.apache.wiki.auth.user.XMLUserDatabaseTest.testRename() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testBlankEscape() (33 ms)</li><li>org.apache.wiki.content.PageRenamerTest.testReferrerChangeMultilink() (49 ms)</li><li>org.apache.wiki.diff.ContextualDiffProviderTest.testSimpleChanges() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated4() (28 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink3() (55 ms)</li><li>org.apache.wiki.util.MailUtilTest.testProperties() (15 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkItalic() (38 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testGetByVersion() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd5() (34 ms)</li><li>org.apache.wiki.auth.acl.AclImplTest.testDave() (22 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinks2() (31 ms)</li><li>org.apache.wiki.ui.PageCommandTest.testStaticCommand() (26 ms)</li><li>org.apache.wiki.VariableManagerTest.testIllegalInsert1() (24 ms)</li><li>org.apache.wiki.WikiEngineTest.testBeautifyTitle() (90 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testParagraph8() (36 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testSpanStyle1() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testTable1() (32 ms)</li><li>org.apache.wiki.auth.AuthenticationManagerTest.testIsUserPrincipal() (19 ms)</li><li>org.apache.wiki.auth.UserManagerTest.testSetCollidingUserProfile() (20 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testIllegalXML() (27 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNoHyperlink2() (37 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testNonExistant1() (122 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testNestedList() (32 ms)</li><li>org.apache.wiki.WikiEngineTest.testGetRequiredPropertyNRPE() (37 ms)</li><li>org.apache.wiki.ui.admin.beans.FilterBeanTest.testDoGet() (14 ms)</li><li>org.apache.wiki.auth.authorize.GroupTest.testEquals4() (17 ms)</li><li>org.apache.wiki.workflow.WorkflowManagerTest.testGetApprover() (14 ms)</li><li>org.apache.wiki.providers.BasicAttachmentProviderTest.testListAll() (2038 ms)</li><li>org.apache.wiki.plugin.IfPluginTest.testIfPluginIPNotAllowed() (40 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testCCLinkBold2() (103 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksCCNegated3() (30 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testAttachmentLink4() (53 ms)</li><li>org.apache.wiki.workflow.DecisionQueueTest.testComplete() (20 ms)</li><li>org.apache.wiki.providers.VersioningFileProviderTest.testDelete() (41 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testHyperlinksExt() (35 ms)</li><li>org.apache.wiki.ui.CommandResolverTest.testFindWikiActionWithParams() (21 ms)</li><li>org.apache.wiki.WikiEngineTest.testSaveExistingPageWithEmptyContent() (45 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testUnreferenced() (86 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginNoEnd() (37 ms)</li><li>org.apache.wiki.ReferenceManagerTest.testRemove() (116 ms)</li><li>org.apache.wiki.parser.JSPWikiMarkupParserTest.testPluginEnd4() (33 ms)</li><li>org.apache.wiki.attachment.AttachmentManagerTest.testSimpleStoreSpace() (46 ms)</li><li>org.apache.wiki.search.SearchManagerTest.testSimpleSearch4() (6067 ms)</li>
+</ul>
+
+<br/>
+
+Report generated by <a href='http://pitest.org'>PIT</a> 1.4.3
+
+</body>
+</html>

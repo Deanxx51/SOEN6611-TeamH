@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>DynamicAttachment.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.attachment</a> &gt; <span class="el_source">DynamicAttachment.java</span></div><h1>DynamicAttachment.java</h1><pre class="source lang-java linenums">/*
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.     
+ */
+package org.apache.wiki.attachment;
+
+import org.apache.wiki.WikiEngine;
+
+/**
+ *  A DynamicAttachment is an attachment which does not really exist, but is
+ *  created dynamically by a JSPWiki component.
+ *  &lt;p&gt;
+ *  Note that a DynamicAttachment might not be available before it is actually
+ *  created by a component (e.g. plugin), and therefore trying to access it
+ *  before that component has been invoked, might result in a surprising 404.
+ *  &lt;p&gt;
+ *  DynamicAttachments are not listed among regular attachments in the current
+ *  version.
+ *  &lt;p&gt;
+ *  Usage:
+ *
+ *  &lt;pre&gt;
+ *
+ *  class MyDynamicComponent implements DynamicAttachmentProvider
+ *  {
+ *  ...
+ *
+ *     DynamicAttachment destatt = mgr.getDynamicAttachment( destattname );
+ *
+ *     if( destatt == null )
+ *     {
+ *         destatt = new DynamicAttachment( context.getEngine(),
+ *                                          context.getPage().getName(),
+ *                                          destfilename,
+ *                                          this );
+ *         destatt.setCacheable( false );
+ *     }
+ *
+ *     // This is used to check whether the attachment is modified or not
+ *     // so don't forget to update this if your attachment source changes!
+ *     // Else JSPWiki will be serving 304s to anyone who asks...
+ *
+ *     destatt.setLastModified( context.getPage().getLastModified() );
+ *     mgr.storeDynamicAttachment( context,  destatt );
+ *  ...
+ *
+ *      public InputStream getAttachmentData( WikiContext context, Attachment att )
+ *          throws IOException
+ *      {
+ *          byte[] bytes = &quot;This is a test&quot;.getBytes();
+ *
+ *          return new ByteArrayInputStream( bytes );
+ *      }
+ *  &lt;/pre&gt;
+ *
+ *  @since 2.5.34
+ */
+public class DynamicAttachment extends Attachment
+{
+<span class="nc" id="L74">    private DynamicAttachmentProvider m_provider  = null;</span>
+
+    /**
+     *  Creates a DynamicAttachment.
+     *
+     *  @param engine  The engine which owns this attachment
+     *  @param parentPage The page which owns this attachment
+     *  @param fileName The filename of the attachment
+     *  @param provider The provider which will be used to generate the attachment.
+     */
+    public DynamicAttachment(WikiEngine engine,
+                             String parentPage,
+                             String fileName,
+                             DynamicAttachmentProvider provider)
+    {
+<span class="nc" id="L89">        super(engine, parentPage, fileName);</span>
+<span class="nc" id="L90">        m_provider = provider;</span>
+<span class="nc" id="L91">    }</span>
+
+    /**
+     *  Returns the provider which is used to generate this attachment.
+     *
+     *  @return A Provider component for this attachment.
+     */
+    public DynamicAttachmentProvider getProvider()
+    {
+<span class="nc" id="L100">        return m_provider;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>

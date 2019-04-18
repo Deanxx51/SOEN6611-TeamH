@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="zh"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>FeedDiscoveryTag.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Apache JSPWiki Main Jar</a> &gt; <a href="index.source.html" class="el_package">org.apache.wiki.tags</a> &gt; <span class="el_source">FeedDiscoveryTag.java</span></div><h1>FeedDiscoveryTag.java</h1><pre class="source lang-java linenums">/* 
+    Licensed to the Apache Software Foundation (ASF) under one
+    or more contributor license agreements.  See the NOTICE file
+    distributed with this work for additional information
+    regarding copyright ownership.  The ASF licenses this file
+    to you under the Apache License, Version 2.0 (the
+    &quot;License&quot;); you may not use this file except in compliance
+    with the License.  You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing,
+    software distributed under the License is distributed on an
+    &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+    KIND, either express or implied.  See the License for the
+    specific language governing permissions and limitations
+    under the License.  
+ */
+package org.apache.wiki.tags;
+
+import java.io.IOException;
+
+import org.apache.wiki.WikiContext;
+import org.apache.wiki.WikiEngine;
+import org.apache.wiki.WikiPage;
+import org.apache.wiki.plugin.WeblogPlugin;
+import org.apache.wiki.rss.Feed;
+import org.apache.wiki.util.TextUtil;
+
+/**
+ *  Outputs links to all the site feeds and APIs this Wiki/blog supports.
+ *
+ *  @since 2.2
+ */
+<span class="nc" id="L35">public class FeedDiscoveryTag</span>
+    extends WikiTagBase
+{
+    private static final long serialVersionUID = 0L;
+    
+    public final int doWikiStartTag()
+        throws IOException
+    {
+<span class="nc" id="L43">        WikiEngine engine = m_wikiContext.getEngine();</span>
+<span class="nc" id="L44">        WikiPage   page   = m_wikiContext.getPage();</span>
+
+<span class="nc" id="L46">        String encodedName = engine.encodeName( page.getName() );</span>
+
+<span class="nc" id="L48">        String rssURL      = engine.getGlobalRSSURL();</span>
+<span class="nc" id="L49">        String rssFeedURL  = engine.getURL(WikiContext.NONE, &quot;rss.jsp&quot;, </span>
+                                           &quot;page=&quot;+encodedName+&quot;&amp;amp;mode=wiki&quot;,
+                                           true );
+        
+<span class="nc bnc" id="L53" title="All 2 branches missed.">        if( rssURL != null )</span>
+        {
+<span class="nc" id="L55">            String siteName = Feed.getSiteName(m_wikiContext);</span>
+<span class="nc" id="L56">            siteName = TextUtil.replaceEntities( siteName );</span>
+            
+<span class="nc" id="L58">            pageContext.getOut().print(&quot;&lt;link rel=\&quot;alternate\&quot; type=\&quot;application/rss+xml\&quot; title=\&quot;RSS wiki feed for the entire site.\&quot; href=\&quot;&quot;+rssURL+&quot;\&quot; /&gt;\n&quot;);</span>
+<span class="nc" id="L59">            pageContext.getOut().print(&quot;&lt;link rel=\&quot;alternate\&quot; type=\&quot;application/rss+xml\&quot; title=\&quot;RSS wiki feed for page &quot;+siteName+&quot;.\&quot; href=\&quot;&quot;+rssFeedURL+&quot;\&quot; /&gt;\n&quot;);</span>
+
+            // TODO: Enable this
+            /*
+            pageContext.getOut().print(&quot;&lt;link rel=\&quot;service.post\&quot; type=\&quot;application/atom+xml\&quot; title=\&quot;&quot;+
+                                       siteName+&quot;\&quot; href=\&quot;&quot;+atomPostURL+&quot;\&quot; /&gt;\n&quot;);
+            */
+            // FIXME: This does not work always, as plugins are not initialized until the first fetch
+<span class="nc bnc" id="L67" title="All 2 branches missed.">            if( &quot;true&quot;.equals(page.getAttribute(WeblogPlugin.ATTR_ISWEBLOG)) )</span>
+            {
+<span class="nc" id="L69">                String blogFeedURL = engine.getURL(WikiContext.NONE,&quot;rss.jsp&quot;,&quot;page=&quot;+encodedName,true);</span>
+<span class="nc" id="L70">                String atomFeedURL = engine.getURL(WikiContext.NONE,&quot;rss.jsp&quot;,&quot;page=&quot;+encodedName+&quot;&amp;amp;type=atom&quot;,true);</span>
+        
+<span class="nc" id="L72">                pageContext.getOut().print(&quot;&lt;link rel=\&quot;alternate\&quot; type=\&quot;application/rss+xml\&quot; title=\&quot;RSS feed for weblog &quot;+</span>
+                                           siteName+&quot;.\&quot; href=\&quot;&quot;+blogFeedURL+&quot;\&quot; /&gt;\n&quot;);
+
+<span class="nc" id="L75">                pageContext.getOut().print(&quot;&lt;link rel=\&quot;service.feed\&quot; type=\&quot;application/atom+xml\&quot; title=\&quot;Atom 1.0 weblog feed for &quot;+</span>
+                                           siteName+&quot;\&quot; href=\&quot;&quot;+atomFeedURL+&quot;\&quot; /&gt;\n&quot;);
+            }
+        }
+
+<span class="nc" id="L80">        return SKIP_BODY;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.2.201808211720</span></div></body></html>
