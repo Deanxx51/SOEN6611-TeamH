@@ -1,10 +1,10 @@
 # SOEN6611-TeamH
 
 ## Team members:
-Hannan li  ID:40047659 
-Tongwei Zhang ID:40044711 
-Xiang Xie ID:40070841 
-Yuhang Gao ID:40070438 
+Hannan li  
+Tongwei Zhang  
+Xiang Xie  
+Yuhang Gao  
 
 ## Structure:
 ### "Commands" folder
